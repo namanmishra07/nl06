@@ -1,0 +1,62 @@
+---
+import { getCollection, render } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import Prose      from "@nl06/design-system/components/Prose.astro";
+
+export async function getStaticPaths() {
+  const notes = await getCollection("notes");
+  return notes.map((n) => ({
+    params: { slug: n.id },
+    props:  { note: n },
+  }));
+}
+
+const { note } = Astro.props;
+const { Content } = await render(note);
+
+const fmtDate = (d: Date) =>
+  d.toISOString().slice(0, 10).replace(/-/g, " · ");
+---
+<BaseLayout
+  title={`${note.data.title} — reading.nl06`}
+  description={note.data.blurb}
+>
+  <Container size="prose" class="entry">
+    <p class="meta">
+      <span>{fmtDate(note.data.date)}</span>
+      <span class="sep">·</span>
+      <span>{note.data.source_type}</span>
+      {note.data.source_author && <>
+        <span class="sep">·</span>
+        <span>{note.data.source_author}</span>
+      </>}
+    </p>
+    <h1>{note.data.title}</h1>
+    {note.data.source_link && (
+      <p class="source"><a href={note.data.source_link} rel="noopener">Source ↗</a></p>
+    )}
+
+    <Prose>
+      <Content />
+    </Prose>
+
+    <p class="back"><a href="/">← all notes</a></p>
+  </Container>
+</BaseLayout>
+
+<style>
+  .entry { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .entry > * + * { margin-top: var(--space-3); }
+  .entry > h1 { margin-top: var(--space-2); }
+  .entry > .source { margin-top: var(--space-2); }
+  .entry > :global(.prose-flow) { margin-top: var(--space-8); }
+  .entry .meta .sep { color: var(--color-rule); }
+  .entry .back {
+    margin-top: var(--space-12);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+  }
+</style>

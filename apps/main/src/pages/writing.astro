@@ -1,0 +1,25 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import Prose      from "@nl06/design-system/components/Prose.astro";
+---
+<BaseLayout
+  title="Writing — nl06"
+  description="Notes and longer-form pieces."
+  pathname="/writing"
+>
+  <Container size="prose" class="writing">
+    <h1>Writing</h1>
+
+    <Prose>
+      <p>Notes live at <a href="https://reading.nl06.com">reading.nl06.com</a> — one entry per book, paper, or post that shifted something.</p>
+
+      <p><em>PLACEHOLDER — when longer-form essays exist, they'll be listed below in reverse-chronological order. Phase 1 leaves this section empty.</em></p>
+    </Prose>
+  </Container>
+</BaseLayout>
+
+<style>
+  .writing { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .writing > * + * { margin-top: var(--space-6); }
+</style>

@@ -1,0 +1,103 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+
+const notes = (await getCollection("notes"))
+  .filter((n) => !n.data.draft)
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+const fmtDate = (d: Date) =>
+  d.toISOString().slice(0, 10).replace(/-/g, " · ");
+---
+<BaseLayout
+  title="reading.nl06"
+  description="Notes on what I'm reading."
+>
+  <Container size="container" class="page">
+    <p class="meta">Reading</p>
+    <h1>Notes</h1>
+    <p class="lede">Specific notes on what shifted — books, papers, posts. <a href="/rss.xml">RSS</a>.</p>
+
+    {notes.length === 0 ? (
+      <p class="empty"><em>PLACEHOLDER — no notes yet.</em></p>
+    ) : (
+      <ul class="notes">
+        {notes.map((n) => (
+          <li class="note">
+            <a class="note__link" href={`/${n.id}`}>
+              <span class="note__title">{n.data.title}</span>
+              <span class="note__meta">
+                <span class="note__date">{fmtDate(n.data.date)}</span>
+                <span class="note__sep">·</span>
+                <span class="note__source">{n.data.source_type}</span>
+                {n.data.source_author && (
+                  <>
+                    <span class="note__sep">·</span>
+                    <span class="note__author">{n.data.source_author}</span>
+                  </>
+                )}
+              </span>
+            </a>
+            {n.data.blurb && <p class="note__blurb">{n.data.blurb}</p>}
+          </li>
+        ))}
+      </ul>
+    )}
+  </Container>
+</BaseLayout>
+
+<style>
+  .page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .page > * + * { margin-top: var(--space-4); }
+  .page > h1 { margin-top: var(--space-2); }
+  .page > .lede {
+    color: var(--color-ink-soft);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+  }
+  .empty { margin-top: var(--space-8); color: var(--color-ink-muted); }
+
+  .notes {
+    margin-top: var(--space-10);
+    list-style: none;
+    padding: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .note {
+    padding: var(--space-5) 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .note + .note { margin-top: 0; }
+  .note__link {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  .note__link:hover .note__title {
+    color: var(--color-accent);
+  }
+  .note__title {
+    font-family: var(--font-serif);
+    font-size: var(--type-h3);
+    font-weight: 600;
+    line-height: var(--leading-snug);
+    transition: color 80ms ease;
+  }
+  .note__meta {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-meta);
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .note__blurb {
+    margin-top: var(--space-2);
+    color: var(--color-ink-soft);
+  }
+</style>

@@ -1,0 +1,25 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import Prose      from "@nl06/design-system/components/Prose.astro";
+---
+<BaseLayout
+  title="About — nl06"
+  description="About Naman."
+  pathname="/about"
+>
+  <Container size="prose" class="about">
+    <h1>About</h1>
+
+    <Prose>
+      <p><em>PLACEHOLDER — 5 sentences max. Where trained, what built, where now, what curious about. Link to LinkedIn for the rest.</em></p>
+
+      <p>— <a href="https://www.linkedin.com/in/namanmishra07" rel="noopener">LinkedIn</a></p>
+    </Prose>
+  </Container>
+</BaseLayout>
+
+<style>
+  .about { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .about > * + * { margin-top: var(--space-6); }
+</style>

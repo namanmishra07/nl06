@@ -1,0 +1,38 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import Prose      from "@nl06/design-system/components/Prose.astro";
+
+// PLACEHOLDER — Naman fills. Update `updated` whenever this page changes.
+const updated = "PLACEHOLDER — YYYY-MM-DD";
+---
+<BaseLayout
+  title="Now — nl06"
+  description="What I'm working on this month."
+  pathname="/now"
+>
+  <Container size="prose" class="now">
+    <p class="meta">Updated {updated}</p>
+    <h1>Now</h1>
+
+    <Prose>
+      <p><em>PLACEHOLDER. Following <a href="https://nownownow.com/about" rel="noopener">Derek Sivers' /now convention</a>: what I'm actively thinking about and working on, this month.</em></p>
+
+      <h2>Building</h2>
+      <p>PLACEHOLDER — what's under construction.</p>
+
+      <h2>Thinking about</h2>
+      <p>PLACEHOLDER — open questions / theses being worked.</p>
+
+      <h2>Reading</h2>
+      <p>PLACEHOLDER — current books / papers (link to <a href="https://reading.nl06.com">reading.nl06.com</a> for notes).</p>
+    </Prose>
+  </Container>
+</BaseLayout>
+
+<style>
+  .now { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .now > * + * { margin-top: var(--space-4); }
+  .now > h1 { margin-top: var(--space-2); }
+  .now > :global(.prose-flow) { margin-top: var(--space-8); }
+</style>

@@ -1,15 +1,40 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
+
+interface Sub {
+  label: string;
+  href: string;
+  blurb: string;
+}
+
+// Subdomain list — structural, not content. Blurbs are PLACEHOLDER (1 line each).
+const subdomains: Sub[] = [
+  { label: "gs.nl06.com",      href: "https://gs.nl06.com",      blurb: "PLACEHOLDER — one-line context for the ground station." },
+  { label: "chains.nl06.com",  href: "https://chains.nl06.com",  blurb: "PLACEHOLDER — one-line context for consequence chains." },
+  { label: "reading.nl06.com", href: "https://reading.nl06.com", blurb: "PLACEHOLDER — one-line context for the reading feed." },
+];
 ---
 <BaseLayout
   title="nl06"
   description="Naman's personal site."
 >
   <Container size="wide" class="hero">
-    <p class="meta">PLACEHOLDER — home page</p>
-    <h1>This is where the GK-2A capture goes, full-bleed.</h1>
-    <p>One sentence of context lives here. Below the fold: a short list of subdomains.</p>
+    <p class="meta">PLACEHOLDER — hero (GK-2A capture goes here, full-bleed)</p>
+    <h1>One strong artifact goes here.</h1>
+    <p class="lede">PLACEHOLDER — single sentence of context underneath.</p>
+  </Container>
+
+  <Container size="container" class="subs">
+    <h2 class="subs__heading">Subdomains</h2>
+    <ul class="subs__list">
+      {subdomains.map((s) => (
+        <li class="subs__item">
+          <a href={s.href} class="subs__link">{s.label}</a>
+          <span class="subs__blurb">{s.blurb}</span>
+        </li>
+      ))}
+    </ul>
   </Container>
 </BaseLayout>
 
@@ -19,5 +44,48 @@ import Container  from "@nl06/design-system/components/Container.astro";
     padding-bottom: var(--space-16);
   }
   .hero p.meta + h1 { margin-top: var(--space-4); }
-  .hero h1 + p { margin-top: var(--space-6); }
+  .hero h1 + .lede {
+    margin-top: var(--space-5);
+    font-size: var(--type-h4);
+    color: var(--color-ink-soft);
+    line-height: var(--leading-snug);
+  }
+
+  .subs {
+    padding-bottom: var(--space-16);
+  }
+  .subs__heading {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    margin-bottom: var(--space-4);
+  }
+  .subs__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .subs__item {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: var(--space-6);
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .subs__item + .subs__item { margin-top: 0; }
+  .subs__link {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .subs__blurb {
+    color: var(--color-ink-soft);
+  }
+  @media (max-width: 600px) {
+    .subs__item { grid-template-columns: 1fr; gap: var(--space-1); }
+  }
 </style>

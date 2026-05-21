@@ -1,0 +1,40 @@
+---
+import "@nl06/design-system/global.css";
+import SiteHeader from "@nl06/design-system/components/SiteHeader.astro";
+import SiteFooter from "@nl06/design-system/components/SiteFooter.astro";
+import Meta       from "@nl06/design-system/components/Meta.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  pathname?: string;
+}
+
+const {
+  title,
+  description,
+  pathname = Astro.url.pathname,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+
+const nav = [
+  { label: "← nl06",       href: "https://nl06.com" },
+  { label: "RSS",          href: "/rss.xml" },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <Meta title={title} description={description} canonical={canonical} />
+    <link rel="alternate" type="application/rss+xml" title="reading.nl06" href="/rss.xml" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <SiteHeader pathname={pathname} title="reading" homeHref="/" nav={nav} />
+    <main>
+      <slot />
+    </main>
+    <SiteFooter signature="A subdomain of nl06.com." />
+  </body>
+</html>

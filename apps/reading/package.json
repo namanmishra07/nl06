@@ -1,0 +1,23 @@
+{
+  "name": "@nl06/reading",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/rss": "^4.0.11",
+    "@astrojs/sitemap": "^3.2.1",
+    "@astrojs/tailwind": "^5.1.4",
+    "@nl06/design-system": "workspace:*",
+    "astro": "^5.1.5",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
