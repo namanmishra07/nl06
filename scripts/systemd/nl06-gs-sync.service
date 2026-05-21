@@ -1,0 +1,21 @@
+[Unit]
+Description=nl06 gs subdomain — rebuild canonical IQ log + sync to website + deploy
+Documentation=file:///website/scripts/README.md
+# Only run when the network is up — wrangler needs DNS + HTTPS.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/website
+# Run the two-step pipeline:
+#   1. build-canonical.py — project NDJSON forensic log to a 1-IQ-1-entry canonical state
+#   2. sync-plates.py --deploy — propagate any new IQs to plates.json, rebuild gs, deploy
+ExecStart=/website/scripts/build-canonical.py
+ExecStart=/website/scripts/sync-plates.py --deploy
+# Cap each step at 10 minutes so a hung wrangler call doesn't wedge the unit.
+TimeoutStartSec=600
+# Don't restart on failure — the next timer firing will retry naturally.
+Restart=no
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,231 @@
+---
+/* The signal chain — an editorial technical diagram for the L-band
+   GK-2A path. Hairlines, named nodes, no icons. */
+
+interface Node {
+  /** Roman numeral printed as the node marker. */
+  mark: string;
+  /** Title — Inter uppercase. */
+  name: string;
+  /** Sub-spec — serif italic. */
+  spec: string;
+  /** Optional second sub-spec, for tabular pairs. */
+  spec2?: string;
+}
+
+const nodes: Node[] = [
+  { mark: "I",   name: "Antenna",    spec: "60 cm parabolic",          spec2: "az 112.6°  ·  el 29.6°" },
+  { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",       spec2: "1691.0 MHz centre" },
+  { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",            spec2: "LNA + SAW filter, ext. PSU" },
+  { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",          spec2: "cu8  ·  2.4 Msps" },
+  { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",         spec2: "pipeline · gk2a_lrit" },
+  { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",        spec2: "blue underlay  ·  haze 0.6" },
+];
+
+const W = 1200;
+const H = 280;
+const PAD = 52;
+const usable = W - PAD * 2;
+const step = usable / (nodes.length - 1);
+const yMid = 140;
+const boxW = 156;
+const boxH = 100;
+
+// Vertical divider between rooftop and NAS halves, sitting between
+// node IV (Receiver) and node V (Decoder).
+const dividerX = PAD + step * 3.5;
+---
+<figure class="signal-chain">
+  <figcaption class="signal-chain__cap">
+    <span class="signal-chain__cap-label">Diagram</span>
+    <span class="signal-chain__cap-rule" aria-hidden="true"></span>
+    <span class="signal-chain__cap-body">
+      The L-band path, antenna to composite. Nodes left of the divider sit on the rooftop; nodes right run on the NAS.
+    </span>
+  </figcaption>
+
+  <svg
+    class="signal-chain__svg"
+    viewBox={`0 0 ${W} ${H}`}
+    role="img"
+    aria-label="Signal chain: 60 cm dish, helix feed, SAWbird+ LNA, RTL-SDR Blog V4, SatDump, Sanchez."
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <!-- domain divider: rooftop vs NAS, tagged at the top -->
+    <line
+      x1={dividerX} y1={36}
+      x2={dividerX} y2={H - 24}
+      stroke="var(--color-rule-strong)" stroke-width="1"
+    />
+    <text x={dividerX - 14} y={28}
+      text-anchor="end"
+      class="sc-tag"
+      fill="var(--color-ink-muted)"
+    >Rooftop · Lucknow</text>
+    <text x={dividerX + 14} y={28}
+      text-anchor="start"
+      class="sc-tag"
+      fill="var(--color-ink-muted)"
+    >NAS · /satellite</text>
+
+    {nodes.map((n, i) => {
+      const cx = PAD + step * i;
+      const x  = cx - boxW / 2;
+      const y  = yMid - boxH / 2;
+      const isLast = i === nodes.length - 1;
+      const nextCx = PAD + step * (i + 1);
+      const crossesDivider = i === 3; // IV → V crosses the rooftop/NAS divider
+      return (
+        <g>
+          {/* connector to next node */}
+          {!isLast && (
+            <g>
+              <line
+                x1={cx + boxW / 2}
+                y1={yMid}
+                x2={nextCx - boxW / 2 - 10}
+                y2={yMid}
+                stroke="var(--color-ink)"
+                stroke-width={crossesDivider ? "1.4" : "1"}
+              />
+              <polygon
+                points={`${nextCx - boxW / 2 - 2},${yMid} ${nextCx - boxW / 2 - 10},${yMid - 4} ${nextCx - boxW / 2 - 10},${yMid + 4}`}
+                fill="var(--color-ink)"
+              />
+            </g>
+          )}
+
+          {/* node frame */}
+          <rect
+            x={x} y={y}
+            width={boxW} height={boxH}
+            fill="var(--color-paper)"
+            stroke="var(--color-ink)"
+            stroke-width="1.2"
+          />
+          {/* mark band at the top of the box */}
+          <line
+            x1={x} y1={y + 24}
+            x2={x + boxW} y2={y + 24}
+            stroke="var(--color-rule)" stroke-width="1"
+          />
+          <text x={x + 10} y={y + 17}
+            class="sc-mark"
+            fill="var(--color-accent)"
+          >{n.mark}</text>
+          <text x={x + boxW - 10} y={y + 17}
+            text-anchor="end"
+            class="sc-folio"
+            fill="var(--color-ink-muted)"
+          >{String(i + 1).padStart(2, "0")}</text>
+
+          {/* node name */}
+          <text x={x + boxW / 2} y={y + 48}
+            text-anchor="middle"
+            class="sc-name"
+            fill="var(--color-ink)"
+          >{n.name}</text>
+
+          {/* node spec */}
+          <text x={x + boxW / 2} y={y + 70}
+            text-anchor="middle"
+            class="sc-spec"
+            fill="var(--color-ink-soft)"
+          >{n.spec}</text>
+          {n.spec2 && (
+            <text x={x + boxW / 2} y={y + 88}
+              text-anchor="middle"
+              class="sc-spec-sm"
+              fill="var(--color-ink-muted)"
+            >{n.spec2}</text>
+          )}
+        </g>
+      );
+    })}
+  </svg>
+
+  <style>
+    .signal-chain {
+      margin: 0;
+      padding: var(--space-8) 0 var(--space-10);
+    }
+    .signal-chain__cap {
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      gap: var(--space-3);
+      align-items: center;
+      margin-bottom: var(--space-6);
+    }
+    .signal-chain__cap-label {
+      font-family: var(--font-sans);
+      font-size: var(--type-marginalia);
+      letter-spacing: var(--tracking-meta);
+      text-transform: uppercase;
+      color: var(--color-ink);
+      font-feature-settings: var(--features-tabular);
+      font-weight: 600;
+    }
+    .signal-chain__cap-rule {
+      width: 2.5rem;
+      height: 1px;
+      background: var(--color-ink);
+    }
+    .signal-chain__cap-body {
+      font-family: var(--font-serif);
+      font-style: italic;
+      color: var(--color-ink-soft);
+      font-size: var(--type-small);
+      line-height: var(--leading-snug);
+    }
+    .signal-chain__svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      background: var(--color-paper);
+    }
+    /* SVG text classes — scoped global so the inline <text> inherits them. */
+    :global(.sc-mark) {
+      font-family: var(--font-serif);
+      font-weight: 800;
+      font-size: 13px;
+      font-feature-settings: var(--features-tabular);
+    }
+    :global(.sc-folio) {
+      font-family: var(--font-sans);
+      font-weight: 500;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      font-feature-settings: var(--features-tabular);
+    }
+    :global(.sc-name) {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-feature-settings: var(--features-tabular);
+    }
+    :global(.sc-spec) {
+      font-family: var(--font-serif);
+      font-weight: 500;
+      font-style: italic;
+      font-size: 12px;
+    }
+    :global(.sc-spec-sm) {
+      font-family: var(--font-sans);
+      font-weight: 500;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      font-feature-settings: var(--features-tabular);
+    }
+    :global(.sc-tag) {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-feature-settings: var(--features-tabular);
+    }
+  </style>
+</figure>

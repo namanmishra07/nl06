@@ -9,10 +9,14 @@
     "dev:main": "pnpm --filter @nl06/main dev",
     "dev:reading": "pnpm --filter @nl06/reading dev",
     "dev:chains": "pnpm --filter @nl06/chains dev",
+    "dev:gs": "pnpm --filter @nl06/gs dev",
+    "dev:auctionhouse": "pnpm --filter @nl06/auctionhouse dev",
     "build": "pnpm -r build",
     "build:main": "pnpm --filter @nl06/main build",
     "build:reading": "pnpm --filter @nl06/reading build",
     "build:chains": "pnpm --filter @nl06/chains build",
+    "build:gs": "pnpm --filter @nl06/gs build",
+    "build:auctionhouse": "pnpm --filter @nl06/auctionhouse build",
     "preview:main": "pnpm --filter @nl06/main preview",
     "clean": "pnpm -r exec rm -rf dist .astro node_modules && rm -rf node_modules"
   }

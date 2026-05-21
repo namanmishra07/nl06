@@ -1,0 +1,19 @@
+[Unit]
+Description=Run nl06-gs-sync nightly at 03:00 IST
+Documentation=file:///website/scripts/README.md
+
+[Timer]
+# 03:00 IST = 21:30 UTC the day before. Systemd timers honour the system
+# timezone, so OnCalendar=03:00 fires at local 03:00. The NAS is on
+# Asia/Kolkata per CLAUDE.md, so this is the right local time.
+OnCalendar=*-*-* 03:00:00
+# If the NAS was off when the timer should have fired (power cut etc.),
+# run as soon as it comes back up.
+Persistent=true
+# Spread the load across systems started simultaneously; harmless on a
+# single-host NAS but a sensible default.
+RandomizedDelaySec=300
+Unit=nl06-gs-sync.service
+
+[Install]
+WantedBy=timers.target

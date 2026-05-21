@@ -1,0 +1,602 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import SignalChain from "~/components/SignalChain.astro";
+
+const all = (await getCollection("plates"))
+  .filter((p) => !p.data.draft)
+  .sort((a, b) => b.data.captured_at.getTime() - a.data.captured_at.getTime());
+
+// Entries with imagery — what the gallery / hero / plate count are based on.
+const withImage = all.filter((p) => !!p.data.image);
+
+// Hero priority: explicitly-flagged hero entry, else most recent.
+const pinned = withImage.find((p) => p.data.hero);
+const hero = pinned ?? withImage[0];
+const gallery = withImage.filter((p) => p.id !== hero.id).slice(0, 4);
+
+const totals = {
+  plates:    withImage.length,
+  gk2a:      withImage.filter((p) => p.data.satellite.includes("KOMPSAT")).length,
+  meteor:    withImage.filter((p) => p.data.satellite.includes("METEOR")).length,
+};
+
+const fmtDateTime = (date: Date) => {
+  const iso = date.toISOString();
+  return iso.slice(0, 10) + " · " + iso.slice(11, 16) + "Z";
+};
+const fmtDate = (date: Date) => date.toISOString().slice(0, 10);
+
+// Log: home shows the most recent five rows; /log carries everything.
+const LOG_HOME_ROWS = 5;
+const log = all.slice(0, LOG_HOME_ROWS);
+const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
+---
+<BaseLayout
+  title="gs.nl06 — Observations from a Lucknow rooftop"
+  description="A 60-centimetre dish, a helix feed, and an RTL-SDR pointed at GK-2A. Plates and a log."
+  itemNumber="№ GS01"
+>
+  <!-- HERO ──────────────────────────────────────────────────────── -->
+  <section class="gs-hero">
+    <Container size="wide" class="gs-hero__inner">
+      <figure class="gs-hero__figure">
+        <img
+          src={hero.data.image}
+          alt={`${hero.data.satellite} ${hero.data.channel} captured ${fmtDateTime(hero.data.captured_at)}`}
+          loading="eager"
+          fetchpriority="high"
+        />
+        <figcaption class="gs-hero__cap">
+          <span class="gs-hero__cap-mark">Plate I</span>
+          <span class="gs-hero__cap-rule" aria-hidden="true"></span>
+          <span class="gs-hero__cap-body">
+            <strong>{hero.data.satellite}</strong> &nbsp;·&nbsp; {hero.data.channel}
+            <br />
+            Captured {fmtDateTime(hero.data.captured_at)} &nbsp;·&nbsp;
+            {hero.data.frequency_mhz.toFixed(3)} MHz &nbsp;·&nbsp; SNR {hero.data.snr_db?.toFixed(1)} dB
+          </span>
+        </figcaption>
+      </figure>
+
+      <div class="gs-hero__lede">
+        <span class="gs-hero__eyebrow">
+          A standing log of one instrument
+          <span aria-hidden="true">·</span>
+          {fmtDate(hero.data.captured_at)}
+        </span>
+        <h1 class="gs-hero__head">
+          <span class="gs-hero__head-line">A dish.</span>
+          <span class="gs-hero__head-emphasis">A satellite. A log.</span>
+        </h1>
+        <p class="gs-hero__sub">
+          A sixty-centimetre parabolic dish on a rooftop in Lucknow, pointed thirty
+          degrees up and a hundred and twelve east of true. It listens to a single
+          geostationary weather satellite and writes the pictures down.
+        </p>
+
+        <dl class="gs-hero__counts">
+          <div class="gs-hero__count">
+            <dt>On file</dt>
+            <dd>{String(totals.plates).padStart(2, "0")}</dd>
+          </div>
+          <div class="gs-hero__count">
+            <dt>GK-2A</dt>
+            <dd>{String(totals.gk2a).padStart(2, "0")}</dd>
+          </div>
+          <div class="gs-hero__count">
+            <dt>Polar</dt>
+            <dd>{String(totals.meteor).padStart(2, "0")}</dd>
+          </div>
+          <div class="gs-hero__count gs-hero__count--accent">
+            <dt>Pointing</dt>
+            <dd class="tabular">112.6° / 29.6°</dd>
+          </div>
+        </dl>
+      </div>
+    </Container>
+  </section>
+
+  <!-- GALLERY ────────────────────────────────────────────────────── -->
+  <Container size="wide">
+    <section class="gs-gallery" aria-labelledby="recent">
+      <header class="gs-banner">
+        <span class="gs-banner__num">II</span>
+        <h2 id="recent" class="gs-banner__title">Recent plates</h2>
+        <span class="gs-banner__rule" aria-hidden="true"></span>
+        <span class="gs-banner__count">{gallery.length} preceding the cover</span>
+      </header>
+
+      <ol class="gs-gallery__grid">
+        {gallery.map((p, i) => {
+          const romanIdx = i + 2; // hero is I, gallery starts at II
+          const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"][romanIdx - 1];
+          return (
+            <li class="gs-gallery__cell">
+              <a class="gs-gallery__link" href={`/plates#${p.id}`}>
+                <figure class="gs-gallery__figure">
+                  <img src={p.data.image}
+                    alt={`${p.data.satellite} ${p.data.channel} ${fmtDateTime(p.data.captured_at)}`}
+                    loading="lazy" decoding="async" />
+                </figure>
+                <div class="gs-gallery__caption">
+                  <span class="gs-gallery__mark">Plate {roman}</span>
+                  <span class="gs-gallery__date tabular">{fmtDateTime(p.data.captured_at)}</span>
+                  <p class="gs-gallery__line">{p.data.caption}</p>
+                </div>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+      <p class="gs-gallery__more">
+        <a href="/plates">Continue to the full register →</a>
+      </p>
+    </section>
+
+    <!-- INSTRUMENT preview ─────────────────────────────────────── -->
+    <section class="gs-instrument" aria-labelledby="instrument">
+      <header class="gs-banner">
+        <span class="gs-banner__num">III</span>
+        <h2 id="instrument" class="gs-banner__title">The instrument</h2>
+        <span class="gs-banner__rule" aria-hidden="true"></span>
+        <span class="gs-banner__count">Six nodes</span>
+      </header>
+      <SignalChain />
+      <p class="gs-instrument__note">
+        Each plate is the output of this chain run end-to-end without intervention.
+        When a node breaks, the chain stops and the log entry says where.
+        &nbsp;<a href="/instrument">Read the longer breakdown →</a>
+      </p>
+    </section>
+
+    <!-- LOG ────────────────────────────────────────────────────── -->
+    <section class="gs-log" id="log" aria-labelledby="log-head">
+      <header class="gs-banner">
+        <span class="gs-banner__num">IV</span>
+        <h2 id="log-head" class="gs-banner__title">Operational log</h2>
+        <span class="gs-banner__rule" aria-hidden="true"></span>
+        <span class="gs-banner__count">Last {LOG_HOME_ROWS} sessions</span>
+      </header>
+
+      <table class="gs-log__table">
+        <thead>
+          <tr>
+            <th class="gs-log__col-num">No.</th>
+            <th class="gs-log__col-when">Captured</th>
+            <th class="gs-log__col-sat">Satellite</th>
+            <th class="gs-log__col-out">Outcome</th>
+            <th class="gs-log__col-band">Band</th>
+            <th class="gs-log__col-snr">SNR</th>
+            <th class="gs-log__col-cadu">CADU</th>
+            <th class="gs-log__col-note">Pipeline / Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {log.map((p, i) => {
+            const o = p.data.outcome;
+            const outLabel = o === "success"      ? "Decoded"
+                          : o === "partial"       ? "Partial"
+                          : o === "fail_no_cadu"  ? "No lock"
+                          :                         "Skipped";
+            return (
+              <tr class:list={["gs-log__row", `gs-log__row--${o}`]}>
+                <td class="gs-log__col-num tabular">{String(all.length - i).padStart(2, "0")}</td>
+                <td class="gs-log__col-when tabular">{fmtDateTime(p.data.captured_at)}</td>
+                <td class="gs-log__col-sat">{p.data.satellite}</td>
+                <td class="gs-log__col-out">
+                  <span class:list={["gs-out", `gs-out--${o}`]}>{outLabel}</span>
+                </td>
+                <td class="gs-log__col-band tabular">{p.data.band}</td>
+                <td class="gs-log__col-snr tabular">{p.data.snr_db != null ? p.data.snr_db.toFixed(1) : "—"}</td>
+                <td class="gs-log__col-cadu tabular">
+                  {p.data.cadu_bytes != null ? (p.data.cadu_bytes / 1024).toFixed(0) + " KiB" : "—"}
+                </td>
+                <td class="gs-log__col-note">{p.data.pipeline ?? p.data.notes ?? "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p class="gs-log__more">
+        {overflow > 0 ? (
+          <>
+            <a href="/log">Full log &mdash; {all.length} sessions on file &rarr;</a>
+          </>
+        ) : (
+          <a href="/log">Full log &rarr;</a>
+        )}
+      </p>
+      <p class="gs-log__legend">
+        Sessions are logged in the order they completed &mdash; failed captures included.
+        SNR is post-DC-block baseband estimate, not link-budget margin. The full archive
+        lives on the NAS at <code>/satellite/.processed-iq-log.ndjson</code>; this table
+        is the daily-refreshed projection.
+      </p>
+    </section>
+  </Container>
+</BaseLayout>
+
+<style>
+  /* HERO ───────────────────────────────────────────────────────── */
+  .gs-hero {
+    margin-inline: calc(-1 * var(--space-page));
+    padding-inline: var(--space-page);
+    padding-top: var(--space-12);
+    padding-bottom: var(--space-12);
+    background: #000;
+    color: var(--color-paper);
+  }
+  .gs-hero :global(.gs-hero__inner) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: var(--space-12);
+    align-items: center;
+  }
+  .gs-hero__figure { margin: 0; }
+  .gs-hero__figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 72vh;
+    object-fit: contain;
+  }
+  .gs-hero__cap {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: var(--space-3);
+    align-items: center;
+    margin-top: var(--space-4);
+    padding-top: var(--space-2);
+    border-top: 1px solid color-mix(in srgb, var(--color-paper) 38%, transparent);
+  }
+  .gs-hero__cap-mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h3);
+    color: var(--color-paper);
+    letter-spacing: var(--tracking-display);
+  }
+  .gs-hero__cap-rule { width: 2.5rem; height: 1px; background: color-mix(in srgb, var(--color-paper) 38%, transparent); }
+  .gs-hero__cap-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: color-mix(in srgb, var(--color-paper) 84%, transparent);
+    line-height: var(--leading-snug);
+  }
+  .gs-hero__cap-body strong {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--color-paper);
+  }
+
+  .gs-hero__lede { max-width: 30rem; }
+  .gs-hero__eyebrow {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-paper) 70%, transparent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-paper) 22%, transparent);
+    margin-bottom: var(--space-6);
+  }
+  .gs-hero__head {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-paper);
+    font-feature-settings: var(--features-display);
+  }
+  .gs-hero__head-line { display: block; }
+  .gs-hero__head-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: #B7CFE7; /* an accent-soft against black */
+  }
+  .gs-hero__sub {
+    margin-top: var(--space-6);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    font-weight: 400;
+    line-height: var(--leading-snug);
+    color: var(--color-paper);
+  }
+
+  .gs-hero__counts {
+    margin: var(--space-8) 0 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-top: 1px solid color-mix(in srgb, var(--color-paper) 30%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-paper) 30%, transparent);
+  }
+  .gs-hero__count {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-2);
+    border-right: 1px solid color-mix(in srgb, var(--color-paper) 16%, transparent);
+  }
+  .gs-hero__count:last-child { border-right: 0; }
+  .gs-hero__count dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-paper) 65%, transparent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .gs-hero__count dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h2);
+    color: var(--color-paper);
+    letter-spacing: var(--tracking-jumbo);
+    font-feature-settings: var(--features-tabular);
+    line-height: 1;
+  }
+  .gs-hero__count--accent dd {
+    font-size: var(--type-h4);
+    color: #B7CFE7;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .gs-hero__count .tabular { font-feature-settings: var(--features-tabular); }
+
+  /* SECTION BANNER (shared) ────────────────────────────────────── */
+  .gs-banner {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-bottom: var(--space-3);
+    border-bottom: 3px solid var(--color-ink);
+    position: relative;
+    margin-top: var(--space-16);
+  }
+  .gs-banner::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -4px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .gs-banner__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    line-height: 0.9;
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-jumbo);
+  }
+  .gs-banner__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h1);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+  }
+  .gs-banner__rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .gs-banner__count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  /* GALLERY ───────────────────────────────────────────────────── */
+  .gs-gallery__grid {
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-10);
+  }
+  .gs-gallery__cell { margin: 0; }
+  .gs-gallery__cell + .gs-gallery__cell { margin-top: 0; }
+  .gs-gallery__link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+  .gs-gallery__figure {
+    margin: 0;
+    background: #000;
+    border: 1px solid var(--color-rule-strong);
+    transition: border-color 120ms ease;
+  }
+  .gs-gallery__link:hover .gs-gallery__figure { border-color: var(--color-accent); }
+  .gs-gallery__figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+  }
+  .gs-gallery__caption {
+    margin-top: var(--space-3);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: var(--space-3);
+  }
+  .gs-gallery__mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h4);
+    color: var(--color-accent);
+  }
+  .gs-gallery__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    justify-self: end;
+  }
+  .gs-gallery__line {
+    grid-column: 1 / -1;
+    margin: var(--space-2) 0 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    line-height: var(--leading-snug);
+  }
+  .gs-gallery__link:hover .gs-gallery__line { color: var(--color-ink); }
+
+  .gs-gallery__more {
+    margin-top: var(--space-8);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+  }
+
+  /* INSTRUMENT ─────────────────────────────────────────────────── */
+  .gs-instrument__note {
+    margin-top: var(--space-2);
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+    max-width: 46rem;
+  }
+
+  /* LOG TABLE ──────────────────────────────────────────────────── */
+  .gs-log__table {
+    width: 100%;
+    margin-top: var(--space-6);
+    border-collapse: collapse;
+    font-feature-settings: var(--features-tabular);
+  }
+  .gs-log__table thead th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 2px solid var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .gs-log__table tbody td {
+    padding: var(--space-3) var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    vertical-align: top;
+  }
+  .gs-log__table tbody tr:hover { background: var(--color-paper-margin); }
+  .gs-log__col-num   { width: 4rem; color: var(--color-accent) !important; font-weight: 700; }
+  .gs-log__col-when  { white-space: nowrap; }
+  .gs-log__col-out   { width: 7rem; }
+  .gs-log__col-band  { width: 4rem; text-align: center; }
+  .gs-log__col-snr   { width: 4.5rem; }
+  .gs-log__col-cadu  { width: 5rem; white-space: nowrap; }
+  .gs-log__col-note  { color: var(--color-ink-soft) !important; font-style: italic; }
+  .tabular { font-feature-settings: var(--features-tabular); }
+
+  /* Failed rows print muted so the eye lands on what decoded. */
+  .gs-log__row--fail_no_cadu td,
+  .gs-log__row--not_decoded td { color: var(--color-ink-muted); }
+  .gs-log__row--fail_no_cadu .gs-log__col-num,
+  .gs-log__row--not_decoded  .gs-log__col-num { color: var(--color-ink-muted) !important; }
+
+  /* Outcome badge — small-caps Inter inside a hairline frame. */
+  .gs-out {
+    display: inline-block;
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding: 0.15em 0.5em 0.1em;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .gs-out--success      { color: var(--color-accent); }
+  .gs-out--partial      { color: var(--color-ink); }
+  .gs-out--fail_no_cadu { color: #8C3A3A; }
+  .gs-out--not_decoded  { color: var(--color-ink-muted); }
+
+  .gs-log__more {
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+  }
+  .gs-log__more a {
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    transition: border-color 100ms ease;
+  }
+  .gs-log__more a:hover {
+    border-bottom-color: var(--color-accent);
+  }
+
+  .gs-log__legend {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    max-width: 50rem;
+  }
+  .gs-log__legend code {
+    font-family: var(--font-mono);
+    font-style: normal;
+    background: var(--color-paper-dim);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+  }
+
+  /* responsive ─────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .gs-hero :global(.gs-hero__inner) {
+      grid-template-columns: 1fr;
+      gap: var(--space-10);
+    }
+    .gs-hero__lede { max-width: none; }
+    .gs-gallery__grid { grid-template-columns: 1fr; }
+    .gs-hero__counts { grid-template-columns: repeat(2, 1fr); }
+    .gs-hero__count:nth-child(2) { border-right: 0; }
+    .gs-hero__count:nth-child(3) { border-top: 1px solid color-mix(in srgb, var(--color-paper) 16%, transparent); }
+    .gs-hero__count:nth-child(4) { border-top: 1px solid color-mix(in srgb, var(--color-paper) 16%, transparent); }
+  }
+  @media (max-width: 760px) {
+    .gs-hero__head { font-size: var(--type-display); }
+    .gs-banner { grid-template-columns: auto 1fr; }
+    .gs-banner__rule, .gs-banner__count { display: none; }
+    .gs-log__col-note { display: none; }
+  }
+  @media (max-width: 560px) {
+    .gs-log__col-band, .gs-log__col-snr { display: none; }
+  }
+</style>

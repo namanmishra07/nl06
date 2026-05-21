@@ -1,0 +1,422 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+
+const all = (await getCollection("plates"))
+  .filter((p) => !p.data.draft)
+  .sort((a, b) => b.data.captured_at.getTime() - a.data.captured_at.getTime());
+
+const fmtDateTime = (date: Date) => {
+  const iso = date.toISOString();
+  return iso.slice(0, 10) + " · " + iso.slice(11, 16) + "Z";
+};
+const fmtJustDate = (date: Date) => date.toISOString().slice(0, 10);
+
+// Group by yyyy-mm for editorial section breaks.
+type Group = { key: string; label: string; entries: typeof all };
+const groups: Group[] = [];
+for (const entry of all) {
+  const iso = entry.data.captured_at.toISOString();
+  const key = iso.slice(0, 7); // yyyy-mm
+  const last = groups[groups.length - 1];
+  if (!last || last.key !== key) {
+    const date = new Date(iso.slice(0, 7) + "-01T00:00:00Z");
+    const label = date.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    groups.push({ key, label, entries: [entry] });
+  } else {
+    last.entries.push(entry);
+  }
+}
+
+// Headline tally — counts by outcome across all entries.
+const tally = {
+  success:      all.filter((e) => e.data.outcome === "success").length,
+  partial:      all.filter((e) => e.data.outcome === "partial").length,
+  fail_no_cadu: all.filter((e) => e.data.outcome === "fail_no_cadu").length,
+  not_decoded:  all.filter((e) => e.data.outcome === "not_decoded").length,
+};
+---
+<BaseLayout
+  title="gs.nl06 — Operational log"
+  description="Every capture this rig has filed, success or failure, with the telemetry it was logged under."
+  itemNumber="№ GS04"
+>
+  <article class="log">
+    <Container size="wide" class="log__inner">
+      <header class="log__head">
+        <div class="log__rail">
+          <span class="rail__label">Register</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">{all.length} on file</span>
+        </div>
+        <div class="log__heading">
+          <h1 class="log__title">
+            <span class="log__title-line">Log.</span>
+            <span class="log__title-emphasis">Every capture, success or failure.</span>
+          </h1>
+          <p class="log__lede">
+            The full operational record of this instrument. Failures are kept on
+            file with the same provenance as successful decodes &mdash; the
+            register is honest about what didn&rsquo;t work.
+          </p>
+        </div>
+      </header>
+
+      <section class="log__tally" aria-label="Outcome tally">
+        <ol class="log__tally-list">
+          <li class="log__tally-cell log__tally-cell--success">
+            <span class="log__tally-count">{String(tally.success).padStart(2, "0")}</span>
+            <span class="log__tally-label">Decoded</span>
+            <span class="log__tally-note">CADU written, image produced.</span>
+          </li>
+          <li class="log__tally-cell log__tally-cell--partial">
+            <span class="log__tally-count">{String(tally.partial).padStart(2, "0")}</span>
+            <span class="log__tally-label">Partial</span>
+            <span class="log__tally-note">Lock intermittent, CADU thin.</span>
+          </li>
+          <li class="log__tally-cell log__tally-cell--fail">
+            <span class="log__tally-count">{String(tally.fail_no_cadu).padStart(2, "0")}</span>
+            <span class="log__tally-label">No lock</span>
+            <span class="log__tally-note">Viterbi never synced.</span>
+          </li>
+          <li class="log__tally-cell log__tally-cell--skipped">
+            <span class="log__tally-count">{String(tally.not_decoded).padStart(2, "0")}</span>
+            <span class="log__tally-label">Skipped</span>
+            <span class="log__tally-note">IQ on file, decode deferred.</span>
+          </li>
+        </ol>
+      </section>
+
+      {groups.map((g) => (
+        <section class="log__group">
+          <header class="log__group-head">
+            <span class="log__group-marker">{g.key}</span>
+            <h2 class="log__group-title">{g.label}</h2>
+            <span class="log__group-rule" aria-hidden="true"></span>
+            <span class="log__group-count">{g.entries.length} entries</span>
+          </header>
+
+          <table class="log__table">
+            <thead>
+              <tr>
+                <th class="log__col-num">No.</th>
+                <th class="log__col-when">Captured</th>
+                <th class="log__col-sat">Satellite</th>
+                <th class="log__col-out">Outcome</th>
+                <th class="log__col-band">Band</th>
+                <th class="log__col-freq">Frequency</th>
+                <th class="log__col-snr">SNR</th>
+                <th class="log__col-cadu">CADU</th>
+                <th class="log__col-note">Pipeline / Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.entries.map((p) => {
+                const i = all.findIndex((x) => x.id === p.id);
+                const o = p.data.outcome;
+                const outLabel = o === "success"      ? "Decoded"
+                              : o === "partial"       ? "Partial"
+                              : o === "fail_no_cadu"  ? "No lock"
+                              :                         "Skipped";
+                return (
+                  <tr class:list={["log__row", `log__row--${o}`]}>
+                    <td class="log__col-num tabular">{String(all.length - i).padStart(2, "0")}</td>
+                    <td class="log__col-when tabular">{fmtDateTime(p.data.captured_at)}</td>
+                    <td class="log__col-sat">{p.data.satellite}</td>
+                    <td class="log__col-out">
+                      <span class:list={["gs-out", `gs-out--${o}`]}>{outLabel}</span>
+                    </td>
+                    <td class="log__col-band tabular">{p.data.band}</td>
+                    <td class="log__col-freq tabular">{p.data.frequency_mhz.toFixed(3)}</td>
+                    <td class="log__col-snr tabular">{p.data.snr_db != null ? p.data.snr_db.toFixed(1) : "—"}</td>
+                    <td class="log__col-cadu tabular">
+                      {p.data.cadu_bytes != null ? (p.data.cadu_bytes / 1024).toFixed(0) + " KiB" : "—"}
+                    </td>
+                    <td class="log__col-note">{p.data.pipeline ?? p.data.notes ?? "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      ))}
+
+      <footer class="log__foot">
+        <p class="log__legend">
+          The full provenance archive lives on the NAS at
+          <code>/satellite/.processed-iq-log.ndjson</code>. This page is the
+          daily-refreshed editorial projection of that file: same data, fewer
+          fields, columns chosen for legibility.
+        </p>
+      </footer>
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  .log { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .log :global(.log__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  .log__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .log__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label, .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .rail__label { color: var(--color-ink); font-weight: 600; }
+  .rail__date  { color: var(--color-ink-muted); }
+  .rail__rule  { height: 1px; background: var(--color-rule); }
+
+  .log__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .log__title-line { display: block; }
+  .log__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+  .log__lede {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+    max-width: 42rem;
+  }
+
+  /* TALLY ─────────────────────────────────────────────────────── */
+  .log__tally {
+    grid-column: 1 / -1;
+    margin-top: var(--space-10);
+  }
+  .log__tally-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--color-ink);
+  }
+  .log__tally-cell {
+    padding: var(--space-5) var(--space-5);
+    border-right: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .log__tally-cell + .log__tally-cell { margin-top: 0; }
+  .log__tally-cell:last-child { border-right: 0; }
+  .log__tally-count {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-display);
+    line-height: 0.9;
+    letter-spacing: var(--tracking-jumbo);
+    font-feature-settings: var(--features-tabular);
+  }
+  .log__tally-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    margin-top: var(--space-2);
+  }
+  .log__tally-note {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    margin-top: var(--space-1);
+  }
+  .log__tally-cell--success .log__tally-count { color: var(--color-accent); }
+  .log__tally-cell--success .log__tally-label { color: var(--color-accent); }
+  .log__tally-cell--partial .log__tally-count { color: var(--color-ink); }
+  .log__tally-cell--fail    .log__tally-count { color: #8C3A3A; }
+  .log__tally-cell--fail    .log__tally-label { color: #8C3A3A; }
+  .log__tally-cell--skipped .log__tally-count { color: var(--color-ink-muted); }
+
+  /* GROUPS ────────────────────────────────────────────────────── */
+  .log__group {
+    grid-column: 1 / -1;
+    margin-top: var(--space-14);
+  }
+  .log__group-head {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-bottom: var(--space-3);
+    border-bottom: 3px solid var(--color-ink);
+    position: relative;
+  }
+  .log__group-head::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -4px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .log__group-marker {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .log__group-title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h1);
+    letter-spacing: var(--tracking-display);
+    line-height: 1;
+  }
+  .log__group-rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .log__group-count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  /* TABLE ─────────────────────────────────────────────────────── */
+  .log__table {
+    width: 100%;
+    margin-top: var(--space-6);
+    border-collapse: collapse;
+    font-feature-settings: var(--features-tabular);
+  }
+  .log__table thead th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 2px solid var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .log__table tbody td {
+    padding: var(--space-3) var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    vertical-align: top;
+  }
+  .log__table tbody tr:hover { background: var(--color-paper-margin); }
+  .log__col-num   { width: 4rem; color: var(--color-accent) !important; font-weight: 700; }
+  .log__col-when  { white-space: nowrap; }
+  .log__col-out   { width: 7rem; }
+  .log__col-band  { width: 4rem; text-align: center; }
+  .log__col-freq  { width: 6rem; }
+  .log__col-snr   { width: 4.5rem; }
+  .log__col-cadu  { width: 5rem; white-space: nowrap; }
+  .log__col-note  { color: var(--color-ink-soft) !important; font-style: italic; min-width: 16rem; }
+  .tabular { font-feature-settings: var(--features-tabular); }
+
+  .log__row--fail_no_cadu td,
+  .log__row--not_decoded  td { color: var(--color-ink-muted); }
+  .log__row--fail_no_cadu .log__col-num,
+  .log__row--not_decoded  .log__col-num { color: var(--color-ink-muted) !important; }
+
+  .gs-out {
+    display: inline-block;
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding: 0.15em 0.5em 0.1em;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .gs-out--success      { color: var(--color-accent); }
+  .gs-out--partial      { color: var(--color-ink); }
+  .gs-out--fail_no_cadu { color: #8C3A3A; }
+  .gs-out--not_decoded  { color: var(--color-ink-muted); }
+
+  .log__foot {
+    grid-column: 1 / -1;
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-rule);
+  }
+  .log__legend {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    max-width: 56rem;
+  }
+  .log__legend code {
+    font-family: var(--font-mono);
+    font-style: normal;
+    background: var(--color-paper-dim);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+  }
+
+  @media (max-width: 900px) {
+    .log__tally-list { grid-template-columns: repeat(2, 1fr); }
+    .log__tally-cell:nth-child(2) { border-right: 0; }
+    .log__tally-cell:nth-child(3),
+    .log__tally-cell:nth-child(4) { border-top: 1px solid var(--color-rule); }
+  }
+  @media (max-width: 760px) {
+    .log :global(.log__inner),
+    .log__head { grid-template-columns: 1fr; }
+    .log__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .log__rail .rail__rule { flex: 1; }
+    .log__title { font-size: var(--type-display); }
+    .log__group-head { grid-template-columns: auto 1fr; }
+    .log__group-rule, .log__group-count { display: none; }
+    .log__col-note { display: none; }
+  }
+  @media (max-width: 560px) {
+    .log__tally-list { grid-template-columns: 1fr; }
+    .log__tally-cell { border-right: 0; border-bottom: 1px solid var(--color-rule); }
+    .log__tally-cell:last-child { border-bottom: 0; }
+    .log__col-band, .log__col-snr, .log__col-cadu, .log__col-freq { display: none; }
+  }
+</style>

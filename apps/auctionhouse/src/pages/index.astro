@@ -1,0 +1,515 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+
+/* Placeholder schema — what a real lot will look like once the backend
+   pulls from MSTC. Single sample row, fields blanked or italicised, used
+   purely as a typographic preview. */
+const sampleLot = {
+  lot:        "—",
+  title:      "Lot title appears here",
+  category:   "Category",
+  agency:     "Selling agency",
+  location:   "Location · State",
+  start:      "Start date",
+  close:      "Close date",
+  emd:        "Earnest money deposit",
+  reserve:    "Reserve price",
+  status:     "UPCOMING",
+};
+---
+<BaseLayout
+  title="auctionhouse.nl06 — A register of government lots"
+  description="A tracker for government surplus and disposal auctions running on MSTC India. Backend in development."
+  itemNumber="№ AH00"
+>
+  <article class="ah">
+    <Container size="wide" class="ah__inner">
+      <!-- HERO ─────────────────────────────────────────────────── -->
+      <header class="ah__head">
+        <div class="ah__rail">
+          <span class="rail__label">Status</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">Backend in development</span>
+        </div>
+
+        <div class="ah__heading">
+          <span class="ah__eyebrow">A standing register of public-sector auctions, India</span>
+          <h1 class="ah__title">
+            <span class="ah__title-line">Auctionhouse.</span>
+            <span class="ah__title-emphasis">What the state is selling.</span>
+          </h1>
+          <p class="ah__lede dropcap-text">
+            Every working day the Government of India puts thousands of lots on the open
+            market through <strong>MSTC Limited</strong> &mdash; the public-sector
+            e-auction platform that handles surplus, disposal, and confiscated-goods sales
+            for the Ministries, the Railways, defence-PSU yards, port trusts, customs
+            warehouses, and the central banks of seized metal. Most of it goes through
+            quietly. This register watches the ones that don&rsquo;t.
+          </p>
+
+          <p class="ah__sub">
+            Currently a placeholder. The backend &mdash; a daily ingest of MSTC&rsquo;s
+            published catalogues, deduplicated and indexed against close dates &mdash;
+            is in development. When it lands, the register fills in below.
+          </p>
+        </div>
+      </header>
+
+      <!-- METHODOLOGY ─────────────────────────────────────────── -->
+      <section class="ah__method" id="methodology">
+        <header class="ah__banner">
+          <span class="ah__banner__num">§</span>
+          <h2 class="ah__banner__title">Methodology</h2>
+          <span class="ah__banner__rule" aria-hidden="true"></span>
+          <span class="ah__banner__count">In development</span>
+        </header>
+
+        <ol class="ah__method-steps">
+          <li class="ah-step">
+            <span class="ah-step__num">01</span>
+            <div class="ah-step__body">
+              <h3 class="ah-step__head">Ingest</h3>
+              <p class="ah-step__text">
+                A daily crawl of MSTC&rsquo;s published catalogue pages and the
+                supporting tender notices. Each lot is captured once with
+                provenance &mdash; URL, snapshot, fetched-at timestamp.
+              </p>
+            </div>
+          </li>
+          <li class="ah-step">
+            <span class="ah-step__num">02</span>
+            <div class="ah-step__body">
+              <h3 class="ah-step__head">Normalise</h3>
+              <p class="ah-step__text">
+                Lots are mapped to a single schema: selling agency, category,
+                location, reserve price, EMD, start, close. Free-text item
+                descriptions stay verbatim. No translation, no rewriting.
+              </p>
+            </div>
+          </li>
+          <li class="ah-step">
+            <span class="ah-step__num">03</span>
+            <div class="ah-step__body">
+              <h3 class="ah-step__head">Register</h3>
+              <p class="ah-step__text">
+                The register is the public output. Filterable by category and
+                agency; sorted by close date; closed lots retained for the
+                record with their hammer outcomes where MSTC publishes them.
+              </p>
+            </div>
+          </li>
+          <li class="ah-step">
+            <span class="ah-step__num">04</span>
+            <div class="ah-step__body">
+              <h3 class="ah-step__head">Annotate</h3>
+              <p class="ah-step__text">
+                A small subset of lots gets a written note &mdash; what&rsquo;s
+                being sold, why it&rsquo;s interesting, what the close
+                attracted. Hand-written, infrequent, opinionated.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- SAMPLE LOT (typographic preview) ─────────────────────── -->
+      <section class="ah__preview" aria-labelledby="preview">
+        <header class="ah__banner">
+          <span class="ah__banner__num">¶</span>
+          <h2 id="preview" class="ah__banner__title">Schema preview</h2>
+          <span class="ah__banner__rule" aria-hidden="true"></span>
+          <span class="ah__banner__count">What a lot looks like</span>
+        </header>
+
+        <p class="ah__preview-note">
+          The shape of a future entry. Once the backend is live, this register
+          will fill with real rows pulled straight from MSTC overnight.
+        </p>
+
+        <article class="ah-lot ah-lot--placeholder">
+          <aside class="ah-lot__rail">
+            <span class="ah-lot__mark">Lot {sampleLot.lot}</span>
+            <span class:list={["status-mark", "status-mark--unresolved"]}>{sampleLot.status}</span>
+            <span class="ah-lot__when">Close · {sampleLot.close}</span>
+          </aside>
+
+          <div class="ah-lot__body">
+            <h3 class="ah-lot__title">{sampleLot.title}</h3>
+            <dl class="ah-lot__rows">
+              <div class="ah-lot__row"><dt>Selling agency</dt><dd>{sampleLot.agency}</dd></div>
+              <div class="ah-lot__row"><dt>Category</dt><dd>{sampleLot.category}</dd></div>
+              <div class="ah-lot__row"><dt>Location</dt><dd>{sampleLot.location}</dd></div>
+              <div class="ah-lot__row"><dt>Reserve</dt><dd class="tabular">{sampleLot.reserve}</dd></div>
+              <div class="ah-lot__row"><dt>EMD</dt><dd class="tabular">{sampleLot.emd}</dd></div>
+              <div class="ah-lot__row"><dt>Opens</dt><dd class="tabular">{sampleLot.start}</dd></div>
+              <div class="ah-lot__row"><dt>Closes</dt><dd class="tabular">{sampleLot.close}</dd></div>
+            </dl>
+          </div>
+        </article>
+      </section>
+
+      <!-- SOURCES ─────────────────────────────────────────────── -->
+      <section class="ah__sources" id="sources">
+        <header class="ah__banner">
+          <span class="ah__banner__num">¤</span>
+          <h2 class="ah__banner__title">Primary sources</h2>
+          <span class="ah__banner__rule" aria-hidden="true"></span>
+          <span class="ah__banner__count">As of 2026</span>
+        </header>
+
+        <dl class="ah__sources-list">
+          <div class="ah__source">
+            <dt>MSTC Limited</dt>
+            <dd>
+              <a href="https://www.mstcindia.co.in" rel="noopener">mstcindia.co.in</a>
+              &nbsp;&mdash;&nbsp; the Government of India&rsquo;s e-auction platform
+              for surplus, disposal, scrap, and confiscated goods. The primary
+              ingest target.
+            </dd>
+          </div>
+          <div class="ah__source">
+            <dt>DGS&amp;D / GeM</dt>
+            <dd>
+              The Government e-Marketplace handles procurement, not auctions, so
+              it is out of scope here. Cross-referenced when an MSTC lot is the
+              upstream consequence of a GeM procurement decision.
+            </dd>
+          </div>
+          <div class="ah__source">
+            <dt>Selling agency catalogues</dt>
+            <dd>
+              Railway divisions, defence PSUs, port trusts, central PSU mills
+              and refineries each publish their own catalogues alongside the
+              MSTC listing. Used to verify lot composition and condition.
+            </dd>
+          </div>
+        </dl>
+
+        <p class="ah__caveat">
+          The register tracks what is publicly listed on MSTC. It does not predict
+          outcomes, advise on bidding, or represent any seller or buyer. The
+          intent is the same as the rest of <a href="https://nl06.com">nl06</a>:
+          watch a running system, write down what it does.
+        </p>
+      </section>
+
+      <p class="ornament" aria-hidden="true"></p>
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  .ah { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .ah :global(.ah__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* HEAD ────────────────────────────────────────────────────── */
+  .ah__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .ah__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label, .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .rail__label { color: var(--color-ink); font-weight: 600; }
+  .rail__date  { color: var(--color-accent); }
+  .rail__rule  { height: 1px; background: var(--color-rule); }
+
+  .ah__eyebrow {
+    display: inline-flex;
+    align-items: baseline;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: var(--space-6);
+  }
+  .ah__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .ah__title-line { display: block; }
+  .ah__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+  .ah__lede {
+    margin-top: var(--space-6);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    max-width: 44rem;
+  }
+  .ah__sub {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+    max-width: 44rem;
+    padding-top: var(--space-5);
+    border-top: 1px dashed var(--color-rule-strong);
+  }
+
+  /* BANNER (shared) ─────────────────────────────────────────── */
+  .ah__method, .ah__preview, .ah__sources {
+    grid-column: 1 / -1;
+    margin-top: var(--space-16);
+  }
+  .ah__banner {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-bottom: var(--space-3);
+    border-bottom: 3px solid var(--color-ink);
+    position: relative;
+  }
+  .ah__banner::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -4px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .ah__banner__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    color: var(--color-accent);
+    line-height: 0.9;
+  }
+  .ah__banner__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h1);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+  }
+  .ah__banner__rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .ah__banner__count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  /* METHOD steps ─────────────────────────────────────────────── */
+  .ah__method-steps {
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    border-top: 1px solid var(--color-rule);
+    border-left: 1px solid var(--color-rule);
+    max-width: 56rem;
+  }
+  .ah-step {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: var(--space-4);
+    padding: var(--space-6) var(--space-6);
+    border-right: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .ah-step + .ah-step { margin-top: 0; }
+  .ah-step__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    color: var(--color-accent);
+    line-height: 0.9;
+    font-feature-settings: var(--features-tabular);
+  }
+  .ah-step__head {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h4);
+    color: var(--color-ink);
+  }
+  .ah-step__text {
+    margin-top: var(--space-2);
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-soft);
+  }
+
+  /* PREVIEW lot ─────────────────────────────────────────────── */
+  .ah__preview-note {
+    margin: var(--space-6) 0 var(--space-6);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    color: var(--color-ink-soft);
+    max-width: 44rem;
+  }
+  .ah-lot {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    padding: var(--space-8);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+  }
+  .ah-lot--placeholder {
+    background-image:
+      repeating-linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--color-rule-strong) 14%, transparent) 0,
+        color-mix(in srgb, var(--color-rule-strong) 14%, transparent) 1px,
+        transparent 1px,
+        transparent 14px
+      );
+  }
+  .ah-lot__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .ah-lot__mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h2);
+    color: var(--color-accent);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+  }
+  .ah-lot__when {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .ah-lot__body { max-width: 50rem; }
+  .ah-lot__title {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h2);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-muted);
+    letter-spacing: var(--tracking-display);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .ah-lot__rows {
+    margin: var(--space-5) 0 0;
+    display: grid;
+    grid-template-columns: 10rem 1fr;
+    gap: var(--space-3) var(--space-6);
+  }
+  .ah-lot__row { display: contents; }
+  .ah-lot__rows dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding-top: 0.18em;
+  }
+  .ah-lot__rows dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    font-style: italic;
+    line-height: var(--leading-normal);
+  }
+  .ah-lot__rows dd.tabular { font-feature-settings: var(--features-tabular); font-style: normal; }
+
+  /* SOURCES ─────────────────────────────────────────────────── */
+  .ah__sources-list {
+    margin: var(--space-8) 0 0;
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: var(--space-5) var(--space-6);
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+    padding: var(--space-6) 0;
+  }
+  .ah__source { display: contents; }
+  .ah__sources-list dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding-top: 0.18em;
+  }
+  .ah__sources-list dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
+  }
+  .ah__caveat {
+    margin-top: var(--space-6);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    max-width: 50rem;
+  }
+
+  @media (max-width: 760px) {
+    .ah :global(.ah__inner),
+    .ah__head,
+    .ah-lot,
+    .ah__sources-list,
+    .ah-lot__rows { grid-template-columns: 1fr; }
+    .ah__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .ah__rail .rail__rule { flex: 1; }
+    .ah__title { font-size: var(--type-display); }
+    .ah__method-steps { grid-template-columns: 1fr; }
+    .ah__banner { grid-template-columns: auto 1fr; }
+    .ah__banner__rule, .ah__banner__count { display: none; }
+    .ah-lot__rail { flex-direction: row; align-items: baseline; }
+    .ah__sources-list dt { padding-top: var(--space-3); }
+  }
+</style>

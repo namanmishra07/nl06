@@ -1,0 +1,215 @@
+---
+import type { CollectionEntry } from "astro:content";
+
+interface Props {
+  plate: CollectionEntry<"plates">;
+  number: number;
+  /** Display roman numeral; computed by caller. */
+  roman: string;
+  /** Heading level used for the title (h2/h3). */
+  level?: 2 | 3;
+}
+const { plate, number, roman, level = 3 } = Astro.props;
+const d = plate.data;
+
+// Caller is responsible for filtering to entries with an image.
+const TitleTag = `h${level}` as "h2" | "h3";
+
+const fmtDate = (date: Date) => {
+  const iso = date.toISOString();
+  return iso.slice(0, 10) + " · " + iso.slice(11, 16) + "Z";
+};
+---
+<article class="plate">
+  <figure class="plate__figure">
+    <a href={d.image} class="plate__figure-link" aria-label={`Open ${d.satellite} ${d.channel ?? "capture"} at full resolution`}>
+      <img
+        src={d.image}
+        alt={`${d.satellite} ${d.channel ?? "capture"} ${fmtDate(d.captured_at)}`}
+        loading="lazy"
+        decoding="async"
+      />
+    </a>
+  </figure>
+
+  <div class="plate__body">
+    <header class="plate__head">
+      <span class="plate__mark">Plate {roman}</span>
+      <span class="plate__folio">No. {String(number).padStart(2, "0")}</span>
+    </header>
+    {d.title && <TitleTag class="plate__title">{d.title}</TitleTag>}
+    {d.caption && <p class="plate__cap">{d.caption}</p>}
+
+    <dl class="plate__telemetry">
+      <div class="plate__row">
+        <dt>Satellite</dt>
+        <dd>{d.satellite}</dd>
+      </div>
+      {d.channel && (
+        <div class="plate__row">
+          <dt>Channel</dt>
+          <dd>{d.channel}</dd>
+        </div>
+      )}
+      <div class="plate__row">
+        <dt>Captured</dt>
+        <dd class="tabular">{fmtDate(d.captured_at)}</dd>
+      </div>
+      {d.aos && d.los && (
+        <div class="plate__row">
+          <dt>AOS / LOS</dt>
+          <dd class="tabular">
+            {d.aos.toISOString().slice(11, 16)}Z
+            &nbsp;→&nbsp;
+            {d.los.toISOString().slice(11, 16)}Z
+            {d.duration_s && (<>&nbsp;&nbsp;<span class="plate__sub">({d.duration_s}s)</span></>)}
+          </dd>
+        </div>
+      )}
+      <div class="plate__row">
+        <dt>Frequency</dt>
+        <dd class="tabular">{d.frequency_mhz.toFixed(3)} MHz <span class="plate__sub">({d.band}-band)</span></dd>
+      </div>
+      {d.snr_db !== undefined && d.snr_db !== null && (
+        <div class="plate__row">
+          <dt>SNR</dt>
+          <dd class="tabular">{d.snr_db.toFixed(1)} dB</dd>
+        </div>
+      )}
+      {d.cadu_bytes !== undefined && (
+        <div class="plate__row">
+          <dt>CADU</dt>
+          <dd class="tabular">{(d.cadu_bytes / 1024).toFixed(0)} KiB</dd>
+        </div>
+      )}
+      {d.pipeline && (
+        <div class="plate__row">
+          <dt>Pipeline</dt>
+          <dd>{d.pipeline}</dd>
+        </div>
+      )}
+    </dl>
+  </div>
+</article>
+
+<style>
+  .plate {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: var(--space-10);
+    align-items: start;
+    padding: var(--space-10) 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .plate__figure { margin: 0; }
+  .plate__figure-link {
+    display: block;
+    background: #000;
+    text-decoration: none;
+    border: 1px solid var(--color-rule-strong);
+    transition: border-color 120ms ease, opacity 120ms ease;
+  }
+  .plate__figure-link:hover {
+    border-color: var(--color-accent);
+    opacity: 0.95;
+  }
+  .plate__figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+
+  .plate__body { padding-top: var(--space-2); }
+
+  .plate__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .plate__mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h3);
+    line-height: 1;
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-display);
+    font-feature-settings: var(--features-display);
+  }
+  .plate__folio {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  .plate__title {
+    margin-top: var(--space-4);
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h2);
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .plate__cap {
+    margin-top: var(--space-3);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+  }
+
+  .plate__telemetry {
+    margin: var(--space-6) 0 0;
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: var(--space-2) var(--space-5);
+    border-top: 1px solid var(--color-ink);
+    padding-top: var(--space-3);
+  }
+  .plate__row { display: contents; }
+  .plate__telemetry dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-top: 0.18em;
+  }
+  .plate__telemetry dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink);
+    line-height: var(--leading-snug);
+  }
+  .plate__telemetry dd.tabular {
+    font-feature-settings: var(--features-tabular);
+  }
+  .plate__sub {
+    color: var(--color-ink-muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 860px) {
+    .plate {
+      grid-template-columns: 1fr;
+      gap: var(--space-6);
+    }
+  }
+  @media (max-width: 560px) {
+    .plate__telemetry { grid-template-columns: 1fr; gap: var(--space-1); }
+    .plate__telemetry dt { padding-top: var(--space-3); }
+    .plate__title { font-size: var(--type-h3); }
+  }
+</style>

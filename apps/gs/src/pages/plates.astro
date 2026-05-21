@@ -1,0 +1,135 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import PlateCard  from "~/components/PlateCard.astro";
+
+const all = (await getCollection("plates"))
+  .filter((p) => !p.data.draft && p.data.image)
+  .sort((a, b) => b.data.captured_at.getTime() - a.data.captured_at.getTime());
+
+const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"];
+---
+<BaseLayout
+  title="gs.nl06 — Plates"
+  description="Every plate this instrument has filed, in reverse chronological order."
+  itemNumber="№ GS02"
+>
+  <article class="plates">
+    <Container size="wide" class="plates__inner">
+      <header class="plates__head">
+        <div class="plates__rail">
+          <span class="rail__label">Register</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">{all.length} on file</span>
+        </div>
+        <div class="plates__heading">
+          <h1 class="plates__title">
+            <span class="plates__title-line">Plates.</span>
+            <span class="plates__title-emphasis">Reverse-chronological, no thumbnails.</span>
+          </h1>
+          <p class="plates__lede">
+            Every frame this instrument has filed, in the order it filed them.
+            The most recent at the top. Each entry carries the telemetry it was
+            captured under &mdash; tune, sample rate, signal-to-noise &mdash; so
+            the record can be re-checked against the raw IQ on the NAS.
+          </p>
+        </div>
+      </header>
+
+      <ol class="plates__list">
+        {all.map((p, i) => (
+          <li id={p.id}>
+            <PlateCard plate={p} number={all.length - i} roman={romans[i]} level={2} />
+          </li>
+        ))}
+      </ol>
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  .plates { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .plates :global(.plates__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+  .plates__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .plates__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  .plates__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .plates__title-line { display: block; }
+  .plates__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+  .plates__lede {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+    max-width: 42rem;
+  }
+
+  .plates__list {
+    grid-column: 1 / -1;
+    margin: var(--space-6) 0 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--color-rule);
+  }
+  .plates__list li { margin: 0; }
+  .plates__list li + li { margin-top: 0; }
+
+  @media (max-width: 760px) {
+    .plates :global(.plates__inner),
+    .plates__head { grid-template-columns: 1fr; }
+    .plates__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .plates__rail .rail__rule { flex: 1; }
+    .plates__title { font-size: var(--type-display); }
+  }
+</style>
