@@ -1,71 +1,114 @@
 ---
 import Container from "./Container.astro";
 
+interface ColophonLink { label: string; href: string; }
 interface Props {
   email?: string;
-  subdomains?: { label: string; href: string }[];
-  /** Footer signature line. e.g. "running on a Pi in Lucknow" */
+  subdomains?: ColophonLink[];
+  /** Closing signature line. */
   signature?: string;
 }
 
 const {
   email = "hi@nl06.com",
   subdomains = [
-    { label: "gs",      href: "https://gs.nl06.com" },
-    { label: "chains",  href: "https://chains.nl06.com" },
-    { label: "reading", href: "https://reading.nl06.com" },
+    { label: "gs.",      href: "https://gs.nl06.com" },
+    { label: "chains.",  href: "https://chains.nl06.com" },
+    { label: "reading.", href: "https://reading.nl06.com" },
   ],
-  signature,
+  signature = "Built and run from one room in Lucknow.",
 } = Astro.props;
 ---
 <footer class="site-footer">
   <Container size="wide" class="site-footer__inner">
-    <div class="site-footer__col">
-      <a class="site-footer__email" href={`mailto:${email}`}>{email}</a>
-      {signature && <p class="site-footer__signature">{signature}</p>}
-    </div>
-    <ul class="site-footer__subs">
-      {subdomains.map((s) => (
-        <li><a href={s.href}>{s.label}.</a></li>
-      ))}
-    </ul>
+    <section class="colophon">
+      <h2 class="colophon__heading">Colophon</h2>
+
+      <dl class="colophon__rows">
+        <div class="colophon__row">
+          <dt>Type</dt>
+          <dd>Source Serif 4 for body. Inter for chrome.</dd>
+        </div>
+        <div class="colophon__row">
+          <dt>Built with</dt>
+          <dd>Astro &amp; Tailwind, deployed to Cloudflare Pages.</dd>
+        </div>
+        <div class="colophon__row">
+          <dt>Source</dt>
+          <dd><a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a></dd>
+        </div>
+        <div class="colophon__row">
+          <dt>Subdomains</dt>
+          <dd>
+            {subdomains.map((s, i) => (
+              <>
+                {i > 0 && <span aria-hidden="true"> · </span>}
+                <a href={s.href}>{s.label}</a>
+              </>
+            ))}
+          </dd>
+        </div>
+        <div class="colophon__row">
+          <dt>Write</dt>
+          <dd><a href={`mailto:${email}`}>{email}</a></dd>
+        </div>
+      </dl>
+
+      <p class="colophon__sig">{signature}</p>
+    </section>
   </Container>
 </footer>
 
 <style>
   .site-footer {
     margin-top: var(--space-24);
-    padding-top: var(--space-8);
+    padding-top: var(--space-10);
     padding-bottom: var(--space-12);
     border-top: 1px solid var(--color-rule);
-    font-family: var(--font-sans);
-    font-size: var(--type-small);
-    color: var(--color-ink-muted);
+    background: var(--color-paper);
   }
-  .site-footer :global(.site-footer__inner) {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-8);
-    flex-wrap: wrap;
-  }
-  .site-footer__col {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-  .site-footer__email {
+  .colophon {
+    font-family: var(--font-serif);
     color: var(--color-ink-soft);
+    font-size: var(--type-small);
+    line-height: var(--leading-normal);
   }
-  .site-footer__signature {
+  .colophon__heading {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    margin-bottom: var(--space-5);
+  }
+  .colophon__rows {
+    display: grid;
+    grid-template-columns: 9rem 1fr;
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
+    padding-bottom: var(--space-6);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .colophon__row { display: contents; }
+  .colophon__rows dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    padding-top: 0.18em;
+  }
+  .colophon__rows dd { margin: 0; }
+  .colophon__rows a { color: var(--color-ink); }
+  .colophon__sig {
+    margin-top: var(--space-5);
+    font-style: italic;
+    color: var(--color-ink-muted);
     font-size: var(--type-meta);
   }
-  .site-footer__subs {
-    display: flex;
-    gap: var(--space-5);
-    list-style: none;
-    padding: 0;
-    margin: 0;
+  @media (max-width: 600px) {
+    .colophon__rows { grid-template-columns: 1fr; gap: var(--space-1) 0; }
+    .colophon__rows dt { padding-top: var(--space-3); }
   }
-  .site-footer__subs li + li { margin-top: 0; }
 </style>

@@ -12,14 +12,24 @@ import Prose      from "@nl06/design-system/components/Prose.astro";
     <h1>About</h1>
 
     <Prose>
-      <p><em>PLACEHOLDER — 5 sentences max. Where trained, what built, where now, what curious about. Link to LinkedIn for the rest.</em></p>
+      <p>I build instruments and write about what they reveal.</p>
 
-      <p>— <a href="https://www.linkedin.com/in/namanmishra07" rel="noopener">LinkedIn</a></p>
+      <p>Currently based in Mumbai, with a rooftop ground station running 1,400&nbsp;km north in Lucknow. Before that: a few years of building hardware-software things — some of which shipped, some of which I walked away from when the next round didn't make sense.</p>
+
+      <p>What's loaded into the next few months is at <a href="/now">/now</a>. What I'm reading is at <a href="https://reading.nl06.com">reading.</a> The way I think about macro shifts is at <a href="https://chains.nl06.com">chains.</a></p>
+
+      <p>For the rest: <a href="https://www.linkedin.com/in/namanmishra07" rel="noopener">LinkedIn</a>.</p>
     </Prose>
   </Container>
 </BaseLayout>
 
 <style>
   .about { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .about > * + * { margin-top: var(--space-6); }
+  .about > :global(.prose-flow) { margin-top: var(--space-8); }
+  .about > :global(.prose-flow) > p:first-child {
+    font-size: var(--type-h3);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    font-style: italic;
+  }
 </style>

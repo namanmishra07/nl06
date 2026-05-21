@@ -14,14 +14,20 @@ interface Props {
   nav?: NavItem[];
   /** Home / site title label. */
   title?: string;
+  /** Small caption next to the title (e.g. "reading.", "chains."). */
+  caption?: string;
   /** Where the site title links to. */
   homeHref?: string;
+  /** Edition / dateline shown in meta type. */
+  edition?: string;
 }
 
 const {
   pathname = "/",
   title = "nl06",
+  caption,
   homeHref = "/",
+  edition = "Issue I · 2026",
   nav = [
     { label: "Now",     href: "/now" },
     { label: "Writing", href: "/writing" },
@@ -36,7 +42,12 @@ const isCurrent = (href: string) => {
 ---
 <header class="site-header">
   <Container size="wide" class="site-header__inner">
-    <a href={homeHref} class="site-header__title">{title}</a>
+    <div class="site-header__lockup">
+      <a href={homeHref} class="site-header__title">
+        {title}{caption && <span class="site-header__caption">{caption}</span>}
+      </a>
+      <span class="site-header__edition">{edition}</span>
+    </div>
     <nav class="site-header__nav" aria-label="Primary">
       {nav.map((item) => (
         <NavLink href={item.href} external={item.external} current={isCurrent(item.href)}>
@@ -58,14 +69,32 @@ const isCurrent = (href: string) => {
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-8);
+    flex-wrap: wrap;
+  }
+  .site-header__lockup {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
   }
   .site-header__title {
     font-family: var(--font-serif);
     font-weight: 600;
-    font-size: var(--type-h4);
+    font-size: var(--type-h3);
     color: var(--color-ink);
     text-decoration: none;
     letter-spacing: var(--tracking-tight);
+    line-height: 1;
+  }
+  .site-header__caption {
+    color: var(--color-ink-muted);
+    font-weight: 400;
+  }
+  .site-header__edition {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
   }
   .site-header__nav {
     display: flex;

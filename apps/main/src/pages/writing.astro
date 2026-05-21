@@ -2,6 +2,11 @@
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
 import Prose      from "@nl06/design-system/components/Prose.astro";
+
+// Eventually this page will aggregate from reading. + longer essays.
+// For now it's a pointer + an empty essays list.
+interface Essay { title: string; date: string; href: string; blurb: string; }
+const essays: Essay[] = [];
 ---
 <BaseLayout
   title="Writing — nl06"
@@ -10,16 +15,47 @@ import Prose      from "@nl06/design-system/components/Prose.astro";
 >
   <Container size="prose" class="writing">
     <h1>Writing</h1>
+    <p class="sub">Short notes live at <a href="https://reading.nl06.com">reading.nl06.com</a> — one entry per book, paper, or post that shifted something. Longer essays land here.</p>
 
-    <Prose>
-      <p>Notes live at <a href="https://reading.nl06.com">reading.nl06.com</a> — one entry per book, paper, or post that shifted something.</p>
-
-      <p><em>PLACEHOLDER — when longer-form essays exist, they'll be listed below in reverse-chronological order. Phase 1 leaves this section empty.</em></p>
-    </Prose>
+    <h2 class="section-head">Essays</h2>
+    {essays.length === 0 ? (
+      <p class="empty"><em>No essays yet. The bar for posting here is higher than for <a href="https://reading.nl06.com">reading.</a> — under-baked writing on a personal site is worse than no writing.</em></p>
+    ) : (
+      <ul class="essays">
+        {essays.map((e) => (
+          <li class="essay">
+            <a href={e.href} class="essay__link">{e.title}</a>
+            <span class="essay__date">{e.date}</span>
+            <p class="essay__blurb">{e.blurb}</p>
+          </li>
+        ))}
+      </ul>
+    )}
   </Container>
 </BaseLayout>
 
 <style>
   .writing { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .writing > * + * { margin-top: var(--space-6); }
+  .writing > h1 { }
+  .writing > .sub {
+    margin-top: var(--space-4);
+    color: var(--color-ink-soft);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+  }
+  .section-head {
+    margin-top: var(--space-12);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+  .empty {
+    margin-top: var(--space-6);
+    color: var(--color-ink-muted);
+  }
 </style>

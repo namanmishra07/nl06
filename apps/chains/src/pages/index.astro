@@ -11,23 +11,41 @@ const all = (await getCollection("chains"))
 
 const active = all.filter((c) => c.data.status !== "KILLED");
 const killed = all.filter((c) => c.data.status === "KILLED");
+
+const counts = {
+  live:       all.filter((c) => c.data.status === "LIVE").length,
+  unresolved: all.filter((c) => c.data.status === "UNRESOLVED").length,
+  killed:     killed.length,
+};
 ---
 <BaseLayout
   title="chains.nl06"
-  description="Consequence chains — a public window into the methodology."
+  description="A public window into a consequence-chain methodology."
 >
   <Container size="container" class="page">
-    <p class="meta">Methodology</p>
-    <h1>Consequence chains</h1>
+    <p class="dateline">Consequence chains &nbsp;·&nbsp; {counts.live} live &nbsp;·&nbsp; {counts.unresolved} unresolved &nbsp;·&nbsp; {counts.killed} killed</p>
+    <h1>Chains</h1>
+    <p class="sub">A four-question structure for tracing macro shifts through to the infrastructure they make necessary. Public so the reasoning can be picked apart.</p>
 
-    <Prose>
-      <p><em>PLACEHOLDER — methodology explainer. The four-question structure: macro shift → first-order change → second-order consequence → mandatory new problem → infrastructure gap. Worked example follows.</em></p>
-    </Prose>
+    <section class="method">
+      <h2 class="section-head">Methodology</h2>
+      <Prose>
+        <p>Given a macro shift, the four questions:</p>
+        <ol>
+          <li><strong>First-order.</strong> What changes immediately?</li>
+          <li><strong>Second-order.</strong> What follows from that change downstream?</li>
+          <li><strong>Forced problem.</strong> What new problem becomes mandatory to solve?</li>
+          <li><strong>Infrastructure gap.</strong> What's missing that someone has to build?</li>
+        </ol>
+        <p>A chain is <strong>LIVE</strong> if the macro shift looks real and at least the first two questions resolve cleanly. <strong>UNRESOLVED</strong> if the chain holds but the buyer is unclear. <strong>KILLED</strong> when a question breaks irreparably — usually because the second-order consequence doesn't follow, or the buyer for the missing infrastructure doesn't exist at any price.</p>
+        <p>The killed chains are the more useful read. They show where the reasoning breaks.</p>
+      </Prose>
+    </section>
 
     <section class="section">
-      <h2 id="live">Live chains</h2>
+      <h2 id="active" class="section-head">Active &nbsp;<span class="section-count">{active.length}</span></h2>
       {active.length === 0 ? (
-        <p class="empty"><em>PLACEHOLDER — no live chains yet.</em></p>
+        <p class="empty">No active chains.</p>
       ) : (
         <div class="chains">
           {active.map((c) => <ChainCard chain={c} />)}
@@ -37,8 +55,8 @@ const killed = all.filter((c) => c.data.status === "KILLED");
 
     {killed.length > 0 && (
       <section class="section">
-        <h2 id="killed">Killed chains</h2>
-        <p class="killed-blurb">Chains that have been killed, with the reason why.</p>
+        <h2 id="killed" class="section-head">Killed &nbsp;<span class="section-count">{killed.length}</span></h2>
+        <p class="section-blurb">Chains that died. The reason is the point of the entry.</p>
         <div class="chains">
           {killed.map((c) => <ChainCard chain={c} />)}
         </div>
@@ -49,25 +67,54 @@ const killed = all.filter((c) => c.data.status === "KILLED");
 
 <style>
   .page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .page > * + * { margin-top: var(--space-4); }
-  .page > h1 { margin-top: var(--space-2); }
-  .page > :global(.prose-flow) { margin-top: var(--space-8); }
 
-  .section {
-    margin-top: var(--space-16);
+  .dateline {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
   }
-  .section > h2 {
+  .page > h1 { margin-top: var(--space-3); }
+  .page > .sub {
+    margin-top: var(--space-4);
+    color: var(--color-ink-soft);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+  }
+
+  .method { margin-top: var(--space-12); }
+  .section { margin-top: var(--space-16); }
+
+  .section-head {
     padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
   }
-  .section > .killed-blurb {
+  .section-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-rule);
+  }
+  .section-blurb {
     margin-top: var(--space-3);
     color: var(--color-ink-muted);
     font-size: var(--type-small);
   }
   .chains {
     margin-top: var(--space-4);
-    border-top: 1px solid var(--color-rule);
   }
-  .empty { margin-top: var(--space-6); color: var(--color-ink-muted); }
+  .empty {
+    margin-top: var(--space-6);
+    color: var(--color-ink-muted);
+  }
+
+  .method :global(.prose-flow) { margin-top: var(--space-5); }
 </style>

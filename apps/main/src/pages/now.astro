@@ -3,8 +3,8 @@ import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
 import Prose      from "@nl06/design-system/components/Prose.astro";
 
-// PLACEHOLDER — Naman fills. Update `updated` whenever this page changes.
-const updated = "PLACEHOLDER — YYYY-MM-DD";
+// Sample copy — drawn from project context. Edit at will.
+const updated = "21 May 2026";
 ---
 <BaseLayout
   title="Now — nl06"
@@ -12,27 +12,46 @@ const updated = "PLACEHOLDER — YYYY-MM-DD";
   pathname="/now"
 >
   <Container size="prose" class="now">
-    <p class="meta">Updated {updated}</p>
+    <p class="dateline">Updated {updated}</p>
     <h1>Now</h1>
+    <p class="sub">Following <a href="https://nownownow.com/about" rel="noopener">Derek Sivers' /now convention</a> — what's actively loaded into the next few months.</p>
 
     <Prose>
-      <p><em>PLACEHOLDER. Following <a href="https://nownownow.com/about" rel="noopener">Derek Sivers' /now convention</a>: what I'm actively thinking about and working on, this month.</em></p>
-
       <h2>Building</h2>
-      <p>PLACEHOLDER — what's under construction.</p>
+      <ul>
+        <li>The SPC India Member Residency application, due in June. The artifacts it leans on are this site and the ground station.</li>
+        <li>Getting the Lucknow ground station to run unattended through the monsoon. Currently the chain stays cold between captures and the SatDump pipeline is touchy on resume.</li>
+        <li>Three consequence chains in active resolution — they're tracked at <a href="https://chains.nl06.com">chains.</a></li>
+      </ul>
 
       <h2>Thinking about</h2>
-      <p>PLACEHOLDER — open questions / theses being worked.</p>
+      <ul>
+        <li>Whether a one-rooftop install in Lucknow can produce useful independent PNT cross-checks without a second ground station to disambiguate local interference.</li>
+        <li>How much of consequence-chain reasoning actually generalises — methodology or just a heuristic I happen to find useful.</li>
+        <li>The right scope of the first hardware-software bet for the new venture. Two candidates, both space-adjacent. Killing one this month.</li>
+      </ul>
 
       <h2>Reading</h2>
-      <p>PLACEHOLDER — current books / papers (link to <a href="https://reading.nl06.com">reading.nl06.com</a> for notes).</p>
+      <p>Currently: <em>Working in Public</em> (Eghbal), <em>Seeing Like a State</em> (Scott), and a clutch of papers on rooftop LRIT site diversity. Notes land at <a href="https://reading.nl06.com">reading.</a> when they shift something.</p>
     </Prose>
   </Container>
 </BaseLayout>
 
 <style>
   .now { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .now > * + * { margin-top: var(--space-4); }
-  .now > h1 { margin-top: var(--space-2); }
-  .now > :global(.prose-flow) { margin-top: var(--space-8); }
+  .dateline {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+  }
+  .now > h1 { margin-top: var(--space-3); }
+  .now > .sub {
+    margin-top: var(--space-4);
+    color: var(--color-ink-soft);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+  }
+  .now > :global(.prose-flow) { margin-top: var(--space-10); }
 </style>

@@ -1,0 +1,106 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import Prose      from "@nl06/design-system/components/Prose.astro";
+
+const swatches: { name: string; var: string; use: string }[] = [
+  { name: "paper",        var: "--color-paper",        use: "page background" },
+  { name: "paper-dim",    var: "--color-paper-dim",    use: "code, inset surfaces" },
+  { name: "ink",          var: "--color-ink",          use: "body text" },
+  { name: "ink-soft",     var: "--color-ink-soft",     use: "secondary text" },
+  { name: "ink-muted",    var: "--color-ink-muted",    use: "dates, labels" },
+  { name: "rule",         var: "--color-rule",         use: "hairline borders" },
+  { name: "accent",       var: "--color-accent",       use: "links, marks" },
+];
+---
+<BaseLayout
+  title="Colophon — nl06"
+  description="How this site is set."
+  pathname="/colophon"
+>
+  <Container size="prose" class="page">
+    <p class="dateline">Colophon &nbsp;·&nbsp; Issue I &nbsp;·&nbsp; 2026</p>
+    <h1>How this site is set.</h1>
+
+    <Prose>
+      <h2>Type</h2>
+      <p>Body text is <em>Source Serif 4</em>, set at 17 pixels with a generous 1.65 line-height. Headings share the same family at 600 weight, slightly tightened. Chrome — navigation, dates, captions — uses <em>Inter</em>, in small caps where it earns it. No third typeface; restraint is the point.</p>
+
+      <h2>Colour</h2>
+      <p>Background is a paper cream rather than white. Text is a slightly cool near-black. One restrained accent — the ink blue below — carries links, blockquote rules, and the live-chain status mark. No gradients, no drop shadows. Every colour is a CSS custom property; the palette can be re-tuned in one file.</p>
+    </Prose>
+
+    <div class="swatches">
+      {swatches.map((s) => (
+        <div class="swatch">
+          <div class="swatch__chip" style={`background: var(${s.var});`} />
+          <div class="swatch__meta">
+            <span class="swatch__name">{s.name}</span>
+            <span class="swatch__use">{s.use}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <Prose>
+      <h2>Construction</h2>
+      <p>Built with <a href="https://astro.build" rel="noopener">Astro</a> and Tailwind as a small pnpm monorepo. Each subdomain is its own application sharing a single design system as a workspace package. Static at build time; no runtime backend.</p>
+      <p>Deployed via Cloudflare Pages with custom domains on the apex and three subdomains. Continuous deployment from <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a> — every push to <code>main</code> builds and ships.</p>
+
+      <h2>Captures</h2>
+      <p>The full-disk Earth on the home page comes from <a href="https://gs.nl06.com">gs.</a>, the rooftop ground station in Lucknow. The receiver chain is a 60-centimetre dish, a 3-turn RHCP helix feed, a SAWbird+ GOES low-noise amplifier, and an RTL-SDR. Decoding runs through SatDump; post-processing through Sanchez.</p>
+
+      <h2>Provenance</h2>
+      <p>If something on this site looks wrong, the source is in git. <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a>. Issues, pull requests, and email at the address in the footer are all read.</p>
+    </Prose>
+  </Container>
+</BaseLayout>
+
+<style>
+  .page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .dateline {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+  }
+  .page > h1 { margin-top: var(--space-3); }
+  .page > :global(.prose-flow) { margin-top: var(--space-8); }
+
+  .swatches {
+    margin-top: var(--space-6);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .swatch__chip {
+    height: 56px;
+    border: 1px solid var(--color-rule);
+  }
+  .swatch__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .swatch__name {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
+  }
+  .swatch__use {
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+  }
+</style>
