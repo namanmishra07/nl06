@@ -1,0 +1,23 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+---
+<BaseLayout
+  title="nl06"
+  description="Naman's personal site."
+>
+  <Container size="wide" class="hero">
+    <p class="meta">PLACEHOLDER — home page</p>
+    <h1>This is where the GK-2A capture goes, full-bleed.</h1>
+    <p>One sentence of context lives here. Below the fold: a short list of subdomains.</p>
+  </Container>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding-top: var(--space-16);
+    padding-bottom: var(--space-16);
+  }
+  .hero p.meta + h1 { margin-top: var(--space-4); }
+  .hero h1 + p { margin-top: var(--space-6); }
+</style>

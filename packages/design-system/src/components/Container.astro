@@ -1,0 +1,18 @@
+---
+type Size = "prose" | "container" | "wide" | "full";
+interface Props {
+  size?: Size;
+  as?: string;
+  class?: string;
+}
+const { size = "prose", as: Tag = "div", class: className = "" } = Astro.props;
+const widthMap: Record<Size, string> = {
+  prose:     "max-w-prose",
+  container: "max-w-container",
+  wide:      "max-w-wide",
+  full:      "max-w-full",
+};
+---
+<Tag class:list={[widthMap[size], "mx-auto px-page", className]}>
+  <slot />
+</Tag>

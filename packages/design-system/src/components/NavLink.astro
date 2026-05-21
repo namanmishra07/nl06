@@ -1,0 +1,31 @@
+---
+interface Props {
+  href: string;
+  current?: boolean;
+  external?: boolean;
+  class?: string;
+}
+const { href, current = false, external = false, class: className = "" } = Astro.props;
+const rel = external ? "noopener noreferrer" : undefined;
+const target = external ? "_blank" : undefined;
+---
+<a
+  href={href}
+  rel={rel}
+  target={target}
+  aria-current={current ? "page" : undefined}
+  class:list={["nav-link", { "is-current": current }, className]}
+>
+  <slot />
+</a>
+
+<style>
+  .nav-link {
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    text-decoration: none;
+  }
+  .nav-link:hover { color: var(--color-accent); }
+  .nav-link.is-current { color: var(--color-ink); }
+</style>

@@ -1,0 +1,26 @@
+---
+interface Props {
+  class?: string;
+}
+const { class: className = "" } = Astro.props;
+---
+<!--
+  Prose: a passive wrapper. Global CSS already styles h1-h4, p, ul, ol,
+  blockquote, code, pre, hr. This component exists so app code reads
+  intentionally — "this region is body prose" — and so future spacing
+  adjustments can land in one place.
+-->
+<div class:list={["prose-flow", className]}>
+  <slot />
+</div>
+
+<style>
+  .prose-flow > * + * {
+    margin-top: var(--space-5);
+  }
+  .prose-flow > h2 { margin-top: var(--space-10); }
+  .prose-flow > h3 { margin-top: var(--space-8); }
+  .prose-flow > h4 { margin-top: var(--space-6); }
+  .prose-flow > hr { margin: var(--space-8) 0; }
+  .prose-flow > pre { margin-top: var(--space-4); }
+</style>

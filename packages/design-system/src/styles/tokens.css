@@ -1,0 +1,59 @@
+/* nl06 design tokens — single source of truth */
+
+:root {
+  /* ── color ─────────────────────────────────────────────────── */
+  --color-paper:        #FAF8F3;  /* page background */
+  --color-paper-dim:    #F2EEE3;  /* elevated / inset surfaces */
+  --color-ink:          #14181F;  /* body text */
+  --color-ink-soft:     #3D424B;  /* secondary text */
+  --color-ink-muted:    #767A82;  /* metadata, dates */
+  --color-rule:         #E2DCC9;  /* hairline borders */
+
+  /* accent — single restrained color, used for links + a few marks
+     PLACEHOLDER: Ink Blue (candidate A). To swap, change this one value. */
+  --color-accent:       #1B3A5C;
+  --color-accent-hover: #122638;
+
+  /* ── type ──────────────────────────────────────────────────── */
+  --font-serif: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --font-sans:  "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --type-display: 2.875rem;   /* 46px */
+  --type-h1:      2rem;       /* 32px */
+  --type-h2:      1.5rem;     /* 24px */
+  --type-h3:      1.25rem;    /* 20px */
+  --type-h4:      1.0625rem;  /* 17px */
+  --type-body:    1.0625rem;  /* 17px — serif benefits from slightly larger */
+  --type-small:   0.875rem;   /* 14px */
+  --type-meta:    0.8125rem;  /* 13px — dates, source labels */
+
+  --leading-tight:  1.15;
+  --leading-snug:   1.35;
+  --leading-normal: 1.5;
+  --leading-prose:  1.65;
+
+  --tracking-tight:  -0.012em;
+  --tracking-normal: 0;
+  --tracking-meta:   0.04em;
+
+  /* ── spacing ──────────────────────────────────────────────── */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
+
+  /* ── layout widths ─────────────────────────────────────────── */
+  --width-prose:     36rem;   /*  576px — single-column reading */
+  --width-container: 48rem;   /*  768px — slightly wider blocks */
+  --width-wide:      64rem;   /* 1024px — image-led layouts */
+  --width-full:      80rem;   /* 1280px — hero / edge-to-edge */
+}

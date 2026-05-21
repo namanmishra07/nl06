@@ -1,0 +1,19 @@
+{
+  "name": "nl06-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.1.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:main": "pnpm --filter @nl06/main dev",
+    "dev:reading": "pnpm --filter @nl06/reading dev",
+    "dev:chains": "pnpm --filter @nl06/chains dev",
+    "build": "pnpm -r build",
+    "build:main": "pnpm --filter @nl06/main build",
+    "build:reading": "pnpm --filter @nl06/reading build",
+    "build:chains": "pnpm --filter @nl06/chains build",
+    "preview:main": "pnpm --filter @nl06/main preview",
+    "clean": "pnpm -r exec rm -rf dist .astro node_modules && rm -rf node_modules"
+  }
+}

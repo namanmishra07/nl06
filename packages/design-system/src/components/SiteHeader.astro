@@ -1,0 +1,74 @@
+---
+import Container from "./Container.astro";
+import NavLink from "./NavLink.astro";
+
+interface NavItem {
+  label: string;
+  href: string;
+  external?: boolean;
+}
+interface Props {
+  /** Path of the current page, used to mark the active nav item. */
+  pathname?: string;
+  /** Override the default nav items. */
+  nav?: NavItem[];
+  /** Home / site title label. */
+  title?: string;
+  /** Where the site title links to. */
+  homeHref?: string;
+}
+
+const {
+  pathname = "/",
+  title = "nl06",
+  homeHref = "/",
+  nav = [
+    { label: "Now",     href: "/now" },
+    { label: "Writing", href: "/writing" },
+    { label: "About",   href: "/about" },
+  ],
+} = Astro.props;
+
+const isCurrent = (href: string) => {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+};
+---
+<header class="site-header">
+  <Container size="wide" class="site-header__inner">
+    <a href={homeHref} class="site-header__title">{title}</a>
+    <nav class="site-header__nav" aria-label="Primary">
+      {nav.map((item) => (
+        <NavLink href={item.href} external={item.external} current={isCurrent(item.href)}>
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+  </Container>
+</header>
+
+<style>
+  .site-header {
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .site-header :global(.site-header__inner) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-8);
+  }
+  .site-header__title {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: var(--type-h4);
+    color: var(--color-ink);
+    text-decoration: none;
+    letter-spacing: var(--tracking-tight);
+  }
+  .site-header__nav {
+    display: flex;
+    gap: var(--space-6);
+  }
+</style>

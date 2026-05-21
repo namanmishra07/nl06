@@ -1,0 +1,136 @@
+@import "@fontsource/source-serif-4/400.css";
+@import "@fontsource/source-serif-4/400-italic.css";
+@import "@fontsource/source-serif-4/600.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+
+@import "./tokens.css";
+
+/* ── reset (minimal, opinionated) ─────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { -webkit-font-smoothing: antialiased; }
+img, picture, video, canvas, svg { display: block; max-width: 100%; height: auto; }
+input, button, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: none; padding: 0; cursor: pointer; }
+p, h1, h2, h3, h4, h5, h6 { overflow-wrap: break-word; }
+
+/* ── document defaults ────────────────────────────────────────── */
+html {
+  font-family: var(--font-serif);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  /* tabular figures off by default; metadata enables them locally */
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+}
+
+body {
+  font-size: var(--type-body);
+  line-height: var(--leading-prose);
+}
+
+/* ── headings ─────────────────────────────────────────────────── */
+h1, h2, h3, h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-ink);
+}
+
+h1 { font-size: var(--type-h1); line-height: var(--leading-tight); }
+h2 { font-size: var(--type-h2); }
+h3 { font-size: var(--type-h3); }
+h4 { font-size: var(--type-h4); }
+
+/* ── links ────────────────────────────────────────────────────── */
+a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 0.05em;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  transition: color 80ms ease, text-decoration-color 80ms ease;
+}
+a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-color: var(--color-accent-hover);
+}
+
+/* ── inline ───────────────────────────────────────────────────── */
+em, i { font-style: italic; }
+strong, b { font-weight: 600; }
+small { font-size: var(--type-small); }
+hr {
+  border: 0;
+  border-top: 1px solid var(--color-rule);
+  margin: var(--space-8) 0;
+}
+
+/* ── code ─────────────────────────────────────────────────────── */
+code, kbd, samp, pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+:not(pre) > code {
+  background: var(--color-paper-dim);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+}
+pre {
+  background: var(--color-paper-dim);
+  border: 1px solid var(--color-rule);
+  padding: var(--space-4) var(--space-5);
+  overflow-x: auto;
+  line-height: var(--leading-normal);
+  border-radius: 2px;
+}
+pre code { background: transparent; padding: 0; }
+
+/* ── blockquote ───────────────────────────────────────────────── */
+blockquote {
+  border-left: 2px solid var(--color-accent);
+  padding-left: var(--space-5);
+  margin-left: 0;
+  color: var(--color-ink-soft);
+  font-style: italic;
+}
+blockquote p + p { margin-top: var(--space-4); }
+
+/* ── lists ────────────────────────────────────────────────────── */
+ul, ol { padding-left: var(--space-6); }
+li + li { margin-top: var(--space-2); }
+
+/* ── tables ───────────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-small);
+  font-variant-numeric: tabular-nums;
+}
+th, td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-rule);
+}
+th { font-weight: 600; font-family: var(--font-sans); font-size: var(--type-meta); letter-spacing: var(--tracking-meta); text-transform: uppercase; color: var(--color-ink-muted); }
+
+/* ── selection ────────────────────────────────────────────────── */
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-ink);
+}
+
+/* ── utility classes (very small set) ─────────────────────────── */
+.font-sans { font-family: var(--font-sans); }
+.font-serif { font-family: var(--font-serif); }
+.font-mono { font-family: var(--font-mono); }
+
+.meta {
+  font-family: var(--font-sans);
+  font-size: var(--type-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}

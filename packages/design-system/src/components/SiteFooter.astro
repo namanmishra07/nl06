@@ -1,0 +1,71 @@
+---
+import Container from "./Container.astro";
+
+interface Props {
+  email?: string;
+  subdomains?: { label: string; href: string }[];
+  /** Footer signature line. e.g. "running on a Pi in Lucknow" */
+  signature?: string;
+}
+
+const {
+  email = "hi@nl06.com",
+  subdomains = [
+    { label: "gs",      href: "https://gs.nl06.com" },
+    { label: "chains",  href: "https://chains.nl06.com" },
+    { label: "reading", href: "https://reading.nl06.com" },
+  ],
+  signature,
+} = Astro.props;
+---
+<footer class="site-footer">
+  <Container size="wide" class="site-footer__inner">
+    <div class="site-footer__col">
+      <a class="site-footer__email" href={`mailto:${email}`}>{email}</a>
+      {signature && <p class="site-footer__signature">{signature}</p>}
+    </div>
+    <ul class="site-footer__subs">
+      {subdomains.map((s) => (
+        <li><a href={s.href}>{s.label}.</a></li>
+      ))}
+    </ul>
+  </Container>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: var(--space-24);
+    padding-top: var(--space-8);
+    padding-bottom: var(--space-12);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+  }
+  .site-footer :global(.site-footer__inner) {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-8);
+    flex-wrap: wrap;
+  }
+  .site-footer__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .site-footer__email {
+    color: var(--color-ink-soft);
+  }
+  .site-footer__signature {
+    font-size: var(--type-meta);
+  }
+  .site-footer__subs {
+    display: flex;
+    gap: var(--space-5);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .site-footer__subs li + li { margin-top: 0; }
+</style>
