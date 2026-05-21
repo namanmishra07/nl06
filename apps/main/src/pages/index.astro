@@ -16,7 +16,7 @@ const subdomains: Sub[] = [
     label:   "gs.",
     href:    "https://gs.nl06.com",
     kicker:  "The instrument",
-    blurb:   "A 60-centimetre dish on a Lucknow rooftop, pointed at GK-2A. Decodes a full-disk Earth every hour. Logs go straight into the index.",
+    blurb:   "A one-metre offset dish on a Lucknow rooftop, pointed at GK-2A. Decodes a full-disk Earth every hour. Logs go straight into the index.",
   },
   {
     numeral: "II",
@@ -48,7 +48,7 @@ const plate = {
 };
 ---
 <BaseLayout
-  title="NL06 — A Field Notebook"
+  title="NL06 — A Field Notebook · Naman Mishra"
   description="An index of running instruments and the notes that go with them. Built from one room in Lucknow."
   itemNumber="№ 001"
 >
@@ -78,10 +78,15 @@ const plate = {
           href="https://gs.nl06.com"
           aria-label="See the ground station at gs.nl06.com"
         >
-          <img
-            src="/hero/gk2a-20260518-1320-sanchez.png"
-            alt="GK-2A full-disk Earth, IR105 channel, captured from Lucknow at 13:20 UTC on 18 May 2026."
-          />
+          <picture>
+            <source srcset="/hero/gk2a-20260518-1320-sanchez.webp" type="image/webp" />
+            <img
+              src="/hero/gk2a-20260518-1320-sanchez.png"
+              alt="GK-2A full-disk Earth, IR105 channel, captured from Lucknow at 13:20 UTC on 18 May 2026."
+              loading="eager"
+              fetchpriority="high"
+            />
+          </picture>
         </a>
         <figcaption class="hero__cap">
           <span class="hero__cap-eyebrow">Plate {plate.number}  ·  {plate.title}</span>

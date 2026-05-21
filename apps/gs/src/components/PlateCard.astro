@@ -15,6 +15,12 @@ const d = plate.data;
 // Caller is responsible for filtering to entries with an image.
 const TitleTag = `h${level}` as "h2" | "h3";
 
+// Derive the WebP path from the PNG path. compress-plates.mjs writes a
+// lossless .webp next to each .png at build time. The PNG remains the
+// canonical full-resolution download.
+const pngHref = d.image!;
+const webpHref = pngHref.replace(/\.png$/i, ".webp");
+
 const fmtDate = (date: Date) => {
   const iso = date.toISOString();
   return iso.slice(0, 10) + " · " + iso.slice(11, 16) + "Z";
@@ -22,14 +28,21 @@ const fmtDate = (date: Date) => {
 ---
 <article class="plate">
   <figure class="plate__figure">
-    <a href={d.image} class="plate__figure-link" aria-label={`Open ${d.satellite} ${d.channel ?? "capture"} at full resolution`}>
-      <img
-        src={d.image}
-        alt={`${d.satellite} ${d.channel ?? "capture"} ${fmtDate(d.captured_at)}`}
-        loading="lazy"
-        decoding="async"
-      />
+    <a href={pngHref} class="plate__figure-link" aria-label={`Open ${d.satellite} ${d.channel ?? "capture"} at full resolution`}>
+      <picture>
+        <source srcset={webpHref} type="image/webp" />
+        <img
+          src={pngHref}
+          alt={`${d.satellite} ${d.channel ?? "capture"} ${fmtDate(d.captured_at)}`}
+          loading="lazy"
+          decoding="async"
+        />
+      </picture>
     </a>
+    <figcaption class="plate__figure-cap">
+      <span>Lossless WebP shown · click for original PNG</span>
+      <a href={pngHref} class="plate__figure-link-out" download>Full PNG ↗</a>
+    </figcaption>
   </figure>
 
   <div class="plate__body">
@@ -118,6 +131,31 @@ const fmtDate = (date: Date) => {
     width: 100%;
     height: auto;
     object-fit: cover;
+  }
+  .plate__figure-cap {
+    margin-top: var(--space-2);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .plate__figure-cap a {
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    padding-bottom: 1px;
+    white-space: nowrap;
+  }
+  .plate__figure-cap a:hover {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
   }
 
   .plate__body { padding-top: var(--space-2); }

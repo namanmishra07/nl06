@@ -7,11 +7,28 @@ interface NavItem {
   href: string;
   external?: boolean;
 }
+interface StationItem {
+  /** Display label, e.g. "gs." */
+  label: string;
+  /** External URL, e.g. "https://gs.nl06.com". */
+  href: string;
+  /** Roman-numeral mark, e.g. "I". Optional; auto-numbered if omitted. */
+  numeral?: string;
+}
 interface Props {
   /** Path of the current page, used to mark the active nav item. */
   pathname?: string;
   /** Override the default nav items. */
   nav?: NavItem[];
+  /**
+   * Optional secondary nav of subdomains ("stations"). When provided
+   * and non-empty, a quietly-subordinated row of subdomain links is
+   * rendered below the primary nav. Currently used by the apex
+   * (nl06.com) only; subdomain mastheads omit it.
+   */
+  stations?: StationItem[];
+  /** Label printed before the stations row. Default "Stations". */
+  stationsLabel?: string;
   /** Wordmark / publication title. */
   title?: string;
   /** Sub-label after the wordmark (e.g. "— A Review", "— Register"). */
@@ -38,11 +55,31 @@ const {
     { label: "About",    href: "/about" },
     { label: "Colophon", href: "/colophon" },
   ],
+  stations,
+  stationsLabel = "Stations",
 } = Astro.props;
 
+const ROMANS = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
+
+/**
+ * Normalise both the pathname and the link href before comparing.
+ * Astro's `build: { format: "file" }` makes `Astro.url.pathname` end
+ * in `.html` at build time (e.g. `/plates.html`), but the nav links
+ * are written without the extension (e.g. `/plates`). Stripping
+ * `.html` (and any trailing slash) makes the equality robust across
+ * both formats. Without this, every non-root page on a `format:"file"`
+ * subdomain would silently fail to mark its nav link as active.
+ */
+const norm = (p: string) => {
+  if (!p) return "/";
+  const stripped = p.replace(/\.html$/i, "").replace(/\/$/, "");
+  return stripped === "" ? "/" : stripped;
+};
 const isCurrent = (href: string) => {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(href + "/");
+  const np = norm(pathname);
+  const nh = norm(href);
+  if (nh === "/") return np === "/";
+  return np === nh || np.startsWith(nh + "/");
 };
 ---
 <header class="masthead">
@@ -58,6 +95,17 @@ const isCurrent = (href: string) => {
       {caption && <span class="masthead__wordmark-caption">{caption}</span>}
     </a>
 
+    {stations && stations.length > 0 && (
+      <p class="masthead__stations" aria-label="Stations">
+        {stations.map((s, i) => (
+          <>
+            {i > 0 && <span class="masthead__stations-sep" aria-hidden="true">·</span>}
+            <a class="masthead__stations-link" href={s.href}>{s.label}</a>
+          </>
+        ))}
+      </p>
+    )}
+
     <nav class="masthead__nav" aria-label="Primary">
       <ol class="masthead__nav-list">
         {nav.map((item, i) => (
@@ -70,6 +118,7 @@ const isCurrent = (href: string) => {
         ))}
       </ol>
     </nav>
+
   </Container>
 </header>
 
@@ -172,8 +221,42 @@ const isCurrent = (href: string) => {
     font-weight: 500;
   }
 
+  /* "Stations" — a quiet italic-serif line sitting in the breathing
+     space between the wordmark and the primary nav. Reads as the
+     publication's department/section index, like a magazine's
+     "in this issue" line. No label, no numerals — just the lowercased
+     subdomain names spaced with middle dots. Apex masthead only. */
+  .masthead__stations {
+    margin: 0;
+    padding: 0 0 var(--space-4);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    line-height: 1;
+    letter-spacing: var(--tracking-tight);
+  }
+  .masthead__stations-sep {
+    margin: 0 0.55em;
+    color: var(--color-ink-faint);
+    font-style: normal;
+  }
+  .masthead__stations-link {
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    padding-bottom: 1px;
+    transition: color 100ms ease, border-color 100ms ease;
+  }
+  .masthead__stations-link:hover {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+
   @media (max-width: 640px) {
     .masthead__wordmark-glyph { font-size: var(--type-display); }
     .masthead__nav-list { gap: var(--space-4) var(--space-5); }
+    .masthead__stations { font-size: var(--type-meta); }
   }
 </style>

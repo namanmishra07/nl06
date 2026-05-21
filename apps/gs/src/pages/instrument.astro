@@ -1,186 +1,250 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import SignalChain from "~/components/SignalChain.astro";
+import SignalChain, { type Node } from "~/components/SignalChain.astro";
 
-interface NodeSpec {
-  mark: string;
+interface InstrumentSpec {
+  id: string;
+  numeral: string;
   name: string;
-  spec: string;
-  detail: string;
-  role: string;
-  notes: string;
+  target: string;
+  targetStatus?: string;
+  /** Frequency band + receive frequency label, e.g. "VHF · 137.900 MHz". */
+  band: string;
+  /** "Lede" sentence appearing under the title. */
+  lede: string;
+  /** Nodes that make up the SVG signal chain. */
+  nodes: Node[];
+  /** Where the rooftop/compute divider sits in the chain (index after which it falls). */
+  dividerAfter: number;
+  /** Per-instrument spec key-values. */
+  specs: { k: string; v: string }[];
+  /** Operative note — the operative quirk worth knowing. */
+  note: string;
+  /** Anchor on /plates that filters captures from this instrument. */
+  capturesHref: string;
+  /** Display label for the captures link. */
+  capturesLabel: string;
+  /** Whether captures from this instrument exist yet. */
+  hasCaptures: boolean;
 }
 
-const components: NodeSpec[] = [
+const instruments: InstrumentSpec[] = [
   {
-    mark: "I",
-    name: "Antenna",
-    spec: "60 cm parabolic offset dish",
-    detail: "Re-purposed Ku-band TV dish, repointed and re-aimed for L-band geostationary work. Mechanical pointing fixed to GK-2A at 128.2°E.",
-    role: "Captures the L-band downlink and concentrates it onto the helix feed at the focal point.",
-    notes: "Azimuth 112.6° true (111.9° magnetic at Lucknow). Elevation 29.6°. Half-power beamwidth at 1.69 GHz is roughly 17°, which means re-aiming for any non-GK-2A bird is a manual job.",
+    id: "i-v-dipole",
+    numeral: "I",
+    name: "137 MHz V-dipole",
+    target: "METEOR M2-4 (and M2-3)",
+    band: "VHF · 137.900 MHz",
+    lede: "A pair of crossed half-wave elements on a rooftop pole, listening for the LRPT downlink as METEOR sweeps overhead. The simplest instrument on the roof — and the one that has produced the only polar-orbit imagery in the register so far.",
+    nodes: [
+      { mark: "I",   name: "V-dipole",   spec: "Linear, ~1 m elements", spec2: "Pole, ~3.6 m, RHCP loss ~3 dB" },
+      { mark: "II",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  1.024 Msps  ·  gain 25 dB" },
+      { mark: "III", name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "meteor_m2-x_lrpt · --dc_block=true" },
+    ],
+    dividerAfter: 1,
+    specs: [
+      { k: "Antenna",   v: "Crossed V-dipole, linear polarisation" },
+      { k: "Mount",     v: "Rooftop pole, ~3.6 m, no rotator" },
+      { k: "Frequency", v: "137.900 MHz (LRPT primary)" },
+      { k: "Sample rate", v: "1.024 Msps (Nyquist for 1024 ksymbol/s QPSK)" },
+      { k: "Gain",      v: "RTL gain 25 dB (no physical LNA in chain)" },
+      { k: "Decode",    v: "SatDump on NAS, --dc_block=true mandatory for cu8" },
+    ],
+    note: "The V-dipole is linear and LRPT is circular, so there's an unavoidable ~3 dB cross-polarisation loss before anything else fails. The instrument's real failure mode isn't the polarisation though — it's the tuner gain. Pushing the R828D above 30 dB compresses the front end and raises the noise floor by 20+ dB; at 25 dB the rig is the quietest it has ever been measured.",
+    capturesHref: "/plates#meteor-m2-4",
+    capturesLabel: "View captures from this instrument",
+    hasCaptures: true,
   },
   {
-    mark: "II",
-    name: "Feed",
-    spec: "3-turn RHCP helix, ~1691 MHz",
-    detail: "Hand-wound helical antenna with reflector ground plane. Right-hand circular to match GK-2A's RHCP downlink.",
-    role: "Converts the dish's focused energy into a coaxial signal of the correct polarisation.",
-    notes: "Mismatched polarisation alone costs 20+ dB, so the helix sense matters more than its raw gain.",
+    id: "ii-l-band-gk2a",
+    numeral: "II",
+    name: "L-band chain · GK-2A",
+    target: "GEO-KOMPSAT-2A",
+    targetStatus: "Geostationary, 128.2°E",
+    band: "L · 1692.140 MHz",
+    lede: "A one-metre offset dish on the rooftop, repurposed from a Ku-band TV setup, with a hand-wound RHCP helix at the focus and a SAWbird+ GOES doing the front-end work. Aimed thirty degrees up and 112° east of true. Decodes a full-disk Earth every ten minutes.",
+    nodes: [
+      { mark: "I",   name: "Antenna",    spec: "1 m parabolic",         spec2: "az 112.6°  ·  el 29.6°" },
+      { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",    spec2: "1692.14 MHz centre" },
+      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",         spec2: "LNA + SAW filter, ext. PSU" },
+      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  2.4 Msps" },
+      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "pipeline · gk2a_lrit" },
+      { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",     spec2: "blue underlay  ·  haze 0.6" },
+    ],
+    dividerAfter: 3,
+    specs: [
+      { k: "Antenna",   v: "1 m offset parabolic (ex-Ku TV)" },
+      { k: "Feed",      v: "3-turn RHCP helix, hand-wound" },
+      { k: "Pointing",  v: "az 112.6° true · el 29.6°" },
+      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU)" },
+      { k: "Frequency", v: "1692.140 MHz (LRIT, BPSK 128 ksymb/s)" },
+      { k: "Sample rate", v: "2.4 Msps cu8" },
+      { k: "Post",      v: "Sanchez · geostationary projection · blue underlay" },
+    ],
+    note: "The chain is shared between GK-2A and Elektro-L5 — only the pointing changes. SAWbird+ GOES is externally powered; the SDR's bias-tee must remain off. Beamwidth at L-band with the 1 m dish is roughly 12°, so a re-aim for any non-GK-2A target is a deliberate manual operation, not a click.",
+    capturesHref: "/plates#gk-2a",
+    capturesLabel: "View captures from this instrument",
+    hasCaptures: true,
   },
   {
-    mark: "III",
-    name: "Front-end",
-    spec: "Nooelec SAWbird+ GOES",
-    detail: "Integrated LNA and SAW filter, ~36 dB gain in band, bandpass centred on 1688 MHz. Externally powered — bias-tee on the SDR is NOT used.",
-    role: "Lifts the microvolt-level dish output above the SDR's noise floor while keeping the band clean of adjacent emitters.",
-    notes: "External 5V supply is the safer arrangement on this rig — co-existing bias-tee would conflict and almost certainly damage the SDR's regulator.",
-  },
-  {
-    mark: "IV",
-    name: "Receiver",
-    spec: "RTL-SDR Blog V4",
-    detail: "R828D tuner, 8-bit ADC, native cu8 baseband, 2.4 Msps capture rate.",
-    role: "Tunes to 1692.140 MHz and writes a complex-baseband stream straight to disk.",
-    notes: "Tuner gain held at 25 dB; pushing higher compresses the front end and raises the noise floor visibly. The first usable METEOR captures on this rig appeared the day the gain came back down.",
-  },
-  {
-    mark: "V",
-    name: "Decoder",
-    spec: "SatDump v2.0.0-alpha-8ce9d5b",
-    detail: "Built from source on the NAS. The gk2a_lrit pipeline does the Viterbi, Reed-Solomon, and CCSDS frame work.",
-    role: "Lock the BPSK carrier, recover the symbol clock, reconstruct CADUs, and write the LRIT image files.",
-    notes: "--dc_block=true is mandatory for cu8 captures from this rig. The DC bin in cu8 sits +30 dB above the noise floor — a known encoding artefact, not a real signal — and destabilises the symbol tracker if not removed.",
-  },
-  {
-    mark: "VI",
-    name: "Composite",
-    spec: "Sanchez v1.0.26.1",
-    detail: "Final colorisation pass: blue Earth underlay, atmospheric haze, optional gradient palettes for the IR brightness scale.",
-    role: "Turn the raw greyscale IR105 brightness frame into a legible plate.",
-    notes: "Optional. Plate V on the register is the same capture before this step, included to show what the decoder hands to the colorist.",
+    id: "iii-l-band-elektro",
+    numeral: "III",
+    name: "L-band chain · Elektro-L5",
+    target: "Elektro-L5",
+    targetStatus: "Geostationary, 76°E · commissioning",
+    band: "L · 1691.000 MHz",
+    lede: "The same one-metre dish and helix-and-SAWbird front-end as Instrument II, repointed south-southwest at the 76°E geostationary slot. Listening for Elektro-L5's sporadic LRIT broadcasts during its commissioning window — currently silent more often than not.",
+    nodes: [
+      { mark: "I",   name: "Antenna",    spec: "1 m parabolic",         spec2: "az 190.9°  ·  el 58.0°" },
+      { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",    spec2: "1691.000 MHz centre" },
+      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",         spec2: "LNA + SAW filter, ext. PSU" },
+      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  2.4 Msps" },
+      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "pipeline · elektro_lrit" },
+      { mark: "VI",  name: "Composite",  spec: "Sanchez (planned)",     spec2: "geostationary · 76°E centred" },
+    ],
+    dividerAfter: 3,
+    specs: [
+      { k: "Antenna",   v: "1 m offset parabolic (shared with II)" },
+      { k: "Feed",      v: "3-turn RHCP helix" },
+      { k: "Pointing",  v: "az 190.9° true · el 58.0° (target 76°E equator)" },
+      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU)" },
+      { k: "Frequency", v: "1691.000 MHz (LRIT)" },
+      { k: "Schedule",  v: "Sporadic — slots at :12/:27/:42/:57 UTC, mostly silent" },
+    ],
+    note: "L5 has been in commissioning since 2026-02-12, with broadcasts clustered around 08:00 UTC and rarely lit outside that window. The first-light attempt on 2026-05-17 produced zero CADU — Viterbi never synced, FFT confirmed no signal in band — leaving the unanswered question of whether the dish was on the bird, the polarisation sense was wrong, or L5 simply wasn't transmitting during that slot.",
+    capturesHref: "/plates#elektro-l5",
+    capturesLabel: "View captures (commissioning, no images yet)",
+    hasCaptures: false,
   },
 ];
 ---
 <BaseLayout
-  title="gs.nl06 — The instrument"
-  description="Antenna to composite: every link in the chain that turns a microvolt at 1.69 GHz into a plate."
+  title="gs.nl06 — The instruments"
+  description="Three configured chains, three satellites. Antenna to composite, end to end."
   itemNumber="№ GS03"
 >
-  <article class="instr">
-    <Container size="wide" class="instr__inner">
-      <header class="instr__head">
-        <div class="instr__rail">
+  <article class="inst">
+    <Container size="wide" class="inst__inner">
+      <header class="inst__head">
+        <div class="inst__rail">
           <span class="rail__label">Reference</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">Six nodes</span>
+          <span class="rail__date">Three chains</span>
         </div>
-        <div class="instr__heading">
-          <h1 class="instr__title">
-            <span class="instr__title-line">The instrument.</span>
-            <span class="instr__title-emphasis">Microvolts in, plate out.</span>
+        <div class="inst__heading">
+          <h1 class="inst__title">
+            <span class="inst__title-line">The instruments.</span>
+            <span class="inst__title-emphasis">Three chains, three targets.</span>
           </h1>
-          <p class="instr__lede dropcap-text">
-            Every plate filed on this register is the output of a six-node chain run
-            end-to-end without intervention. The diagram below names the nodes; the
-            register beneath it lists what each one is for, what part of the failure
-            envelope it owns, and where the surprises tend to live.
+          <p class="inst__lede dropcap-text">
+            The rig is not one antenna. It&rsquo;s three operating configurations of the
+            same rooftop &mdash; a V-dipole on a pole for the polar pass, a one-metre
+            offset dish aimed at GK-2A through the morning haze, and the same dish
+            repointed south-southwest when Elektro-L5 decides to broadcast. Each
+            configuration is its own instrument. Each instrument writes its own log.
           </p>
         </div>
       </header>
 
-      <section class="instr__diagram">
-        <SignalChain />
-      </section>
+      {instruments.map((inst) => (
+        <section class="inst-card" id={inst.id}>
+          <header class="inst-card__head">
+            <span class="inst-card__numeral">{inst.numeral}</span>
+            <div class="inst-card__heading">
+              <span class="inst-card__kicker">
+                Instrument {inst.numeral}
+                <span class="inst-card__kicker-sep" aria-hidden="true">·</span>
+                {inst.band}
+              </span>
+              <h2 class="inst-card__name">{inst.name}</h2>
+              <p class="inst-card__target">
+                <span class="inst-card__target-label">Target</span>
+                <span class="inst-card__target-body">
+                  {inst.target}
+                  {inst.targetStatus && (
+                    <span class="inst-card__target-status">{inst.targetStatus}</span>
+                  )}
+                </span>
+              </p>
+            </div>
+          </header>
 
-      <section class="instr__register">
-        <header class="instr__banner">
-          <span class="instr__banner__num">§</span>
-          <h2 class="instr__banner__title">Per-node register</h2>
-          <span class="instr__banner__rule" aria-hidden="true"></span>
-          <span class="instr__banner__count">{components.length} entries</span>
+          <p class="inst-card__lede">{inst.lede}</p>
+
+          <SignalChain
+            nodes={inst.nodes}
+            dividerAfter={inst.dividerAfter}
+            domainTags={["Rooftop · Lucknow", "NAS · /satellite"]}
+            caption={`The ${inst.name} chain, antenna to ${inst.nodes[inst.nodes.length - 1].name.toLowerCase()}.`}
+          />
+
+          <dl class="inst-card__specs">
+            {inst.specs.map((s) => (
+              <div class="inst-card__spec">
+                <dt>{s.k}</dt>
+                <dd>{s.v}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <p class="inst-card__note">
+            <span class="inst-card__note-label">Operative note</span>
+            <span class="inst-card__note-body">{inst.note}</span>
+          </p>
+
+          <p class:list={["inst-card__cta", { "inst-card__cta--quiet": !inst.hasCaptures }]}>
+            <a href={inst.capturesHref}>
+              {inst.capturesLabel}
+              <span class="inst-card__cta-arrow" aria-hidden="true">→</span>
+            </a>
+          </p>
+        </section>
+      ))}
+
+      <section class="inst__ops">
+        <header class="inst__banner">
+          <span class="inst__banner__num">¶</span>
+          <h2 class="inst__banner__title">Standing notes</h2>
+          <span class="inst__banner__rule" aria-hidden="true"></span>
+          <span class="inst__banner__count">Across instruments</span>
         </header>
 
-        <ol class="instr__list">
-          {components.map((c, i) => (
-            <li class="node">
-              <article class="node__article">
-                <aside class="node__rail">
-                  <span class="node__mark">{c.mark}</span>
-                  <span class="node__folio">No. {String(i + 1).padStart(2, "0")}</span>
-                </aside>
-                <div class="node__body">
-                  <header class="node__head">
-                    <span class="node__kicker">{c.spec}</span>
-                    <h3 class="node__name">{c.name}</h3>
-                  </header>
-
-                  <dl class="node__rows">
-                    <div class="node__row">
-                      <dt>Detail</dt>
-                      <dd>{c.detail}</dd>
-                    </div>
-                    <div class="node__row">
-                      <dt>Role</dt>
-                      <dd>{c.role}</dd>
-                    </div>
-                    <div class="node__row node__row--accent">
-                      <dt>Operative note</dt>
-                      <dd>{c.notes}</dd>
-                    </div>
-                  </dl>
-                </div>
-              </article>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section class="instr__ops">
-        <header class="instr__banner">
-          <span class="instr__banner__num">¶</span>
-          <h2 class="instr__banner__title">Operational notes</h2>
-          <span class="instr__banner__rule" aria-hidden="true"></span>
-          <span class="instr__banner__count">Standing posture</span>
-        </header>
-
-        <dl class="ops__rows">
-          <div class="ops__row">
+        <dl class="inst__ops-rows">
+          <div class="inst__ops-row">
+            <dt>Switching</dt>
+            <dd>Only one chain is wired to the RTL-SDR at a time. The SPDT switch the rig was designed around is not yet installed, so moving between instruments is a manual coax swap and, for II&ndash;III, a physical re-aim.</dd>
+          </div>
+          <div class="inst__ops-row">
             <dt>Cadence</dt>
-            <dd>GK-2A transmits continuously. Capture slots are scheduled on the hour and the half hour; the rooftop chain is otherwise idle.</dd>
+            <dd>GK-2A transmits continuously; capture slots are scheduled on the hour and the half hour. METEOR is captured per-pass when the orbit is favourable. Elektro-L5 captures track its sporadic broadcast cadence, mostly within an 05:30&ndash;09:30 UTC window.</dd>
           </div>
-          <div class="ops__row">
+          <div class="inst__ops-row">
             <dt>Calibration</dt>
-            <dd>The 137 MHz V-dipole path (now retired) used the always-on ORBCOMM constellation as a chain canary &mdash; if frames decode, the chain is alive. The L-band path has no equivalent free signal; GGAK at 1693 MHz is the closest candidate but currently unverified on this rig.</dd>
+            <dd>The 137 MHz chain uses the always-on ORBCOMM constellation as a chain canary &mdash; if frames decode, the rig is alive. The L-band chains have no equivalent free signal; GGAK at 1693 MHz is a candidate but unverified on this rig.</dd>
           </div>
-          <div class="ops__row">
+          <div class="inst__ops-row">
             <dt>Retention</dt>
-            <dd>Raw IQ from a successful decode is purged within an hour. Failed-decode IQ is held seven days in <code>/satellite/_raw-iq/needs-review/</code> for re-decode attempts, then auto-deleted.</dd>
+            <dd>Raw IQ from a successful decode is purged within an hour. Failed-decode IQ is held seven days in <code>/satellite/_raw-iq/needs-review/</code>, then auto-deleted.</dd>
           </div>
-          <div class="ops__row">
+          <div class="inst__ops-row">
             <dt>Provenance</dt>
-            <dd>Every IQ file that has been pulled and processed is logged one JSON line at a time in <code>/satellite/.processed-iq-log.ndjson</code>, keyed on filename and first-megabyte SHA-256.</dd>
+            <dd>Every IQ pulled and processed is logged one JSON line at a time in <code>/satellite/.processed-iq-log.ndjson</code> &mdash; keyed on filename and first-megabyte SHA-256, then projected to a canonical per-IQ state file the website reads from.</dd>
           </div>
         </dl>
-
-        <p class="ops__legend">
-          The chain has been quiet since the rooftop hardware was moved off-site for
-          re-housing. New plates resume the day the dish goes back up.
-        </p>
       </section>
     </Container>
   </article>
 </BaseLayout>
 
 <style>
-  .instr { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .instr :global(.instr__inner) {
+  .inst { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .inst :global(.inst__inner) {
     display: grid;
     grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
     gap: var(--space-8);
   }
-  .instr__head {
+  .inst__head {
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
@@ -189,7 +253,7 @@ const components: NodeSpec[] = [
     padding-bottom: var(--space-10);
     border-bottom: 1px solid var(--color-rule);
   }
-  .instr__rail {
+  .inst__rail {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -207,7 +271,7 @@ const components: NodeSpec[] = [
   .rail__date  { color: var(--color-ink-muted); }
   .rail__rule  { height: 1px; background: var(--color-rule); }
 
-  .instr__title {
+  .inst__title {
     font-family: var(--font-serif);
     font-weight: 900;
     font-size: var(--type-jumbo);
@@ -216,26 +280,228 @@ const components: NodeSpec[] = [
     color: var(--color-ink);
     font-feature-settings: var(--features-display);
   }
-  .instr__title-line { display: block; }
-  .instr__title-emphasis {
+  .inst__title-line { display: block; }
+  .inst__title-emphasis {
     display: block;
     font-style: italic;
     font-weight: 500;
     color: var(--color-accent);
   }
-  .instr__lede {
+  .inst__lede {
     margin-top: var(--space-5);
     font-family: var(--font-serif);
     font-size: var(--type-h4);
     line-height: var(--leading-snug);
-    color: var(--color-ink-soft);
-    max-width: 42rem;
+    color: var(--color-ink);
+    max-width: 44rem;
   }
 
-  .instr__diagram { grid-column: 1 / -1; margin-top: var(--space-10); }
-  .instr__register, .instr__ops { grid-column: 1 / -1; margin-top: var(--space-16); }
+  /* INSTRUMENT CARD ────────────────────────────────────────────── */
+  .inst-card {
+    grid-column: 1 / -1;
+    margin-top: var(--space-16);
+    padding: var(--space-10) 0;
+    border-top: 3px solid var(--color-ink);
+    position: relative;
+  }
+  .inst-card::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 4px;
+    border-top: 1px solid var(--color-ink);
+  }
+  .inst-card + .inst-card { margin-top: var(--space-12); }
 
-  .instr__banner {
+  .inst-card__head {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-top: var(--space-3);
+  }
+  .inst-card__numeral {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-folio);
+    line-height: 0.82;
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+  }
+  .inst-card__heading { padding-top: 0.4em; }
+  .inst-card__kicker {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: var(--space-3);
+    width: max-content;
+    max-width: 100%;
+  }
+  .inst-card__kicker-sep { color: var(--color-rule-strong); }
+  .inst-card__name {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-display);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .inst-card__target {
+    margin-top: var(--space-4);
+    display: grid;
+    grid-template-columns: 5rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+  .inst-card__target-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .inst-card__target-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h4);
+    color: var(--color-ink);
+  }
+  .inst-card__target-status {
+    margin-left: var(--space-3);
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  .inst-card__lede {
+    margin: var(--space-6) 0 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+    max-width: 50rem;
+  }
+
+  /* spec grid ─────────────────────────────────────── */
+  .inst-card__specs {
+    margin: var(--space-4) 0 0;
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: var(--space-3) var(--space-6);
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+    max-width: 50rem;
+  }
+  .inst-card__spec { display: contents; }
+  .inst-card__specs dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-top: 0.18em;
+  }
+  .inst-card__specs dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+  }
+
+  /* operative note ────────────────────────────────────────────── */
+  .inst-card__note {
+    margin: var(--space-6) 0 0;
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: baseline;
+    padding-left: var(--space-5);
+    border-left: 2px solid var(--color-accent);
+    max-width: 50rem;
+  }
+  .inst-card__note-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 700;
+    padding-top: 0.3em;
+  }
+  .inst-card__note-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+
+  /* CTA — view captures from this instrument */
+  .inst-card__cta {
+    margin: var(--space-8) 0 0;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    font-style: italic;
+  }
+  .inst-card__cta a {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    padding-bottom: 1px;
+    transition: color 100ms ease, border-color 100ms ease;
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+  .inst-card__cta a:hover {
+    color: var(--color-accent-hover);
+    border-bottom-color: var(--color-accent-hover);
+  }
+  .inst-card__cta-arrow {
+    font-style: normal;
+    transition: transform 200ms cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  .inst-card__cta a:hover .inst-card__cta-arrow { transform: translateX(0.2em); }
+  .inst-card__cta--quiet a {
+    color: var(--color-ink-muted);
+    border-bottom-color: color-mix(in srgb, var(--color-ink-muted) 40%, transparent);
+  }
+  .inst-card__cta--quiet a:hover {
+    color: var(--color-ink);
+    border-bottom-color: var(--color-ink);
+  }
+
+  /* STANDING NOTES ─────────────────────────────────────────────── */
+  .inst__ops {
+    grid-column: 1 / -1;
+    margin-top: var(--space-16);
+  }
+  .inst__banner {
     display: grid;
     grid-template-columns: auto auto 1fr auto;
     gap: var(--space-4);
@@ -244,28 +510,28 @@ const components: NodeSpec[] = [
     border-bottom: 3px solid var(--color-ink);
     position: relative;
   }
-  .instr__banner::after {
+  .inst__banner::after {
     content: "";
     position: absolute;
     left: 0; right: 0; bottom: -4px;
     border-bottom: 1px solid var(--color-ink);
   }
-  .instr__banner__num {
+  .inst__banner__num {
     font-family: var(--font-serif);
     font-weight: 800;
     font-size: var(--type-h1);
     color: var(--color-accent);
     line-height: 0.9;
   }
-  .instr__banner__title {
+  .inst__banner__title {
     font-family: var(--font-serif);
     font-weight: 700;
     font-size: var(--type-h1);
     line-height: 1;
     letter-spacing: var(--tracking-display);
   }
-  .instr__banner__rule { height: 1px; background: var(--color-rule); align-self: center; }
-  .instr__banner__count {
+  .inst__banner__rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .inst__banner__count {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
@@ -275,105 +541,7 @@ const components: NodeSpec[] = [
     font-weight: 500;
   }
 
-  /* NODE LIST ───────────────────────────────────────────────────── */
-  .instr__list {
-    margin: var(--space-8) 0 0;
-    padding: 0;
-    list-style: none;
-    border-top: 1px solid var(--color-rule);
-  }
-  .node {
-    margin: 0;
-    padding: var(--space-8) 0;
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .node + .node { margin-top: 0; }
-  .node__article {
-    display: grid;
-    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
-    gap: var(--space-8);
-    align-items: start;
-  }
-  .node__rail { display: flex; flex-direction: column; gap: var(--space-2); }
-  .node__mark {
-    font-family: var(--font-serif);
-    font-weight: 800;
-    font-size: var(--type-jumbo);
-    line-height: 0.82;
-    letter-spacing: var(--tracking-jumbo);
-    color: var(--color-accent);
-    font-feature-settings: var(--features-tabular);
-  }
-  .node__folio {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-  }
-
-  .node__body { max-width: 56rem; }
-  .node__head {
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .node__kicker {
-    display: block;
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-  }
-  .node__name {
-    margin-top: var(--space-2);
-    font-family: var(--font-serif);
-    font-weight: 700;
-    font-size: var(--type-h1);
-    line-height: 1.05;
-    letter-spacing: var(--tracking-display);
-    color: var(--color-ink);
-    font-feature-settings: var(--features-display);
-  }
-
-  .node__rows {
-    margin-top: var(--space-5);
-    display: grid;
-    grid-template-columns: 8rem 1fr;
-    gap: var(--space-4) var(--space-6);
-  }
-  .node__row { display: contents; }
-  .node__rows dt {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-    padding-top: 0.3em;
-  }
-  .node__rows dd {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-size: var(--type-body);
-    line-height: var(--leading-prose);
-    color: var(--color-ink);
-  }
-  .node__row--accent dt { color: var(--color-accent); font-weight: 600; }
-  .node__row--accent dd {
-    border-left: 2px solid var(--color-accent);
-    padding-left: var(--space-4);
-    font-style: italic;
-    color: var(--color-ink-soft);
-  }
-
-  /* OPERATIONAL ROWS ───────────────────────────────────────────── */
-  .ops__rows {
+  .inst__ops-rows {
     margin: var(--space-8) 0 0;
     display: grid;
     grid-template-columns: 9rem 1fr;
@@ -382,8 +550,8 @@ const components: NodeSpec[] = [
     border-top: 1px solid var(--color-rule);
     border-bottom: 1px solid var(--color-rule);
   }
-  .ops__row { display: contents; }
-  .ops__rows dt {
+  .inst__ops-row { display: contents; }
+  .inst__ops-rows dt {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
@@ -393,43 +561,43 @@ const components: NodeSpec[] = [
     font-weight: 600;
     padding-top: 0.3em;
   }
-  .ops__rows dd {
+  .inst__ops-rows dd {
     margin: 0;
     font-family: var(--font-serif);
     font-size: var(--type-body);
     line-height: var(--leading-prose);
     color: var(--color-ink);
   }
-  .ops__rows code {
+  .inst__ops-rows code {
     font-family: var(--font-mono);
     background: var(--color-paper-dim);
     padding: 0.1em 0.35em;
     border-radius: 2px;
     font-size: 0.92em;
   }
-  .ops__legend {
-    margin-top: var(--space-6);
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: var(--type-body);
-    color: var(--color-ink-soft);
-    max-width: 46rem;
-  }
 
   @media (max-width: 760px) {
-    .instr :global(.instr__inner),
-    .instr__head,
-    .node__article,
-    .ops__rows { grid-template-columns: 1fr; gap: var(--space-3); }
-    .instr__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
-    .instr__rail .rail__rule { flex: 1; }
-    .instr__title { font-size: var(--type-display); }
-    .node__rail { flex-direction: row; align-items: baseline; gap: var(--space-4); }
-    .node__mark { font-size: var(--type-h1); }
-    .node__rows { grid-template-columns: 1fr; gap: var(--space-2); }
-    .node__rows dt { padding-top: var(--space-3); }
-    .ops__rows dt { padding-top: var(--space-3); }
-    .instr__banner { grid-template-columns: auto 1fr; }
-    .instr__banner__rule, .instr__banner__count { display: none; }
+    .inst :global(.inst__inner),
+    .inst__head,
+    .inst-card__head,
+    .inst-card__target,
+    .inst-card__specs,
+    .inst-card__note,
+    .inst__ops-rows { grid-template-columns: 1fr; }
+    .inst__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .inst__rail .rail__rule { flex: 1; }
+    .inst__title { font-size: var(--type-display); }
+    .inst-card__numeral { font-size: var(--type-display); }
+    .inst-card__name { font-size: var(--type-h1); }
+    .inst-card__head { gap: var(--space-4); }
+    .inst-card__target { gap: var(--space-1); }
+    .inst-card__note {
+      padding-left: var(--space-3);
+      gap: var(--space-2);
+    }
+    .inst-card__specs dt,
+    .inst__ops-rows dt { padding-top: var(--space-3); }
+    .inst__banner { grid-template-columns: auto 1fr; }
+    .inst__banner__rule, .inst__banner__count { display: none; }
   }
 </style>

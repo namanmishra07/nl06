@@ -21,6 +21,17 @@ const {
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+
+/* Subdomain "stations" — surfaced as a quietly-subordinated second nav
+ * row in the masthead so visitors don't have to scroll past the hero
+ * to discover the running instruments. Apex only; subdomain mastheads
+ * don't pass this prop. */
+const stations = [
+  { numeral: "I",   label: "gs.",           href: "https://gs.nl06.com" },
+  { numeral: "II",  label: "chains.",       href: "https://chains.nl06.com" },
+  { numeral: "III", label: "reading.",      href: "https://reading.nl06.com" },
+  { numeral: "IV",  label: "auctionhouse.", href: "https://auctionhouse.nl06.com" },
+];
 ---
 <!doctype html>
 <html lang="en">
@@ -32,9 +43,10 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
     <SiteHeader
       pathname={pathname}
       title="NL06"
-      caption="— A Field Notebook"
+      caption="— A Field Notebook · Naman Mishra"
       edition='Composed by <a href="https://www.anthropic.com" rel="noopener">Claude</a>'
       dateline="Earth  ·  2026"
+      stations={stations}
     />
     <main>
       <slot />

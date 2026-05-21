@@ -2,7 +2,7 @@
 import { getCollection } from "astro:content";
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import SignalChain from "~/components/SignalChain.astro";
+import SignalChain, { type Node } from "~/components/SignalChain.astro";
 
 const all = (await getCollection("plates"))
   .filter((p) => !p.data.draft)
@@ -35,19 +35,24 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
 ---
 <BaseLayout
   title="gs.nl06 — Observations from a Lucknow rooftop"
-  description="A 60-centimetre dish, a helix feed, and an RTL-SDR pointed at GK-2A. Plates and a log."
+  description="A one-metre offset dish, a helix feed, and an RTL-SDR pointed at GK-2A. Plates and a log."
   itemNumber="№ GS01"
 >
   <!-- HERO ──────────────────────────────────────────────────────── -->
   <section class="gs-hero">
     <Container size="wide" class="gs-hero__inner">
       <figure class="gs-hero__figure">
-        <img
-          src={hero.data.image}
-          alt={`${hero.data.satellite} ${hero.data.channel} captured ${fmtDateTime(hero.data.captured_at)}`}
-          loading="eager"
-          fetchpriority="high"
-        />
+        <a href={hero.data.image} aria-label="Open full-resolution PNG of the hero plate">
+          <picture>
+            <source srcset={hero.data.image!.replace(/\.png$/i, ".webp")} type="image/webp" />
+            <img
+              src={hero.data.image}
+              alt={`${hero.data.satellite} ${hero.data.channel} captured ${fmtDateTime(hero.data.captured_at)}`}
+              loading="eager"
+              fetchpriority="high"
+            />
+          </picture>
+        </a>
         <figcaption class="gs-hero__cap">
           <span class="gs-hero__cap-mark">Plate I</span>
           <span class="gs-hero__cap-rule" aria-hidden="true"></span>
@@ -56,6 +61,9 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
             <br />
             Captured {fmtDateTime(hero.data.captured_at)} &nbsp;·&nbsp;
             {hero.data.frequency_mhz.toFixed(3)} MHz &nbsp;·&nbsp; SNR {hero.data.snr_db?.toFixed(1)} dB
+            <span class="gs-hero__cap-action">
+              <a href={hero.data.image} download>Open full-resolution PNG ↗</a>
+            </span>
           </span>
         </figcaption>
       </figure>
@@ -71,9 +79,9 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
           <span class="gs-hero__head-emphasis">A satellite. A log.</span>
         </h1>
         <p class="gs-hero__sub">
-          A sixty-centimetre parabolic dish on a rooftop in Lucknow, pointed thirty
-          degrees up and a hundred and twelve east of true. It listens to a single
-          geostationary weather satellite and writes the pictures down.
+          A one-metre offset dish on a rooftop in Lucknow, pointed thirty
+          degrees up and a hundred and twelve east of true. It listens to a
+          single geostationary weather satellite and writes the pictures down.
         </p>
 
         <dl class="gs-hero__counts">
@@ -116,9 +124,12 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
             <li class="gs-gallery__cell">
               <a class="gs-gallery__link" href={`/plates#${p.id}`}>
                 <figure class="gs-gallery__figure">
-                  <img src={p.data.image}
-                    alt={`${p.data.satellite} ${p.data.channel} ${fmtDateTime(p.data.captured_at)}`}
-                    loading="lazy" decoding="async" />
+                  <picture>
+                    <source srcset={p.data.image!.replace(/\.png$/i, ".webp")} type="image/webp" />
+                    <img src={p.data.image}
+                      alt={`${p.data.satellite} ${p.data.channel} ${fmtDateTime(p.data.captured_at)}`}
+                      loading="lazy" decoding="async" />
+                  </picture>
                 </figure>
                 <div class="gs-gallery__caption">
                   <span class="gs-gallery__mark">Plate {roman}</span>
@@ -139,15 +150,26 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
     <section class="gs-instrument" aria-labelledby="instrument">
       <header class="gs-banner">
         <span class="gs-banner__num">III</span>
-        <h2 id="instrument" class="gs-banner__title">The instrument</h2>
+        <h2 id="instrument" class="gs-banner__title">The instruments</h2>
         <span class="gs-banner__rule" aria-hidden="true"></span>
-        <span class="gs-banner__count">Six nodes</span>
+        <span class="gs-banner__count">Three chains</span>
       </header>
-      <SignalChain />
+      <SignalChain
+        nodes={[
+          { mark: "I",   name: "Antenna",    spec: "1 m parabolic",         spec2: "az 112.6°  ·  el 29.6°" },
+          { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",    spec2: "1692.14 MHz centre" },
+          { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",         spec2: "LNA + SAW filter, ext. PSU" },
+          { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  2.4 Msps" },
+          { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "pipeline · gk2a_lrit" },
+          { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",     spec2: "blue underlay  ·  haze 0.6" },
+        ]}
+        dividerAfter={3}
+        caption="Featured chain: the L-band path pointed at GK-2A. Two more instruments listed on the dedicated page."
+      />
       <p class="gs-instrument__note">
-        Each plate is the output of this chain run end-to-end without intervention.
-        When a node breaks, the chain stops and the log entry says where.
-        &nbsp;<a href="/instrument">Read the longer breakdown →</a>
+        Each plate is the output of one of three configured chains, run end-to-end without
+        intervention. When a node breaks, the chain stops and the log entry says where.
+        &nbsp;<a href="/instrument">See all three instruments →</a>
       </p>
     </section>
 
@@ -270,6 +292,28 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
     font-style: normal;
     font-weight: 600;
     color: var(--color-paper);
+  }
+  .gs-hero__cap-action {
+    display: block;
+    margin-top: var(--space-2);
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-paper) 70%, transparent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .gs-hero__cap-action a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-paper) 35%, transparent);
+    padding-bottom: 1px;
+  }
+  .gs-hero__cap-action a:hover {
+    color: var(--color-paper);
+    border-bottom-color: var(--color-paper);
   }
 
   .gs-hero__lede { max-width: 30rem; }

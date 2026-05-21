@@ -5,6 +5,9 @@
   "engines": {
     "node": ">=22"
   },
+  "devDependencies": {
+    "sharp": "^0.34.0"
+  },
   "scripts": {
     "dev:main": "pnpm --filter @nl06/main dev",
     "dev:reading": "pnpm --filter @nl06/reading dev",

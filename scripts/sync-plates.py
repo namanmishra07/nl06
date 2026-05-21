@@ -294,7 +294,19 @@ def index_existing(entries: list[dict]) -> tuple[set[str], set[str]]:
     return shas, keys
 
 def deploy_gs() -> int:
-    """pnpm build + wrangler deploy. Returns process exit code."""
+    """compress images → pnpm build → wrangler deploy. Each step is
+    idempotent so this chain is safe to re-run."""
+    compress_script = WEBSITE_ROOT / "scripts" / "compress-plates.mjs"
+    if compress_script.exists():
+        print("sync-plates: compressing any new plates to WebP ...")
+        r = subprocess.run(
+            ["node", str(compress_script)],
+            cwd=WEBSITE_ROOT,
+        )
+        if r.returncode != 0:
+            print("sync-plates: compress-plates failed", file=sys.stderr)
+            return r.returncode
+
     print("sync-plates: building apps/gs ...")
     r = subprocess.run(
         ["pnpm", "--filter", "@nl06/gs", "build"],

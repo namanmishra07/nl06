@@ -9,10 +9,68 @@ const all = (await getCollection("plates"))
   .sort((a, b) => b.data.captured_at.getTime() - a.data.captured_at.getTime());
 
 const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"];
+
+/** Map a plate's `satellite` display string to the section key. */
+function sectionKey(satDisplay: string): "gk-2a" | "elektro-l5" | "meteor-m2-4" | "other" {
+  if (satDisplay.includes("KOMPSAT")) return "gk-2a";
+  if (satDisplay.includes("ELEKTRO")) return "elektro-l5";
+  if (satDisplay.includes("METEOR"))  return "meteor-m2-4";
+  return "other";
+}
+
+interface Section {
+  id: "gk-2a" | "elektro-l5" | "meteor-m2-4";
+  numeral: string;
+  label: string;
+  target: string;
+  band: string;
+  instrumentHref: string;
+  emptyMessage?: string;
+  entries: typeof all;
+}
+
+const sections: Section[] = [
+  {
+    id: "gk-2a",
+    numeral: "I",
+    label: "GK-2A",
+    target: "GEO-KOMPSAT-2A · 128.2°E",
+    band: "L-band · 1692.140 MHz",
+    instrumentHref: "/instrument#ii-l-band-gk2a",
+    entries: all.filter((p) => sectionKey(p.data.satellite) === "gk-2a"),
+  },
+  {
+    id: "elektro-l5",
+    numeral: "II",
+    label: "Elektro-L5",
+    target: "Elektro-L5 · 76°E",
+    band: "L-band · 1691.000 MHz",
+    instrumentHref: "/instrument#iii-l-band-elektro",
+    emptyMessage: "Elektro-L5 is in commissioning at 76°E. Broadcasts are sporadic, clustered around 08:00 UTC, and the first-light attempt on 2026-05-17 yielded no decoded frames. Images appear here once the bird is reliably transmitting and the chain locks.",
+    entries: all.filter((p) => sectionKey(p.data.satellite) === "elektro-l5"),
+  },
+  {
+    id: "meteor-m2-4",
+    numeral: "III",
+    label: "METEOR M2-4",
+    target: "METEOR-M N2-4 (and N2-3) · polar LEO",
+    band: "VHF · 137.900 MHz",
+    instrumentHref: "/instrument#i-v-dipole",
+    entries: all.filter((p) => sectionKey(p.data.satellite) === "meteor-m2-4"),
+  },
+];
+
+// Per-section plate numbering — start each section at I and count up.
+function getRomanFor(sectionEntries: typeof all, plateId: string): string {
+  const idx = sectionEntries.findIndex((e) => e.id === plateId);
+  return romans[idx] ?? "—";
+}
+
+const totalImaged = all.length;
 ---
 <BaseLayout
   title="gs.nl06 — Plates"
-  description="Every plate this instrument has filed, in reverse chronological order."
+  description="Every decoded plate this rig has produced, sectioned by satellite."
   itemNumber="№ GS02"
 >
   <article class="plates">
@@ -21,29 +79,83 @@ const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","X
         <div class="plates__rail">
           <span class="rail__label">Register</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">{all.length} on file</span>
+          <span class="rail__date">{totalImaged} on file</span>
         </div>
         <div class="plates__heading">
           <h1 class="plates__title">
             <span class="plates__title-line">Plates.</span>
-            <span class="plates__title-emphasis">Reverse-chronological, no thumbnails.</span>
+            <span class="plates__title-emphasis">By satellite, then by time.</span>
           </h1>
           <p class="plates__lede">
-            Every frame this instrument has filed, in the order it filed them.
-            The most recent at the top. Each entry carries the telemetry it was
-            captured under &mdash; tune, sample rate, signal-to-noise &mdash; so
-            the record can be re-checked against the raw IQ on the NAS.
+            Every frame this rig has filed, grouped by which bird it came from. Each
+            section is fed by one configured chain; clicking the section header takes
+            you to that instrument's page. Failed captures and unlocked passes are
+            kept in the <a href="/log">operational log</a>, not here.
           </p>
         </div>
       </header>
 
-      <ol class="plates__list">
-        {all.map((p, i) => (
-          <li id={p.id}>
-            <PlateCard plate={p} number={all.length - i} roman={romans[i]} level={2} />
-          </li>
-        ))}
-      </ol>
+      <!-- table of contents -->
+      <nav class="plates__toc" aria-label="Sections">
+        <ol class="plates__toc-list">
+          {sections.map((s) => (
+            <li class="plates__toc-item">
+              <a href={`#${s.id}`} class="plates__toc-link">
+                <span class="plates__toc-mark">{s.numeral}</span>
+                <span class="plates__toc-label">{s.label}</span>
+                <span class="plates__toc-count">
+                  {s.entries.length === 0 ? "—" : String(s.entries.length).padStart(2, "0")}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+
+      {sections.map((s) => (
+        <section class="plates__section" id={s.id}>
+          <header class="plates__section-head">
+            <span class="plates__section-mark">{s.numeral}</span>
+            <div class="plates__section-heading">
+              <span class="plates__section-kicker">
+                {s.band}
+                <span class="plates__section-kicker-sep" aria-hidden="true">·</span>
+                <a href={s.instrumentHref} class="plates__section-instrument-link">
+                  Instrument {s.numeral} ↗
+                </a>
+              </span>
+              <h2 class="plates__section-title">{s.label}</h2>
+              <p class="plates__section-target">{s.target}</p>
+            </div>
+            <span class="plates__section-count">
+              {s.entries.length === 0 ? "Coming soon" : `${s.entries.length} plates on file`}
+            </span>
+          </header>
+
+          {s.entries.length === 0 ? (
+            <div class="plates__section-empty">
+              <p class="plates__empty-mark">No images yet</p>
+              <p class="plates__empty-body">{s.emptyMessage}</p>
+              <p class="plates__empty-link">
+                <a href={s.instrumentHref}>See the instrument →</a>
+              </p>
+            </div>
+          ) : (
+            <ol class="plates__section-list">
+              {s.entries.map((p) => (
+                <li id={p.id}>
+                  <PlateCard
+                    plate={p}
+                    number={s.entries.findIndex((e) => e.id === p.id) + 1}
+                    roman={getRomanFor(s.entries, p.id)}
+                    level={3}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      ))}
     </Container>
   </article>
 </BaseLayout>
@@ -70,25 +182,17 @@ const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","X
     gap: var(--space-2);
     padding-top: var(--space-3);
   }
-  .rail__label {
+  .rail__label, .rail__date {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
-    color: var(--color-ink);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 600;
-  }
-  .rail__rule { height: 1px; background: var(--color-rule); }
-  .rail__date {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
+  .rail__label { color: var(--color-ink); font-weight: 600; }
+  .rail__date  { color: var(--color-ink-muted); }
+  .rail__rule  { height: 1px; background: var(--color-rule); }
 
   .plates__title {
     font-family: var(--font-serif);
@@ -112,18 +216,215 @@ const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","X
     font-size: var(--type-h4);
     line-height: var(--leading-snug);
     color: var(--color-ink-soft);
-    max-width: 42rem;
+    max-width: 44rem;
   }
 
-  .plates__list {
+  /* TOC ────────────────────────────────────────────────────────── */
+  .plates__toc {
     grid-column: 1 / -1;
-    margin: var(--space-6) 0 0;
+    margin-top: var(--space-10);
+  }
+  .plates__toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--color-ink);
+  }
+  .plates__toc-item {
+    border-right: 1px solid var(--color-rule);
+    margin: 0;
+  }
+  .plates__toc-item + .plates__toc-item { margin-top: 0; }
+  .plates__toc-item:last-child { border-right: 0; }
+  .plates__toc-link {
+    display: grid;
+    grid-template-columns: 3rem 1fr auto;
+    gap: var(--space-3);
+    align-items: baseline;
+    padding: var(--space-5) var(--space-5);
+    text-decoration: none;
+    color: inherit;
+    background: var(--color-paper);
+    transition: background 100ms ease;
+  }
+  .plates__toc-link:hover { background: var(--color-paper-margin); }
+  .plates__toc-mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h2);
+    line-height: 0.9;
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    text-align: center;
+  }
+  .plates__toc-label {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h4);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .plates__toc-count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  /* SECTION ────────────────────────────────────────────────────── */
+  .plates__section {
+    grid-column: 1 / -1;
+    margin-top: var(--space-16);
+    scroll-margin-top: var(--space-12);
+  }
+  .plates__section-head {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr) auto;
+    gap: var(--space-6);
+    align-items: baseline;
+    padding-bottom: var(--space-3);
+    border-bottom: 3px solid var(--color-ink);
+    position: relative;
+  }
+  .plates__section-head::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -4px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .plates__section-mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-jumbo);
+    line-height: 0.82;
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    text-align: right;
+  }
+  .plates__section-heading { padding-top: 0.6em; }
+  .plates__section-kicker {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: var(--space-3);
+    width: max-content;
+    max-width: 100%;
+  }
+  .plates__section-kicker-sep { color: var(--color-rule-strong); }
+  .plates__section-instrument-link {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    padding-bottom: 1px;
+  }
+  .plates__section-instrument-link:hover {
+    color: var(--color-accent-hover);
+    border-bottom-color: var(--color-accent-hover);
+  }
+  .plates__section-title {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-display);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .plates__section-target {
+    margin-top: var(--space-3);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    color: var(--color-ink-soft);
+  }
+  .plates__section-count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    white-space: nowrap;
+    align-self: end;
+    padding-bottom: 0.2em;
+  }
+
+  .plates__section-list {
+    grid-column: 1 / -1;
+    margin: var(--space-4) 0 0;
     padding: 0;
     list-style: none;
     border-top: 1px solid var(--color-rule);
   }
-  .plates__list li { margin: 0; }
-  .plates__list li + li { margin-top: 0; }
+  .plates__section-list li { margin: 0; }
+  .plates__section-list li + li { margin-top: 0; }
+
+  /* Empty state — Elektro-L5 placeholder */
+  .plates__section-empty {
+    margin-top: var(--space-6);
+    padding: var(--space-8);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+    background-image: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-rule-strong) 14%, transparent) 0,
+      color-mix(in srgb, var(--color-rule-strong) 14%, transparent) 1px,
+      transparent 1px,
+      transparent 14px
+    );
+    max-width: 50rem;
+  }
+  .plates__empty-mark {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 700;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: var(--space-4);
+  }
+  .plates__empty-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .plates__empty-link {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+  }
+  .plates__empty-link a {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    padding-bottom: 1px;
+  }
+  .plates__empty-link a:hover {
+    color: var(--color-accent-hover);
+    border-bottom-color: var(--color-accent-hover);
+  }
 
   @media (max-width: 760px) {
     .plates :global(.plates__inner),
@@ -131,5 +432,12 @@ const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","X
     .plates__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
     .plates__rail .rail__rule { flex: 1; }
     .plates__title { font-size: var(--type-display); }
+    .plates__toc-list { grid-template-columns: 1fr; }
+    .plates__toc-item { border-right: 0; border-bottom: 1px solid var(--color-rule); }
+    .plates__toc-item:last-child { border-bottom: 0; }
+    .plates__section-head { grid-template-columns: auto 1fr; }
+    .plates__section-mark { font-size: var(--type-h1); }
+    .plates__section-title { font-size: var(--type-h2); }
+    .plates__section-count { display: none; }
   }
 </style>
