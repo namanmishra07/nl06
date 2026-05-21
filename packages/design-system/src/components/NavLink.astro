@@ -25,7 +25,17 @@ const target = external ? "_blank" : undefined;
     font-size: var(--type-small);
     color: var(--color-ink-soft);
     text-decoration: none;
+    letter-spacing: 0.01em;
+    border-bottom: 1px solid transparent;
+    padding-bottom: 1px;
+    transition: color 80ms ease, border-color 80ms ease;
   }
-  .nav-link:hover { color: var(--color-accent); }
-  .nav-link.is-current { color: var(--color-ink); }
+  .nav-link:hover {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+  .nav-link.is-current {
+    color: var(--color-ink);
+    border-bottom-color: var(--color-ink);
+  }
 </style>

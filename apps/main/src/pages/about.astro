@@ -1,35 +1,245 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import Prose      from "@nl06/design-system/components/Prose.astro";
 ---
 <BaseLayout
-  title="About — nl06"
+  title="About — NL06"
   description="About Naman."
   pathname="/about"
+  itemNumber="№ 003"
 >
-  <Container size="prose" class="about">
-    <h1>About</h1>
+  <article class="about">
+    <Container size="wide" class="about__inner">
+      <header class="about__head">
+        <div class="about__rail">
+          <span class="rail__label">Concerning</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">The Author</span>
+        </div>
+        <h1 class="about__title">About</h1>
+      </header>
 
-    <Prose>
-      <p>I build instruments and write about what they reveal.</p>
+      <div class="about__body">
+        <p class="about__lede">
+          I build instruments and write about what they reveal.
+        </p>
 
-      <p>Currently based in Mumbai, with a rooftop ground station running 1,400&nbsp;km north in Lucknow. Before that: a few years of building hardware-software things — some of which shipped, some of which I walked away from when the next round didn't make sense.</p>
+        <div class="about__columns">
+          <div class="about__column">
+            <p class="dropcap-text">
+              Currently based in Mumbai, with a rooftop ground station running
+              roughly 1,400&nbsp;km north in Lucknow. Before that: a few years
+              of building hardware-software things &mdash; some of which shipped,
+              some of which I walked away from when the next round didn&rsquo;t
+              make sense.
+            </p>
+            <p>
+              What&rsquo;s loaded into the next few months is at
+              <a href="/now">/now</a>. The way I think about macro shifts &mdash;
+              the four-question consequence-chain method &mdash; sits at
+              <a href="https://chains.nl06.com">chains.</a> Notes on what I&rsquo;m
+              reading land at <a href="https://reading.nl06.com">reading.</a>
+              The instrument itself reports at <a href="https://gs.nl06.com">gs.</a>
+            </p>
+            <p>
+              For the rest:
+              <a href="https://www.linkedin.com/in/namanmishra07" rel="noopener">LinkedIn</a>.
+            </p>
+          </div>
 
-      <p>What's loaded into the next few months is at <a href="/now">/now</a>. What I'm reading is at <a href="https://reading.nl06.com">reading.</a> The way I think about macro shifts is at <a href="https://chains.nl06.com">chains.</a></p>
+          <aside class="about__aside" aria-label="Quick facts">
+            <dl class="facts">
+              <div class="facts__row">
+                <dt>Based</dt>
+                <dd>Mumbai, India</dd>
+              </div>
+              <div class="facts__row">
+                <dt>Station</dt>
+                <dd>Lucknow rooftop, L-band &amp; VHF</dd>
+              </div>
+              <div class="facts__row">
+                <dt>Working on</dt>
+                <dd>A hardware-software bet, space-adjacent</dd>
+              </div>
+              <div class="facts__row">
+                <dt>Issue</dt>
+                <dd>Vol. I &nbsp;·&nbsp; 2026</dd>
+              </div>
+              <div class="facts__row">
+                <dt>Reach</dt>
+                <dd><a href="mailto:naman@nl06.com">naman@nl06.com</a></dd>
+              </div>
+            </dl>
 
-      <p>For the rest: <a href="https://www.linkedin.com/in/namanmishra07" rel="noopener">LinkedIn</a>.</p>
-    </Prose>
-  </Container>
+            <p class="aside__pull">
+              <span class="aside__pull-mark" aria-hidden="true">“</span>
+              The work is the artefact; this is where the artefact is kept.
+            </p>
+          </aside>
+        </div>
+      </div>
+
+    </Container>
+  </article>
 </BaseLayout>
 
 <style>
   .about { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .about > :global(.prose-flow) { margin-top: var(--space-8); }
-  .about > :global(.prose-flow) > p:first-child {
-    font-size: var(--type-h3);
+  .about :global(.about__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* HEAD ─────────────────────────────────────────────────────────── */
+  .about__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-8);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .about__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .about__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: 0.95;
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+
+  /* BODY ─────────────────────────────────────────────────────────── */
+  .about__body {
+    grid-column: 2 / -1;
+    padding-top: var(--space-10);
+  }
+  .about__lede {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h2);
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-ink);
+    max-width: 38rem;
+    padding-bottom: var(--space-6);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .about__columns {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) 1fr;
+    gap: var(--space-12);
+  }
+  .about__column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
+    max-width: 36rem;
+  }
+
+  .about__column .dropcap-text::first-letter {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-dropcap);
+    line-height: 0.82;
+    float: left;
+    padding: 0.06em 0.14em 0 0;
+    margin: 0.04em 0.06em 0 0;
+    color: var(--color-accent);
+    letter-spacing: -0.02em;
+    font-feature-settings: var(--features-display);
+  }
+
+  /* ASIDE ───────────────────────────────────────────────────────── */
+  .about__aside {
+    padding-left: var(--space-6);
+    border-left: 1px solid var(--color-rule);
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: var(--space-3) var(--space-4);
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+  }
+  .facts__row { display: contents; }
+  .facts dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    padding-top: 0.22em;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .facts dd { margin: 0; line-height: var(--leading-normal); }
+  .facts a { color: var(--color-ink); }
+
+  .aside__pull {
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h4);
     line-height: var(--leading-snug);
     color: var(--color-ink);
-    font-style: italic;
+    text-indent: -0.45em;
+  }
+  .aside__pull-mark {
+    color: var(--color-accent);
+    font-weight: 800;
+    font-size: 1.4em;
+    line-height: 0;
+    vertical-align: -0.1em;
+  }
+
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .about :global(.about__inner),
+    .about__head { grid-template-columns: 1fr; }
+    .about__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .about__rail .rail__rule { flex: 1; }
+    .about__title { font-size: var(--type-display); }
+    .about__body { grid-column: 1 / -1; }
+    .about__columns { grid-template-columns: 1fr; gap: var(--space-8); }
+    .about__aside { padding-left: 0; border-left: 0; padding-top: var(--space-6); border-top: 1px solid var(--color-rule); }
   }
 </style>

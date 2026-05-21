@@ -9,95 +9,297 @@ const notes = (await getCollection("notes"))
 
 const fmtDate = (d: Date) =>
   d.toISOString().slice(0, 10).replace(/-/g, " · ");
+
+const fmtYear = (d: Date) => d.getFullYear().toString();
+
+const sourceLabel = (t: string) => ({
+  book:  "Book",
+  paper: "Paper",
+  post:  "Post",
+  other: "Other",
+}[t] ?? t);
 ---
 <BaseLayout
-  title="reading.nl06"
-  description="Notes on what I'm reading."
+  title="reading.nl06 — A Review Section"
+  description="Notes on what I'm reading. One per source, only when it shifts something."
+  itemNumber="№ R01"
 >
-  <Container size="container" class="page">
-    <p class="meta">Reading</p>
-    <h1>Notes</h1>
-    <p class="lede">Specific notes on what shifted — books, papers, posts. <a href="/rss.xml">RSS</a>.</p>
+  <article class="reading">
+    <Container size="wide" class="reading__inner">
+      <header class="reading__head">
+        <div class="reading__rail">
+          <span class="rail__label">Index</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">Updated as it goes</span>
+        </div>
 
-    {notes.length === 0 ? (
-      <p class="empty"><em>PLACEHOLDER — no notes yet.</em></p>
-    ) : (
-      <ul class="notes">
-        {notes.map((n) => (
-          <li class="note">
-            <a class="note__link" href={`/${n.id}`}>
-              <span class="note__title">{n.data.title}</span>
-              <span class="note__meta">
-                <span class="note__date">{fmtDate(n.data.date)}</span>
-                <span class="note__sep">·</span>
-                <span class="note__source">{n.data.source_type}</span>
-                {n.data.source_author && (
-                  <>
-                    <span class="note__sep">·</span>
-                    <span class="note__author">{n.data.source_author}</span>
-                  </>
-                )}
-              </span>
-            </a>
-            {n.data.blurb && <p class="note__blurb">{n.data.blurb}</p>}
-          </li>
-        ))}
-      </ul>
-    )}
-  </Container>
+        <div class="reading__heading">
+          <h1 class="reading__title">
+            <span class="reading__title-line">Notes,</span>
+            <span class="reading__title-emphasis">one per source.</span>
+          </h1>
+          <p class="reading__lede">
+            A standing record of what has moved a thought, set in chronological
+            descent. Each entry is one book, paper, or post and the specific
+            shift it caused. Nothing here is a review; everything here is a
+            citation with a margin note.
+          </p>
+          <p class="reading__meta">
+            <span class="reading__meta-count tabular">{String(notes.length).padStart(2, "0")}</span>
+            <span class="reading__meta-rule" aria-hidden="true"></span>
+            <span class="reading__meta-label">Entries on file</span>
+            <span class="reading__meta-sep" aria-hidden="true">·</span>
+            <a class="reading__meta-link" href="/rss.xml">RSS feed</a>
+          </p>
+        </div>
+      </header>
+
+      <!-- INDEX ─────────────────────────────────────────────────── -->
+      {notes.length === 0 ? (
+        <p class="empty"><em>PLACEHOLDER — no notes yet.</em></p>
+      ) : (
+        <ol class="entries">
+          {notes.map((n, i) => (
+            <li class="entry">
+              <a class="entry__link" href={`/${n.id}`}>
+                <div class="entry__rail">
+                  <span class="entry__num">{String(notes.length - i).padStart(2, "0")}</span>
+                  <span class="entry__year">{fmtYear(n.data.date)}</span>
+                </div>
+
+                <div class="entry__body">
+                  <span class="entry__kicker">
+                    <span class="entry__kicker-type">{sourceLabel(n.data.source_type)}</span>
+                    {n.data.source_author && (
+                      <>
+                        <span class="entry__kicker-sep" aria-hidden="true">·</span>
+                        <span class="entry__kicker-author">{n.data.source_author}</span>
+                      </>
+                    )}
+                  </span>
+                  <h2 class="entry__title">{n.data.title}</h2>
+                  {n.data.blurb && <p class="entry__blurb">{n.data.blurb}</p>}
+                </div>
+
+                <span class="entry__date">{fmtDate(n.data.date)}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
+
+    </Container>
+  </article>
 </BaseLayout>
 
 <style>
-  .page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .page > * + * { margin-top: var(--space-4); }
-  .page > h1 { margin-top: var(--space-2); }
-  .page > .lede {
-    color: var(--color-ink-soft);
-    font-size: var(--type-h4);
-    line-height: var(--leading-snug);
+  .reading { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .reading :global(.reading__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
   }
-  .empty { margin-top: var(--space-8); color: var(--color-ink-muted); }
 
-  .notes {
-    margin-top: var(--space-10);
-    list-style: none;
-    padding: 0;
-    border-top: 1px solid var(--color-rule);
-  }
-  .note {
-    padding: var(--space-5) 0;
+  /* HEAD ─────────────────────────────────────────────────────────── */
+  .reading__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
     border-bottom: 1px solid var(--color-rule);
   }
-  .note + .note { margin-top: 0; }
-  .note__link {
+  .reading__rail {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    text-decoration: none;
-    color: var(--color-ink);
+    padding-top: var(--space-3);
   }
-  .note__link:hover .note__title {
+  .rail__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  .reading__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .reading__title-line { display: block; }
+  .reading__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
     color: var(--color-accent);
   }
-  .note__title {
+  .reading__lede {
+    margin-top: var(--space-5);
     font-family: var(--font-serif);
-    font-size: var(--type-h3);
-    font-weight: 600;
+    font-size: var(--type-h4);
     line-height: var(--leading-snug);
-    transition: color 80ms ease;
-  }
-  .note__meta {
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    color: var(--color-ink-muted);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-meta);
-    display: flex;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-  .note__blurb {
-    margin-top: var(--space-2);
     color: var(--color-ink-soft);
+    max-width: 38rem;
+  }
+  .reading__meta {
+    margin-top: var(--space-6);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .reading__meta-count {
+    color: var(--color-accent);
+    font-weight: 700;
+    font-size: var(--type-h4);
+    line-height: 1;
+  }
+  .reading__meta-rule { flex: 0 0 2rem; height: 1px; background: var(--color-rule-strong); }
+  .reading__meta-label { color: var(--color-ink); }
+  .reading__meta-sep   { color: var(--color-rule-strong); }
+  .reading__meta-link  { color: var(--color-accent); text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+
+  /* ENTRIES ────────────────────────────────────────────────────── */
+  .entries {
+    grid-column: 1 / -1;
+    list-style: none;
+    padding: 0;
+    margin: var(--space-10) 0 0;
+    border-top: 1px solid var(--color-ink);
+  }
+  .entry {
+    margin: 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .entry + .entry { margin-top: 0; }
+  .entry__link {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr) auto;
+    gap: var(--space-8);
+    align-items: start;
+    padding: var(--space-8) 0;
+    text-decoration: none;
+    color: var(--color-ink);
+    transition: color 100ms ease;
+  }
+
+  .entry__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .entry__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-display);
+    line-height: 0.85;
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+  }
+  .entry__year {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  .entry__body { display: flex; flex-direction: column; gap: var(--space-3); }
+  .entry__kicker {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .entry__kicker-type {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .entry__kicker-sep   { color: var(--color-rule-strong); }
+  .entry__kicker-author{ font-style: italic; font-weight: 400; text-transform: none; letter-spacing: 0; font-family: var(--font-serif); color: var(--color-ink-soft); font-size: var(--type-small); }
+
+  .entry__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h1);
+    line-height: 1.05;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .entry__blurb {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+    max-width: 40rem;
+  }
+  .entry__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    white-space: nowrap;
+    padding-top: 0.5em;
+  }
+
+  .entry__link:hover .entry__title { color: var(--color-accent); }
+  .entry__link:hover .entry__num   { color: var(--color-accent-hover); }
+
+  .empty { margin-top: var(--space-8); color: var(--color-ink-muted); }
+
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .reading :global(.reading__inner),
+    .reading__head { grid-template-columns: 1fr; }
+    .reading__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .reading__rail .rail__rule { flex: 1; }
+    .reading__title { font-size: var(--type-display); }
+    .entries { grid-column: 1 / -1; }
+    .entry__link {
+      grid-template-columns: 4rem minmax(0, 1fr);
+      gap: var(--space-4);
+    }
+    .entry__num { font-size: var(--type-h1); }
+    .entry__title { font-size: var(--type-h2); }
+    .entry__date { display: none; }
   }
 </style>

@@ -1,106 +1,485 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import Prose      from "@nl06/design-system/components/Prose.astro";
 
-const swatches: { name: string; var: string; use: string }[] = [
-  { name: "paper",        var: "--color-paper",        use: "page background" },
-  { name: "paper-dim",    var: "--color-paper-dim",    use: "code, inset surfaces" },
-  { name: "ink",          var: "--color-ink",          use: "body text" },
-  { name: "ink-soft",     var: "--color-ink-soft",     use: "secondary text" },
-  { name: "ink-muted",    var: "--color-ink-muted",    use: "dates, labels" },
-  { name: "rule",         var: "--color-rule",         use: "hairline borders" },
-  { name: "accent",       var: "--color-accent",       use: "links, marks" },
+const swatches: { name: string; var: string; use: string; hex: string }[] = [
+  { name: "paper",         var: "--color-paper",        use: "Page background",     hex: "#FAF8F3" },
+  { name: "paper-dim",     var: "--color-paper-dim",    use: "Inset surfaces, code",hex: "#F2EEE3" },
+  { name: "paper-margin",  var: "--color-paper-margin", use: "Marginalia rail",     hex: "#F5F1E4" },
+  { name: "ink",           var: "--color-ink",          use: "Body text",           hex: "#14181F" },
+  { name: "ink-soft",      var: "--color-ink-soft",     use: "Secondary text",      hex: "#3D424B" },
+  { name: "ink-muted",     var: "--color-ink-muted",    use: "Dates, labels",       hex: "#767A82" },
+  { name: "ink-faint",     var: "--color-ink-faint",    use: "Ornaments, hung qts.",hex: "#B8B2A0" },
+  { name: "rule",          var: "--color-rule",         use: "Hairline borders",    hex: "#E2DCC9" },
+  { name: "rule-strong",   var: "--color-rule-strong",  use: "Double-rule emphasis",hex: "#C9C1A9" },
+  { name: "accent",        var: "--color-accent",       use: "Links, drop caps",    hex: "#1B3A5C" },
+];
+
+const typeScale: { token: string; size: string; sample: string }[] = [
+  { token: "marginalia", size: "12 / 16", sample: "Updated 21·05·2026" },
+  { token: "meta",       size: "13 / 19", sample: "PLATE I · LUCKNOW" },
+  { token: "body",       size: "17 / 29", sample: "Set in Source Serif 4." },
+  { token: "h3",         size: "22 / 28", sample: "A sub-section head." },
+  { token: "h2",         size: "28 / 35", sample: "A section head, set serif." },
+  { token: "h1",         size: "40 / 42", sample: "Page heads run here." },
+  { token: "display",    size: "56 / 60", sample: "Major heroes." },
+  { token: "jumbo",      size: "84 / 80", sample: "The cover." },
 ];
 ---
 <BaseLayout
-  title="Colophon — nl06"
+  title="Colophon — NL06"
   description="How this site is set."
   pathname="/colophon"
+  itemNumber="№ 005"
 >
-  <Container size="prose" class="page">
-    <p class="dateline">Colophon &nbsp;·&nbsp; Issue I &nbsp;·&nbsp; 2026</p>
-    <h1>How this site is set.</h1>
+  <article class="colophon-page">
+    <Container size="wide" class="colophon-page__inner">
+      <header class="colophon-page__head">
+        <div class="cp__rail">
+          <span class="rail__label">Colophon</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">Vol. I · 2026</span>
+        </div>
+        <h1 class="colophon-page__title">
+          <span class="cp__title-line">How this</span>
+          <span class="cp__title-emphasis">site is set.</span>
+        </h1>
+        <p class="colophon-page__epigraph">
+          A site set to be read, not scrolled past. The aesthetic is editorial,
+          the constraints are deliberate: one serif, one sans, one accent, no
+          shadows, no gradients, no images-as-background. What richness is here
+          is set, not painted.
+        </p>
+      </header>
 
-    <Prose>
-      <h2>Type</h2>
-      <p>Body text is <em>Source Serif 4</em>, set at 17 pixels with a generous 1.65 line-height. Headings share the same family at 600 weight, slightly tightened. Chrome — navigation, dates, captions — uses <em>Inter</em>, in small caps where it earns it. No third typeface; restraint is the point.</p>
+      <!-- TYPE ───────────────────────────────────────────────── -->
+      <section class="section">
+        <header class="section__head">
+          <span class="section__num">I</span>
+          <h2 class="section__title">Type</h2>
+        </header>
+        <div class="section__columns">
+          <div class="section__prose">
+            <p class="dropcap-text">
+              Body text is <em>Source Serif 4</em>, set 17 pixels with a
+              generous 29-pixel leading, in 400 weight with proportional
+              oldstyle figures by default. Headlines climb from 600 to 900
+              of the same family; the largest cuts run on display tracking
+              and use Source Serif&rsquo;s discretionary ligatures and
+              stylistic alternates. Chrome &mdash; dateline, marginalia,
+              section labels &mdash; uses <em>Inter</em> 400 / 500 / 600 at
+              13&thinsp;px with wide tracking, lining tabular figures.
+              No third typeface. Restraint is the point.
+            </p>
+          </div>
 
-      <h2>Colour</h2>
-      <p>Background is a paper cream rather than white. Text is a slightly cool near-black. One restrained accent — the ink blue below — carries links, blockquote rules, and the live-chain status mark. No gradients, no drop shadows. Every colour is a CSS custom property; the palette can be re-tuned in one file.</p>
-    </Prose>
-
-    <div class="swatches">
-      {swatches.map((s) => (
-        <div class="swatch">
-          <div class="swatch__chip" style={`background: var(${s.var});`} />
-          <div class="swatch__meta">
-            <span class="swatch__name">{s.name}</span>
-            <span class="swatch__use">{s.use}</span>
+          <div class="type-table">
+            <span class="type-table__head">Scale</span>
+            <ul class="type-table__list">
+              {typeScale.map((t) => (
+                <li class="type-table__row">
+                  <span class="type-table__token">{t.token}</span>
+                  <span class="type-table__size">{t.size}</span>
+                  <span class="type-table__sample">{t.sample}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-      ))}
-    </div>
+      </section>
 
-    <Prose>
-      <h2>Construction</h2>
-      <p>Built with <a href="https://astro.build" rel="noopener">Astro</a> and Tailwind as a small pnpm monorepo. Each subdomain is its own application sharing a single design system as a workspace package. Static at build time; no runtime backend.</p>
-      <p>Deployed via Cloudflare Pages with custom domains on the apex and three subdomains. Continuous deployment from <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a> — every push to <code>main</code> builds and ships.</p>
+      <!-- COLOUR ─────────────────────────────────────────────── -->
+      <section class="section">
+        <header class="section__head">
+          <span class="section__num">II</span>
+          <h2 class="section__title">Colour</h2>
+        </header>
+        <p class="section__lede">
+          Background is a paper cream rather than white. Text is a slightly
+          cool near-black. One restrained accent &mdash; ink blue &mdash; carries
+          links, drop caps, hung folios, and the live-chain status mark.
+        </p>
 
-      <h2>Captures</h2>
-      <p>The full-disk Earth on the home page comes from <a href="https://gs.nl06.com">gs.</a>, the rooftop ground station in Lucknow. The receiver chain is a 60-centimetre dish, a 3-turn RHCP helix feed, a SAWbird+ GOES low-noise amplifier, and an RTL-SDR. Decoding runs through SatDump; post-processing through Sanchez.</p>
+        <div class="swatches">
+          {swatches.map((s) => (
+            <div class="swatch">
+              <div class="swatch__chip" style={`background: var(${s.var});`} />
+              <div class="swatch__meta">
+                <span class="swatch__name">{s.name}</span>
+                <span class="swatch__hex">{s.hex}</span>
+                <span class="swatch__use">{s.use}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <h2>Provenance</h2>
-      <p>If something on this site looks wrong, the source is in git. <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a>. Issues, pull requests, and email at the address in the footer are all read.</p>
-    </Prose>
-  </Container>
+      <!-- CONSTRUCTION ────────────────────────────────────────── -->
+      <section class="section">
+        <header class="section__head">
+          <span class="section__num">III</span>
+          <h2 class="section__title">Construction</h2>
+        </header>
+        <div class="section__columns">
+          <div class="section__prose">
+            <p>
+              Built with <a href="https://astro.build" rel="noopener">Astro</a>
+              and Tailwind as a small pnpm monorepo. Each subdomain is its own
+              application sharing a single design system as a workspace package.
+              Static at build time; no runtime backend.
+            </p>
+            <p>
+              Deployed via Cloudflare Pages with custom domains on the apex and
+              three subdomains. Continuous deployment from
+              <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a>
+              &mdash; every push to <code>main</code> builds and ships.
+            </p>
+          </div>
+          <aside class="section__aside">
+            <dl class="kv">
+              <div class="kv__row"><dt>Framework</dt><dd>Astro 5</dd></div>
+              <div class="kv__row"><dt>Utility CSS</dt><dd>Tailwind 3 (preset disables shadow, gradient)</dd></div>
+              <div class="kv__row"><dt>Package manager</dt><dd>pnpm 11</dd></div>
+              <div class="kv__row"><dt>Hosting</dt><dd>Cloudflare Pages, three subdomains</dd></div>
+              <div class="kv__row"><dt>Source</dt><dd><a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a></dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+
+      <!-- CAPTURES ────────────────────────────────────────────── -->
+      <section class="section">
+        <header class="section__head">
+          <span class="section__num">IV</span>
+          <h2 class="section__title">Captures</h2>
+        </header>
+        <div class="section__columns">
+          <div class="section__prose">
+            <p>
+              The full-disk Earth on the home page comes from
+              <a href="https://gs.nl06.com">gs.</a>, the rooftop ground
+              station in Lucknow. The receiver chain is a 60-centimetre dish,
+              a 3-turn RHCP helix feed, a SAWbird+ GOES low-noise amplifier,
+              and an RTL-SDR. Decoding runs through SatDump; post-processing
+              through Sanchez.
+            </p>
+            <p>
+              Captures are dated, plate-numbered, and signed off in the
+              station log before they appear on this site.
+            </p>
+          </div>
+          <aside class="section__aside">
+            <dl class="kv">
+              <div class="kv__row"><dt>Antenna</dt><dd>60 cm offset dish</dd></div>
+              <div class="kv__row"><dt>Feed</dt><dd>3-turn RHCP helix</dd></div>
+              <div class="kv__row"><dt>LNA</dt><dd>SAWbird+ GOES</dd></div>
+              <div class="kv__row"><dt>SDR</dt><dd>RTL-SDR Blog V4</dd></div>
+              <div class="kv__row"><dt>Decoder</dt><dd>SatDump</dd></div>
+              <div class="kv__row"><dt>Post-processing</dt><dd>Sanchez</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+
+      <!-- PROVENANCE ──────────────────────────────────────────── -->
+      <section class="section">
+        <header class="section__head">
+          <span class="section__num">V</span>
+          <h2 class="section__title">Provenance</h2>
+        </header>
+        <p class="section__lede">
+          If something on this site looks wrong, the source is in git.
+          <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a>.
+          Issues, pull requests, and email at the address in the footer are all read.
+        </p>
+      </section>
+
+    </Container>
+  </article>
 </BaseLayout>
 
 <style>
-  .page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .dateline {
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-  }
-  .page > h1 { margin-top: var(--space-3); }
-  .page > :global(.prose-flow) { margin-top: var(--space-8); }
-
-  .swatches {
-    margin-top: var(--space-6);
+  .colophon-page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .colophon-page :global(.colophon-page__inner) {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--space-4);
-    padding: var(--space-5) 0;
-    border-top: 1px solid var(--color-rule);
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* HEAD ─────────────────────────────────────────────────────────── */
+  .colophon-page__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr) minmax(14rem, 18rem);
+    gap: var(--space-8);
+    align-items: end;
+    padding-bottom: var(--space-10);
     border-bottom: 1px solid var(--color-rule);
   }
-  .swatch {
+  .cp__rail {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .colophon-page__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .cp__title-line { display: block; }
+  .cp__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+  .colophon-page__epigraph {
+    margin-top: 0;
+    padding-left: var(--space-5);
+    border-left: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    line-height: var(--leading-normal);
+  }
+
+  /* SECTIONS ────────────────────────────────────────────────────── */
+  .section {
+    grid-column: 1 / -1;
+    margin-top: var(--space-14);
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+  .section__head {
+    display: contents;
+  }
+  .section__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-display);
+    line-height: 0.85;
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-jumbo);
+  }
+  .section__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h1);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .section__lede {
+    grid-column: 2 / -1;
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+    max-width: 40rem;
+    margin-top: var(--space-2);
+  }
+  .section__columns {
+    grid-column: 2 / -1;
+    margin-top: var(--space-4);
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) 1fr;
+    gap: var(--space-10);
+  }
+  .section__prose {
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    max-width: 38rem;
+  }
+  .section__prose .dropcap-text::first-letter {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-dropcap);
+    line-height: 0.82;
+    float: left;
+    padding: 0.06em 0.14em 0 0;
+    margin: 0.04em 0.06em 0 0;
+    color: var(--color-accent);
+    letter-spacing: -0.02em;
+  }
+  .section__aside {
+    padding: var(--space-6);
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper-margin);
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: minmax(7rem, 8rem) 1fr;
+    gap: var(--space-3) var(--space-4);
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+  }
+  .kv__row { display: contents; }
+  .kv dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-top: 0.22em;
+  }
+  .kv dd { margin: 0; line-height: var(--leading-normal); }
+  .kv a { color: var(--color-ink); }
+
+  /* TYPE TABLE ──────────────────────────────────────────────────── */
+  .type-table { border: 1px solid var(--color-rule); background: var(--color-paper-margin); }
+  .type-table__head {
+    display: block;
+    padding: var(--space-4) var(--space-5);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .type-table__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .type-table__row {
+    display: grid;
+    grid-template-columns: 5rem 4rem 1fr;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--color-rule);
+    align-items: baseline;
+  }
+  .type-table__row + .type-table__row { margin-top: 0; }
+  .type-table__row:last-child { border-bottom: 0; }
+  .type-table__token {
+    font-family: var(--font-mono);
+    font-size: var(--type-marginalia);
+    color: var(--color-accent);
+  }
+  .type-table__size {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+  .type-table__sample {
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink);
+  }
+
+  /* SWATCHES ────────────────────────────────────────────────────── */
+  .swatches {
+    grid-column: 2 / -1;
+    margin-top: var(--space-6);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0;
+    border: 1px solid var(--color-rule);
+    border-right: 0;
+    border-bottom: 0;
+  }
+  .swatch {
+    border-right: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+    padding: var(--space-3);
+    background: var(--color-paper);
   }
   .swatch__chip {
     height: 56px;
     border: 1px solid var(--color-rule);
   }
   .swatch__meta {
+    margin-top: var(--space-3);
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
   .swatch__name {
     font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    text-transform: uppercase;
+    font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
-    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .swatch__hex {
+    font-family: var(--font-mono);
+    font-size: var(--type-marginalia);
+    color: var(--color-accent);
   }
   .swatch__use {
     font-family: var(--font-serif);
     font-size: var(--type-small);
     color: var(--color-ink-soft);
+  }
+
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 980px) {
+    .colophon-page__head {
+      grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+      align-items: start;
+    }
+    .colophon-page__epigraph {
+      grid-column: 2 / -1;
+      margin-top: var(--space-4);
+      padding-left: 0;
+      border-left: 0;
+      max-width: 36rem;
+    }
+  }
+  @media (max-width: 760px) {
+    .colophon-page :global(.colophon-page__inner),
+    .colophon-page__head,
+    .section { grid-template-columns: 1fr; }
+    .cp__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .cp__rail .rail__rule { flex: 1; }
+    .colophon-page__title { font-size: var(--type-display); }
+    .section__columns { grid-template-columns: 1fr; gap: var(--space-6); }
+    .section__num { font-size: var(--type-h1); }
+    .colophon-page__epigraph { grid-column: 1 / -1; }
   }
 </style>

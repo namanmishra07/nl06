@@ -1,12 +1,25 @@
+/* nl06 global stylesheet. Periodical typographic system on cream paper.
+   Loads the type families and OpenType features, defines headings, links,
+   inline copy, and a small set of editorial utilities (small caps, drop
+   caps, marginalia, label rules, double rules, ornaments). */
+
+/* Source Serif 4 — body 400/400i, mid-callout 500/500i, head 600,
+   display weights 700/800/900 for the typographic scale to actually run. */
 @import "@fontsource/source-serif-4/400.css";
 @import "@fontsource/source-serif-4/400-italic.css";
+@import "@fontsource/source-serif-4/500.css";
+@import "@fontsource/source-serif-4/500-italic.css";
 @import "@fontsource/source-serif-4/600.css";
+@import "@fontsource/source-serif-4/700.css";
+@import "@fontsource/source-serif-4/800.css";
+@import "@fontsource/source-serif-4/900.css";
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
 
 @import "./tokens.css";
 
-/* ── reset (minimal, opinionated) ─────────────────────────────── */
+/* ── reset (minimal, opinionated) ─────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -16,49 +29,57 @@ input, button, textarea, select { font: inherit; color: inherit; }
 button { background: none; border: none; padding: 0; cursor: pointer; }
 p, h1, h2, h3, h4, h5, h6 { overflow-wrap: break-word; }
 
-/* ── document defaults ────────────────────────────────────────── */
+/* ── document defaults ────────────────────────────────────────────── */
 html {
   font-family: var(--font-serif);
   color: var(--color-ink);
   background: var(--color-paper);
-  /* tabular figures off by default; metadata enables them locally */
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  font-feature-settings: var(--features-oldstyle);
 }
 
 body {
   font-size: var(--type-body);
   line-height: var(--leading-prose);
+  /* Horizontal page gutter lives on the body so masthead / footer rules
+     and content alike are inset from the viewport edges, like an
+     actual printed page margin. */
+  padding-inline: var(--space-page);
 }
 
-/* ── headings ─────────────────────────────────────────────────── */
+/* ── headings ─────────────────────────────────────────────────────── */
 h1, h2, h3, h4 {
   font-family: var(--font-serif);
-  font-weight: 600;
+  font-weight: 700;
   line-height: var(--leading-snug);
   letter-spacing: var(--tracking-tight);
   color: var(--color-ink);
 }
 
-h1 { font-size: var(--type-h1); line-height: var(--leading-tight); }
-h2 { font-size: var(--type-h2); }
-h3 { font-size: var(--type-h3); }
-h4 { font-size: var(--type-h4); }
+h1 {
+  font-size: var(--type-h1);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-display);
+  font-weight: 800;
+}
+h2 { font-size: var(--type-h2); font-weight: 700; }
+h3 { font-size: var(--type-h3); font-weight: 600; }
+h4 { font-size: var(--type-h4); font-weight: 600; }
 
-/* ── links ────────────────────────────────────────────────────── */
+/* ── links ────────────────────────────────────────────────────────── */
 a {
   color: var(--color-accent);
   text-decoration: underline;
   text-decoration-thickness: 0.05em;
-  text-underline-offset: 0.18em;
-  text-decoration-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
-  transition: color 80ms ease, text-decoration-color 80ms ease;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  transition: color 80ms ease, text-decoration-color 80ms ease, background 80ms ease;
 }
 a:hover {
   color: var(--color-accent-hover);
   text-decoration-color: var(--color-accent-hover);
 }
 
-/* ── inline ───────────────────────────────────────────────────── */
+/* ── inline ───────────────────────────────────────────────────────── */
 em, i { font-style: italic; }
 strong, b { font-weight: 600; }
 small { font-size: var(--type-small); }
@@ -68,7 +89,7 @@ hr {
   margin: var(--space-8) 0;
 }
 
-/* ── code ─────────────────────────────────────────────────────── */
+/* ── code ─────────────────────────────────────────────────────────── */
 code, kbd, samp, pre {
   font-family: var(--font-mono);
   font-size: 0.92em;
@@ -88,7 +109,7 @@ pre {
 }
 pre code { background: transparent; padding: 0; }
 
-/* ── blockquote ───────────────────────────────────────────────── */
+/* ── blockquote ───────────────────────────────────────────────────── */
 blockquote {
   border-left: 2px solid var(--color-accent);
   padding-left: var(--space-5);
@@ -98,39 +119,219 @@ blockquote {
 }
 blockquote p + p { margin-top: var(--space-4); }
 
-/* ── lists ────────────────────────────────────────────────────── */
+/* ── lists ────────────────────────────────────────────────────────── */
 ul, ol { padding-left: var(--space-6); }
 li + li { margin-top: var(--space-2); }
 
-/* ── tables ───────────────────────────────────────────────────── */
+/* ── tables ───────────────────────────────────────────────────────── */
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--type-small);
-  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--features-tabular);
 }
 th, td {
   text-align: left;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-rule);
 }
-th { font-weight: 600; font-family: var(--font-sans); font-size: var(--type-meta); letter-spacing: var(--tracking-meta); text-transform: uppercase; color: var(--color-ink-muted); }
-
-/* ── selection ────────────────────────────────────────────────── */
-::selection {
-  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
-  color: var(--color-ink);
-}
-
-/* ── utility classes (very small set) ─────────────────────────── */
-.font-sans { font-family: var(--font-sans); }
-.font-serif { font-family: var(--font-serif); }
-.font-mono { font-family: var(--font-mono); }
-
-.meta {
+th {
+  font-weight: 600;
   font-family: var(--font-sans);
   font-size: var(--type-meta);
   letter-spacing: var(--tracking-meta);
   text-transform: uppercase;
   color: var(--color-ink-muted);
 }
+
+/* ── selection ────────────────────────────────────────────────────── */
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-ink);
+}
+
+/* ── utility classes ──────────────────────────────────────────────── */
+.font-sans  { font-family: var(--font-sans);  }
+.font-serif { font-family: var(--font-serif); }
+.font-mono  { font-family: var(--font-mono);  }
+
+/* Inter small-caps-style label (display=block) used for "dateline",
+   masthead tags, plate captions, status marks. Real upper-case Inter,
+   wide tracking — not OpenType small caps. */
+.meta {
+  font-family: var(--font-sans);
+  font-size: var(--type-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  font-feature-settings: var(--features-tabular);
+  color: var(--color-ink-muted);
+  font-weight: 500;
+}
+
+/* OpenType true small caps — used for italicised section labels in body. */
+.smallcaps {
+  font-family: var(--font-serif);
+  font-feature-settings: var(--features-smallcaps);
+  text-transform: lowercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.tabular  { font-feature-settings: var(--features-tabular); }
+.oldstyle { font-feature-settings: var(--features-oldstyle); }
+.display-features { font-feature-settings: var(--features-display); }
+
+/* Hung folio — display-size numeral used as a chapter mark.
+   Always tabular lining, ink-blue, serif heavy. */
+.folio {
+  font-family: var(--font-serif);
+  font-weight: 800;
+  font-size: var(--type-folio);
+  line-height: 0.85;
+  letter-spacing: var(--tracking-jumbo);
+  color: var(--color-accent);
+  font-feature-settings: var(--features-tabular);
+}
+.folio--medium {
+  font-size: var(--type-jumbo);
+}
+.folio--small {
+  font-size: var(--type-display);
+}
+
+/* Drop cap — first letter of a paragraph, hung. Used very sparingly. */
+.dropcap::first-letter,
+.dropcap-text::first-letter {
+  font-family: var(--font-serif);
+  font-weight: 900;
+  font-size: var(--type-dropcap);
+  line-height: 0.82;
+  float: left;
+  padding: 0.06em 0.12em 0 0;
+  margin: 0.04em 0.04em 0 0;
+  color: var(--color-accent);
+  letter-spacing: -0.02em;
+  font-feature-settings: var(--features-display);
+}
+
+/* Label-rule: a small-caps Inter label with a hairline rule directly
+   under it. Used everywhere for "Subdomains", "Plate", "Status", etc. */
+.label-rule {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--type-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  font-feature-settings: var(--features-tabular);
+  color: var(--color-ink-muted);
+  font-weight: 500;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-rule);
+}
+
+/* Section break — double rule, thick over thin (Vignelli touch). */
+.double-rule {
+  border: 0;
+  border-top: 3px solid var(--color-ink);
+  position: relative;
+  height: 0;
+  margin: var(--space-12) 0 var(--space-8);
+}
+.double-rule::after {
+  content: "";
+  position: absolute;
+  inset: 4px 0 auto 0;
+  border-top: 1px solid var(--color-ink);
+}
+
+/* Thick-thin rule reversed (thin over thick). */
+.thin-thick-rule {
+  border: 0;
+  border-top: 1px solid var(--color-ink);
+  position: relative;
+  height: 0;
+  margin: var(--space-12) 0 var(--space-8);
+}
+.thin-thick-rule::after {
+  content: "";
+  position: absolute;
+  inset: 4px 0 auto 0;
+  border-top: 3px solid var(--color-ink);
+}
+
+/* Ornament — end-of-section flourish, centred, ink-blue. */
+.ornament {
+  display: block;
+  text-align: center;
+  font-family: var(--font-serif);
+  color: var(--color-ink-faint);
+  letter-spacing: 0.6em;
+  font-size: var(--type-small);
+  margin: var(--space-12) 0;
+}
+.ornament::before { content: "❡   ·   §   ·   ❡"; }
+.ornament--diamond::before { content: "◆"; letter-spacing: 0; }
+.ornament--dagger::before  { content: "†   ·   †"; }
+.ornament--bullets::before { content: "·   ·   ·"; }
+
+/* Marginalia rail — a narrow rule-bordered note sitting flush to the
+   text column. Used for dates, source labels, item numbers. */
+.marginalia {
+  font-family: var(--font-sans);
+  font-size: var(--type-marginalia);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  font-feature-settings: var(--features-tabular);
+  font-weight: 500;
+}
+
+/* Display-line: thin rule above and below, label-style content between.
+   Used in the masthead and section dividers. */
+.banner-rule {
+  border-top: 1px solid var(--color-ink);
+  border-bottom: 1px solid var(--color-ink);
+  padding: var(--space-2) 0;
+}
+
+/* Hung quotation mark — used in pull quotes. */
+.pullquote {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: var(--type-h2);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-ink);
+  position: relative;
+  padding-left: 1.6em;
+}
+.pullquote::before {
+  content: "\201C";
+  position: absolute;
+  left: 0;
+  top: -0.1em;
+  font-family: var(--font-serif);
+  font-weight: 800;
+  font-size: 3em;
+  line-height: 1;
+  color: var(--color-accent);
+  letter-spacing: 0;
+}
+
+/* Status mark — typographic badge for chain status. Hairline borders
+   above and below, small-caps text, no fill. */
+.status-mark {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: var(--type-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  font-feature-settings: var(--features-tabular);
+  font-weight: 600;
+  padding: 0.2em 0.5em 0.15em;
+  border-top: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+}
+.status-mark--live       { color: var(--color-accent); }
+.status-mark--unresolved { color: var(--color-ink); }
+.status-mark--killed     { color: var(--color-ink-muted); }

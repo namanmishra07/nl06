@@ -1,57 +1,263 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import Prose      from "@nl06/design-system/components/Prose.astro";
 
-// Sample copy — drawn from project context. Edit at will.
 const updated = "21 May 2026";
+const sections = [
+  {
+    numeral: "I",
+    head:    "Building",
+    items: [
+      "The SPC India Member Residency application, due in June. The artefacts it leans on are this site and the ground station.",
+      "Getting the Lucknow ground station to run unattended through the monsoon. Currently the chain stays cold between captures and the SatDump pipeline is touchy on resume.",
+      "Three consequence chains in active resolution &mdash; tracked at <a href='https://chains.nl06.com'>chains.</a>",
+    ],
+  },
+  {
+    numeral: "II",
+    head:    "Thinking about",
+    items: [
+      "Whether a one-rooftop install in Lucknow can produce useful independent PNT cross-checks without a second station to disambiguate local interference.",
+      "How much of consequence-chain reasoning actually generalises &mdash; methodology, or just a heuristic I happen to find useful.",
+      "The right scope of the first hardware-software bet for the new venture. Two candidates, both space-adjacent. Killing one this month.",
+    ],
+  },
+  {
+    numeral: "III",
+    head:    "Reading",
+    items: [
+      "Currently: <em>Working in Public</em> (Eghbal), <em>Seeing Like a State</em> (Scott), and a clutch of papers on rooftop LRIT site diversity. Notes land at <a href='https://reading.nl06.com'>reading.</a> when they shift something.",
+    ],
+  },
+];
 ---
 <BaseLayout
-  title="Now — nl06"
-  description="What I'm working on this month."
+  title="Now — NL06"
+  description="What's loaded into the next few months."
   pathname="/now"
+  itemNumber="№ 002"
 >
-  <Container size="prose" class="now">
-    <p class="dateline">Updated {updated}</p>
-    <h1>Now</h1>
-    <p class="sub">Following <a href="https://nownownow.com/about" rel="noopener">Derek Sivers' /now convention</a> — what's actively loaded into the next few months.</p>
+  <article class="dispatch">
+    <Container size="wide" class="dispatch__inner">
+      <!-- Page-head: dispatch label, big "NOW", dateline -->
+      <header class="dispatch__head">
+        <div class="dispatch__rail">
+          <span class="rail__label">Dispatch</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">Updated {updated}</span>
+        </div>
+        <h1 class="dispatch__title">
+          <span class="dispatch__title-line">Now</span>
+          <span class="dispatch__title-sub">A standing inventory of attention.</span>
+        </h1>
+        <p class="dispatch__epigraph">
+          Following <a href="https://nownownow.com/about" rel="noopener">Derek Sivers&rsquo; /now convention</a>
+          &mdash; what&rsquo;s actively loaded into the next few months. Reset on each
+          update; nothing here is permanent.
+        </p>
+      </header>
 
-    <Prose>
-      <h2>Building</h2>
-      <ul>
-        <li>The SPC India Member Residency application, due in June. The artifacts it leans on are this site and the ground station.</li>
-        <li>Getting the Lucknow ground station to run unattended through the monsoon. Currently the chain stays cold between captures and the SatDump pipeline is touchy on resume.</li>
-        <li>Three consequence chains in active resolution — they're tracked at <a href="https://chains.nl06.com">chains.</a></li>
-      </ul>
+      <!-- Sections, each one a numbered chapter -->
+      <div class="dispatch__chapters">
+        {sections.map((s) => (
+          <section class="chapter">
+            <header class="chapter__head">
+              <span class="chapter__numeral" aria-hidden="true">{s.numeral}</span>
+              <h2 class="chapter__title">{s.head}</h2>
+            </header>
+            <ul class="chapter__list">
+              {s.items.map((it) => (
+                <li class="chapter__item" set:html={it} />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
 
-      <h2>Thinking about</h2>
-      <ul>
-        <li>Whether a one-rooftop install in Lucknow can produce useful independent PNT cross-checks without a second ground station to disambiguate local interference.</li>
-        <li>How much of consequence-chain reasoning actually generalises — methodology or just a heuristic I happen to find useful.</li>
-        <li>The right scope of the first hardware-software bet for the new venture. Two candidates, both space-adjacent. Killing one this month.</li>
-      </ul>
-
-      <h2>Reading</h2>
-      <p>Currently: <em>Working in Public</em> (Eghbal), <em>Seeing Like a State</em> (Scott), and a clutch of papers on rooftop LRIT site diversity. Notes land at <a href="https://reading.nl06.com">reading.</a> when they shift something.</p>
-    </Prose>
-  </Container>
+      <p class="dispatch__sign">
+        &mdash; Naman, signing off this dispatch on {updated}.
+      </p>
+    </Container>
+  </article>
 </BaseLayout>
 
 <style>
-  .now { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .dateline {
+  .dispatch {
+    padding-top: var(--space-12);
+    padding-bottom: var(--space-12);
+  }
+  .dispatch :global(.dispatch__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* HEAD ─────────────────────────────────────────────────────────── */
+  .dispatch__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr) minmax(14rem, 18rem);
+    gap: var(--space-8);
+    align-items: end;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .dispatch__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label {
     font-family: var(--font-sans);
-    font-size: var(--type-meta);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
   }
-  .now > h1 { margin-top: var(--space-3); }
-  .now > .sub {
-    margin-top: var(--space-4);
-    color: var(--color-ink-soft);
-    font-size: var(--type-h4);
+  .dispatch__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: 0.95;
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .dispatch__title-sub {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h3);
     line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-ink-muted);
+    margin-top: var(--space-3);
   }
-  .now > :global(.prose-flow) { margin-top: var(--space-10); }
+  .dispatch__epigraph {
+    margin-top: 0;
+    padding-left: var(--space-5);
+    border-left: 1px solid var(--color-rule);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    line-height: var(--leading-normal);
+  }
+
+  /* CHAPTERS ────────────────────────────────────────────────────── */
+  .dispatch__chapters {
+    grid-column: 2 / -1;
+    padding-top: var(--space-10);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-14);
+    max-width: 42rem;
+  }
+  .chapter__head {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-bottom: var(--space-3);
+    border-bottom: 3px solid var(--color-ink);
+    position: relative;
+  }
+  .chapter__head::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -4px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .chapter__numeral {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    line-height: 1;
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-jumbo);
+    font-feature-settings: var(--features-display);
+  }
+  .chapter__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h2);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+  }
+  .chapter__list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-6) 0 0;
+  }
+  .chapter__item {
+    position: relative;
+    padding: var(--space-3) 0 var(--space-3) var(--space-7);
+    border-bottom: 1px dotted var(--color-rule-strong);
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
+  }
+  .chapter__item + .chapter__item { margin-top: 0; }
+  .chapter__item::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    top: var(--space-3);
+    color: var(--color-accent);
+    font-weight: 700;
+  }
+  .chapter__item :global(em) {
+    font-style: italic;
+    color: var(--color-ink);
+  }
+
+  /* SIGN-OFF ────────────────────────────────────────────────────── */
+  .dispatch__sign {
+    grid-column: 2 / -1;
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    text-align: center;
+    margin-top: var(--space-8);
+  }
+
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 980px) {
+    .dispatch__head {
+      grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+      align-items: start;
+    }
+    .dispatch__epigraph {
+      grid-column: 2 / -1;
+      margin-top: var(--space-4);
+      padding-left: 0;
+      border-left: 0;
+      max-width: 36rem;
+    }
+  }
+  @media (max-width: 760px) {
+    .dispatch :global(.dispatch__inner),
+    .dispatch__head {
+      grid-template-columns: 1fr;
+    }
+    .dispatch__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .dispatch__rail .rail__rule { flex: 1; }
+    .dispatch__title { font-size: var(--type-display); }
+    .dispatch__chapters { grid-column: 1 / -1; }
+    .dispatch__epigraph { grid-column: 1 / -1; }
+  }
 </style>

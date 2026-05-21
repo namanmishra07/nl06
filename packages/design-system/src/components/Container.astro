@@ -13,6 +13,6 @@ const widthMap: Record<Size, string> = {
   full:      "max-w-full",
 };
 ---
-<Tag class:list={[widthMap[size], "mx-auto px-page", className]}>
+<Tag class:list={[widthMap[size], "mx-auto", className]}>
   <slot />
 </Tag>

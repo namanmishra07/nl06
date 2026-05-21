@@ -17,46 +17,281 @@ const { Content } = await render(note);
 
 const fmtDate = (d: Date) =>
   d.toISOString().slice(0, 10).replace(/-/g, " · ");
+
+const sourceLabel = (t: string) => ({
+  book:  "Book",
+  paper: "Paper",
+  post:  "Post",
+  other: "Other",
+}[t] ?? t);
 ---
 <BaseLayout
   title={`${note.data.title} — reading.nl06`}
   description={note.data.blurb}
+  itemNumber="№ R—"
 >
-  <Container size="prose" class="entry">
-    <p class="meta">
-      <span>{fmtDate(note.data.date)}</span>
-      <span class="sep">·</span>
-      <span>{note.data.source_type}</span>
-      {note.data.source_author && <>
-        <span class="sep">·</span>
-        <span>{note.data.source_author}</span>
-      </>}
-    </p>
-    <h1>{note.data.title}</h1>
-    {note.data.source_link && (
-      <p class="source"><a href={note.data.source_link} rel="noopener">Source ↗</a></p>
-    )}
+  <article class="note">
+    <Container size="wide" class="note__inner">
+      <!-- HEAD ─────────────────────────────────────────────────── -->
+      <header class="note__head">
+        <div class="note__rail">
+          <span class="rail__label">{sourceLabel(note.data.source_type)}</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">{fmtDate(note.data.date)}</span>
+        </div>
 
-    <Prose>
-      <Content />
-    </Prose>
+        <div class="note__title-block">
+          <p class="note__kicker">
+            {note.data.source_author && (
+              <span class="note__kicker-author">{note.data.source_author}</span>
+            )}
+            {note.data.source_author && (
+              <span class="note__kicker-sep" aria-hidden="true">·</span>
+            )}
+            <span class="note__kicker-type">{sourceLabel(note.data.source_type)}</span>
+          </p>
+          <h1 class="note__title">{note.data.title}</h1>
+          {note.data.source_link && (
+            <p class="note__source">
+              <a href={note.data.source_link} rel="noopener">
+                Source <span class="note__source-arrow" aria-hidden="true">↗</span>
+              </a>
+            </p>
+          )}
+        </div>
+      </header>
 
-    <p class="back"><a href="/">← all notes</a></p>
-  </Container>
+      <!-- BODY ─────────────────────────────────────────────────── -->
+      <div class="note__body">
+        <aside class="note__sidenote" aria-label="At a glance">
+          <span class="sidenote__head">At a glance</span>
+          <dl class="sidenote__list">
+            <div class="sidenote__row">
+              <dt>Source</dt>
+              <dd>{sourceLabel(note.data.source_type)}</dd>
+            </div>
+            {note.data.source_author && (
+              <div class="sidenote__row">
+                <dt>Author</dt>
+                <dd>{note.data.source_author}</dd>
+              </div>
+            )}
+            <div class="sidenote__row">
+              <dt>Read</dt>
+              <dd>{fmtDate(note.data.date)}</dd>
+            </div>
+            {note.data.blurb && (
+              <div class="sidenote__row sidenote__row--full">
+                <dt>Note</dt>
+                <dd><em>{note.data.blurb}</em></dd>
+              </div>
+            )}
+          </dl>
+        </aside>
+
+        <Prose class="note__prose">
+          <Content />
+        </Prose>
+      </div>
+
+      <p class="note__back">
+        <a href="/">← all entries</a>
+      </p>
+    </Container>
+  </article>
 </BaseLayout>
 
 <style>
-  .entry { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-  .entry > * + * { margin-top: var(--space-3); }
-  .entry > h1 { margin-top: var(--space-2); }
-  .entry > .source { margin-top: var(--space-2); }
-  .entry > :global(.prose-flow) { margin-top: var(--space-8); }
-  .entry .meta .sep { color: var(--color-rule); }
-  .entry .back {
-    margin-top: var(--space-12);
+  .note { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .note :global(.note__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* HEAD ─────────────────────────────────────────────────────────── */
+  .note__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .note__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  .note__title-block { max-width: 44rem; }
+  .note__kicker {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .note__kicker-author {
+    font-family: var(--font-serif);
+    text-transform: none;
+    letter-spacing: 0;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--color-ink-soft);
+    font-size: var(--type-small);
+  }
+  .note__kicker-sep { color: var(--color-rule-strong); }
+  .note__kicker-type { color: var(--color-ink); font-weight: 600; }
+
+  .note__title {
+    margin-top: var(--space-3);
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-display);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .note__source {
+    margin-top: var(--space-5);
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+  }
+  .note__source a {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3em;
+  }
+
+  /* BODY ─────────────────────────────────────────────────────────── */
+  .note__body {
+    grid-column: 1 / -1;
+    margin-top: var(--space-10);
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+  }
+  .note__sidenote {
+    position: sticky;
+    top: var(--space-8);
+    padding: var(--space-5);
+    background: var(--color-paper-margin);
+    border: 1px solid var(--color-rule);
+  }
+  .sidenote__head {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .sidenote__list {
+    margin: var(--space-3) 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .sidenote__row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .sidenote__row dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .sidenote__row dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink);
+    line-height: var(--leading-normal);
+  }
+  .sidenote__row--full dd em {
+    color: var(--color-ink-soft);
+  }
+
+  /* PROSE — the actual note body, with a drop cap on the first p. */
+  .note :global(.note__prose) {
+    max-width: 40rem;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
+  }
+  .note :global(.note__prose) :global(p:first-of-type)::first-letter {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-dropcap);
+    line-height: 0.82;
+    float: left;
+    padding: 0.06em 0.14em 0 0;
+    margin: 0.04em 0.06em 0 0;
+    color: var(--color-accent);
+    letter-spacing: -0.02em;
+    font-feature-settings: var(--features-display);
+  }
+
+  .note__back {
+    grid-column: 1 / -1;
+    margin-top: var(--space-8);
     padding-top: var(--space-4);
     border-top: 1px solid var(--color-rule);
     font-family: var(--font-sans);
     font-size: var(--type-small);
+  }
+
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .note :global(.note__inner),
+    .note__head,
+    .note__body { grid-template-columns: 1fr; }
+    .note__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .note__rail .rail__rule { flex: 1; }
+    .note__title { font-size: var(--type-h1); }
+    .note__sidenote { position: static; }
   }
 </style>

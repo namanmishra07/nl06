@@ -12,26 +12,31 @@ interface Props {
   pathname?: string;
   /** Override the default nav items. */
   nav?: NavItem[];
-  /** Home / site title label. */
+  /** Wordmark / publication title. */
   title?: string;
-  /** Small caption next to the title (e.g. "reading.", "chains."). */
+  /** Sub-label after the wordmark (e.g. "— A Review", "— Register"). */
   caption?: string;
-  /** Where the site title links to. */
+  /** Where the wordmark links to. */
   homeHref?: string;
-  /** Edition / dateline shown in meta type. */
+  /** Edition / volume line shown above the wordmark. */
   edition?: string;
+  /** Right-side dateline (defaults to the issue's longest-living date). */
+  dateline?: string;
 }
 
 const {
   pathname = "/",
-  title = "nl06",
+  title = "NL06",
   caption,
   homeHref = "/",
-  edition = "Issue I · 2026",
+  edition = "Vol. I  ·  Issue 01",
+  dateline = "Lucknow  ·  2026",
   nav = [
-    { label: "Now",     href: "/now" },
-    { label: "Writing", href: "/writing" },
-    { label: "About",   href: "/about" },
+    { label: "Home",     href: "/" },
+    { label: "Now",      href: "/now" },
+    { label: "Writing",  href: "/writing" },
+    { label: "About",    href: "/about" },
+    { label: "Colophon", href: "/colophon" },
   ],
 } = Astro.props;
 
@@ -40,64 +45,135 @@ const isCurrent = (href: string) => {
   return pathname === href || pathname.startsWith(href + "/");
 };
 ---
-<header class="site-header">
-  <Container size="wide" class="site-header__inner">
-    <div class="site-header__lockup">
-      <a href={homeHref} class="site-header__title">
-        {title}{caption && <span class="site-header__caption">{caption}</span>}
-      </a>
-      <span class="site-header__edition">{edition}</span>
+<header class="masthead">
+  <Container size="wide" class="masthead__inner">
+    <div class="masthead__topline">
+      <span class="masthead__edition" set:html={edition}></span>
+      <span class="masthead__rule" aria-hidden="true"></span>
+      <span class="masthead__dateline">{dateline}</span>
     </div>
-    <nav class="site-header__nav" aria-label="Primary">
-      {nav.map((item) => (
-        <NavLink href={item.href} external={item.external} current={isCurrent(item.href)}>
-          {item.label}
-        </NavLink>
-      ))}
+
+    <a href={homeHref} class="masthead__wordmark" aria-label={`${title} — home`}>
+      <span class="masthead__wordmark-glyph">{title}</span>
+      {caption && <span class="masthead__wordmark-caption">{caption}</span>}
+    </a>
+
+    <nav class="masthead__nav" aria-label="Primary">
+      <ol class="masthead__nav-list">
+        {nav.map((item, i) => (
+          <li class="masthead__nav-item">
+            <span class="masthead__nav-num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+            <NavLink href={item.href} external={item.external} current={isCurrent(item.href)}>
+              {item.label}
+            </NavLink>
+          </li>
+        ))}
+      </ol>
     </nav>
   </Container>
 </header>
 
 <style>
-  .site-header {
+  .masthead {
     padding-top: var(--space-6);
-    padding-bottom: var(--space-6);
+    position: relative;
+  }
+
+  .masthead :global(.masthead__inner) {
+    display: block;
+  }
+
+  /* Top line: edition · hairline · dateline */
+  .masthead__topline {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    color: var(--color-ink-muted);
+    font-weight: 500;
   }
-  .site-header :global(.site-header__inner) {
+  .masthead__edition { white-space: nowrap; }
+  .masthead__edition :global(a) {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    padding-bottom: 1px;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .masthead__edition :global(a:hover) {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+  .masthead__dateline { white-space: nowrap; }
+  .masthead__rule {
+    flex: 1;
+    height: 1px;
+    background: var(--color-rule);
+  }
+
+  /* Wordmark — display-jumbo serif, slight optical hang. */
+  .masthead__wordmark {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-8);
-    flex-wrap: wrap;
-  }
-  .site-header__lockup {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-4);
-  }
-  .site-header__title {
-    font-family: var(--font-serif);
-    font-weight: 600;
-    font-size: var(--type-h3);
+    gap: 0.4em;
+    padding: var(--space-5) 0 var(--space-4);
     color: var(--color-ink);
     text-decoration: none;
+  }
+  .masthead__wordmark-glyph {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: 0.9;
+    letter-spacing: var(--tracking-jumbo);
+    font-feature-settings: var(--features-display);
+  }
+  .masthead__wordmark-caption {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h3);
+    color: var(--color-ink-muted);
     letter-spacing: var(--tracking-tight);
-    line-height: 1;
   }
-  .site-header__caption {
-    color: var(--color-ink-muted);
-    font-weight: 400;
+
+  /* Nav: numbered list flowing horizontally with hung tabular numerals. */
+  .masthead__nav {
+    border-top: 1px solid var(--color-rule);
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
   }
-  .site-header__edition {
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-meta);
-    color: var(--color-ink-muted);
-  }
-  .site-header__nav {
+  .masthead__nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: flex;
-    gap: var(--space-6);
+    flex-wrap: wrap;
+    gap: var(--space-7);
+  }
+  .masthead__nav-item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin: 0;
+  }
+  .masthead__nav-num {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-faint);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  @media (max-width: 640px) {
+    .masthead__wordmark-glyph { font-size: var(--type-display); }
+    .masthead__nav-list { gap: var(--space-4) var(--space-5); }
   }
 </style>

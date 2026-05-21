@@ -1,59 +1,95 @@
-/* nl06 design tokens — single source of truth */
+/* nl06 design tokens — single source of truth.
+   Periodical / scientific-journal direction: cream paper, ink body, one
+   restrained accent, an editorial typographic scale that runs from
+   marginalia to display-size folios. Richness is built from rules,
+   numerals, small caps, and asymmetric grids — not from shadow or
+   gradient (both disabled in the tailwind preset on purpose). */
 
 :root {
-  /* ── color ─────────────────────────────────────────────────── */
-  --color-paper:        #FAF8F3;  /* page background */
-  --color-paper-dim:    #F2EEE3;  /* elevated / inset surfaces */
-  --color-ink:          #14181F;  /* body text */
-  --color-ink-soft:     #3D424B;  /* secondary text */
-  --color-ink-muted:    #767A82;  /* metadata, dates */
-  --color-rule:         #E2DCC9;  /* hairline borders */
+  /* ── colour ───────────────────────────────────────────────────── */
+  --color-paper:         #FAF8F3;  /* page background */
+  --color-paper-dim:     #F2EEE3;  /* elevated / inset surfaces */
+  --color-paper-margin:  #F5F1E4;  /* marginalia rail */
+  --color-ink:           #14181F;  /* body text */
+  --color-ink-soft:      #3D424B;  /* secondary text */
+  --color-ink-muted:     #767A82;  /* metadata, dates */
+  --color-ink-faint:     #B8B2A0;  /* hung quotation marks, ornaments */
+  --color-rule:          #E2DCC9;  /* hairline borders */
+  --color-rule-strong:   #C9C1A9;  /* double-rule emphasis */
 
-  /* accent — single restrained color, used for links + a few marks
-     PLACEHOLDER: Ink Blue (candidate A). To swap, change this one value. */
-  --color-accent:       #1B3A5C;
-  --color-accent-hover: #122638;
+  /* accent — single restrained colour; used for links, drop caps,
+     status marks, hung folios. Ink Blue. */
+  --color-accent:        #1B3A5C;
+  --color-accent-hover:  #122638;
+  --color-accent-soft:   #4F6E8C;
 
-  /* ── type ──────────────────────────────────────────────────── */
-  --font-serif: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
-  --font-sans:  "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono:  ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* ── type families ────────────────────────────────────────────── */
+  --font-serif:   "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --font-sans:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --type-display: 2.875rem;   /* 46px */
-  --type-h1:      2rem;       /* 32px */
-  --type-h2:      1.5rem;     /* 24px */
-  --type-h3:      1.25rem;    /* 20px */
-  --type-h4:      1.0625rem;  /* 17px */
-  --type-body:    1.0625rem;  /* 17px — serif benefits from slightly larger */
-  --type-small:   0.875rem;   /* 14px */
-  --type-meta:    0.8125rem;  /* 13px — dates, source labels */
+  /* ── type scale ───────────────────────────────────────────────── */
+  /* marginalia → body → display → folio (display-size numerals) */
+  --type-marginalia: 0.75rem;    /* 12px — rail labels, folios in chrome */
+  --type-meta:       0.8125rem;  /* 13px — dates, source labels */
+  --type-small:      0.875rem;   /* 14px — captions */
+  --type-body:       1.0625rem;  /* 17px — serif benefits from slightly larger */
+  --type-h4:         1.0625rem;  /* 17px — section labels in chrome */
+  --type-h3:         1.375rem;   /* 22px — sub-section heads */
+  --type-h2:         1.75rem;    /* 28px — section heads */
+  --type-h1:         2.5rem;     /* 40px — page heads */
+  --type-display:    3.5rem;     /* 56px — major page hero */
+  --type-jumbo:      5.25rem;    /* 84px — issue cover */
+  --type-folio:      7.5rem;     /* 120px — display numerals */
+  --type-dropcap:    4.75rem;    /* 76px — first-letter drop cap */
 
-  --leading-tight:  1.15;
-  --leading-snug:   1.35;
-  --leading-normal: 1.5;
-  --leading-prose:  1.65;
+  /* ── leading ──────────────────────────────────────────────────── */
+  --leading-tight:    1.05;
+  --leading-display:  1.08;
+  --leading-snug:     1.25;
+  --leading-normal:   1.5;
+  --leading-prose:    1.7;
 
-  --tracking-tight:  -0.012em;
-  --tracking-normal: 0;
-  --tracking-meta:   0.04em;
+  /* ── tracking ─────────────────────────────────────────────────── */
+  --tracking-jumbo:   -0.028em;
+  --tracking-display: -0.018em;
+  --tracking-tight:   -0.012em;
+  --tracking-normal:  0;
+  --tracking-meta:    0.06em;
+  --tracking-wide:    0.14em;     /* small-caps run-of-page chrome */
 
-  /* ── spacing ──────────────────────────────────────────────── */
+  /* ── OpenType feature recipes (applied via font-feature-settings) ─ */
+  --features-oldstyle: "onum" 1, "kern" 1, "liga" 1, "calt" 1;
+  --features-tabular:  "lnum" 1, "tnum" 1, "kern" 1;
+  --features-smallcaps: "smcp" 1, "c2sc" 1, "kern" 1, "liga" 1;
+  --features-display:  "lnum" 1, "kern" 1, "liga" 1, "dlig" 1, "ss01" 1;
+
+  /* ── spacing ──────────────────────────────────────────────────── */
   --space-1:  0.25rem;
   --space-2:  0.5rem;
   --space-3:  0.75rem;
   --space-4:  1rem;
   --space-5:  1.25rem;
   --space-6:  1.5rem;
+  --space-7:  1.75rem;
   --space-8:  2rem;
   --space-10: 2.5rem;
   --space-12: 3rem;
+  --space-14: 3.5rem;
   --space-16: 4rem;
+  --space-20: 5rem;
   --space-24: 6rem;
   --space-32: 8rem;
+  --space-40: 10rem;
 
-  /* ── layout widths ─────────────────────────────────────────── */
-  --width-prose:     36rem;   /*  576px — single-column reading */
-  --width-container: 48rem;   /*  768px — slightly wider blocks */
-  --width-wide:      64rem;   /* 1024px — image-led layouts */
-  --width-full:      80rem;   /* 1280px — hero / edge-to-edge */
+  /* page gutter — responsive horizontal breathing room around content,
+     scales from 1.5rem on phones up to 4.5rem on wide desktops */
+  --space-page: clamp(1.5rem, 4.5vw, 4.5rem);
+
+  /* ── layout widths ────────────────────────────────────────────── */
+  --width-prose:     38rem;   /*  608px — single-column reading */
+  --width-container: 50rem;   /*  800px — slightly wider blocks */
+  --width-wide:      66rem;   /* 1056px — masthead, indexes */
+  --width-full:      82rem;   /* 1312px — hero / edge-to-edge */
+  --width-marginalia: 8rem;   /*  128px — left rail for hung numerals */
 }

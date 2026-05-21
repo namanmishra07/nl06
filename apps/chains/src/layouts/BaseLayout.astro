@@ -8,18 +8,23 @@ interface Props {
   title: string;
   description?: string;
   pathname?: string;
+  itemNumber?: string;
 }
 
 const {
   title,
   description,
   pathname = Astro.url.pathname,
+  itemNumber,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 
 const nav = [
-  { label: "← nl06", href: "https://nl06.com" },
+  { label: "Active",      href: "#active"     },
+  { label: "Killed",      href: "#killed"     },
+  { label: "Methodology", href: "#methodology"},
+  { label: "← NL06",      href: "https://nl06.com" },
 ];
 ---
 <!doctype html>
@@ -29,10 +34,18 @@ const nav = [
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
-    <SiteHeader pathname={pathname} title="chains" homeHref="/" nav={nav} />
+    <SiteHeader
+      pathname={pathname}
+      title="CHAINS"
+      caption="— A Register"
+      homeHref="/"
+      edition='Composed by <a href="https://www.anthropic.com" rel="noopener">Claude</a>'
+      dateline="Four Questions Down"
+      nav={nav}
+    />
     <main>
       <slot />
     </main>
-    <SiteFooter signature="A subdomain of nl06.com." />
+    <SiteFooter itemNumber={itemNumber} />
   </body>
 </html>

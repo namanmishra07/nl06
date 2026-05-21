@@ -3,93 +3,268 @@ import type { CollectionEntry } from "astro:content";
 
 interface Props {
   chain: CollectionEntry<"chains">;
+  /** Sequence number, for the hung folio. */
+  number?: number;
 }
-const { chain } = Astro.props;
+const { chain, number } = Astro.props;
 const d = chain.data;
 
 const fmtDate = (date: Date) =>
   date.toISOString().slice(0, 10).replace(/-/g, " · ");
+
+const statusClass = d.status.toLowerCase();
+const stepHeads = ["First-order", "Second-order", "Forced problem", "Infrastructure gap"];
 ---
-<article class:list={["chain", `chain--${d.status.toLowerCase()}`]}>
-  <header class="chain__head">
-    <span class:list={["chain__status", `chain__status--${d.status.toLowerCase()}`]}>{d.status}</span>
-    <span class="chain__date">Updated {fmtDate(d.last_updated)}</span>
-  </header>
+<li class:list={["dossier", `dossier--${statusClass}`]}>
+  <article class="dossier__article">
+    <!-- LEFT RAIL — folio number, status, date -->
+    <aside class="dossier__rail" aria-hidden="false">
+      {number !== undefined && (
+        <span class="dossier__folio">{String(number).padStart(2, "0")}</span>
+      )}
+      <span class:list={["status-mark", `status-mark--${statusClass}`]}>{d.status}</span>
+      <span class="dossier__date">Updated {fmtDate(d.last_updated)}</span>
+    </aside>
 
-  <h3 class="chain__title">{d.title}</h3>
+    <!-- BODY -->
+    <div class="dossier__body">
+      <header class="dossier__head">
+        <span class="dossier__kicker">Dossier № {number !== undefined ? String(number).padStart(2, "0") : "—"}</span>
+        <h3 class="dossier__title">{d.title}</h3>
+      </header>
 
-  <p class="chain__macro"><span class="chain__label">Macro shift</span>{d.macro_shift}</p>
+      <p class="dossier__macro">
+        <span class="dossier__macro-label">Macro shift</span>
+        <span class="dossier__macro-body">{d.macro_shift}</span>
+      </p>
 
-  <ol class="chain__steps">
-    {d.steps.map((s) => <li>{s}</li>)}
-  </ol>
+      <ol class="dossier__steps">
+        {d.steps.map((s, i) => (
+          <li class="dossier__step">
+            <span class="dossier__step-num">{String(i + 1).padStart(2, "0")}</span>
+            <div class="dossier__step-body">
+              <span class="dossier__step-head">{stepHeads[i] ?? `Step ${i + 1}`}</span>
+              <p class="dossier__step-text">{s}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
 
-  {d.status === "KILLED" && d.killed_reason && (
-    <p class="chain__verdict chain__verdict--killed">
-      <span class="chain__label">Killed</span>{d.killed_reason}
-    </p>
-  )}
-  {d.status !== "KILLED" && d.verdict_reason && (
-    <p class="chain__verdict">
-      <span class="chain__label">Verdict</span>{d.verdict_reason}
-    </p>
-  )}
-</article>
+      {d.status === "KILLED" && d.killed_reason && (
+        <p class="dossier__verdict dossier__verdict--killed">
+          <span class="dossier__verdict-label">Killed</span>
+          <span class="dossier__verdict-body">{d.killed_reason}</span>
+        </p>
+      )}
+      {d.status !== "KILLED" && d.verdict_reason && (
+        <p class="dossier__verdict">
+          <span class="dossier__verdict-label">Verdict</span>
+          <span class="dossier__verdict-body">{d.verdict_reason}</span>
+        </p>
+      )}
+    </div>
+  </article>
+</li>
 
 <style>
-  .chain {
-    padding: var(--space-6) 0;
+  .dossier {
+    margin: 0;
+    border-bottom: 1px solid var(--color-rule);
+    padding: var(--space-10) 0;
+  }
+  .dossier + .dossier { margin-top: 0; }
+  .dossier__article {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+  }
+
+  /* RAIL ─────────────────────────────────────────────────────────── */
+  .dossier__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .dossier__folio {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-jumbo);
+    line-height: 0.82;
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+  }
+  .dossier__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  /* BODY ─────────────────────────────────────────────────────────── */
+  .dossier__body { max-width: 50rem; }
+
+  .dossier__head { padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-rule); }
+  .dossier__kicker {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .dossier__title {
+    margin-top: var(--space-2);
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    line-height: 1.05;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+
+  .dossier--killed .dossier__title {
+    color: var(--color-ink-muted);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--color-rule-strong);
+  }
+  .dossier--killed .dossier__folio { color: var(--color-ink-faint); }
+
+  .dossier__macro {
+    margin-top: var(--space-5);
+    display: grid;
+    grid-template-columns: 7.5rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-bottom: var(--space-5);
+    border-bottom: 1px dashed var(--color-rule-strong);
+  }
+  .dossier__macro-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    padding-top: 0.25em;
+  }
+  .dossier__macro-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+  }
+
+  /* STEPS ────────────────────────────────────────────────────────── */
+  .dossier__steps {
+    margin-top: var(--space-5);
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+  .dossier__step {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+  .dossier__step + .dossier__step { margin-top: 0; }
+  .dossier__step-num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h2);
+    color: var(--color-accent);
+    line-height: 0.95;
+    font-feature-settings: var(--features-tabular);
+    text-align: right;
+  }
+  .dossier--killed .dossier__step-num { color: var(--color-ink-faint); }
+
+  .dossier__step-head {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding-bottom: var(--space-1);
     border-bottom: 1px solid var(--color-rule);
   }
-  .chain + .chain { margin-top: 0; }
-
-  .chain__head {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-4);
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-  }
-  .chain__status { font-weight: 600; }
-  .chain__status--live       { color: var(--color-accent); }
-  .chain__status--unresolved { color: var(--color-ink-soft); }
-  .chain__status--killed     { color: var(--color-ink-muted); }
-  .chain__date { color: var(--color-ink-muted); }
-
-  .chain__title {
-    font-size: var(--type-h3);
+  .dossier__step-text {
     margin-top: var(--space-2);
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
   }
 
-  .chain__macro {
-    margin-top: var(--space-3);
-    color: var(--color-ink-soft);
+  /* VERDICT ──────────────────────────────────────────────────────── */
+  .dossier__verdict {
+    margin-top: var(--space-6);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
   }
-
-  .chain__label {
-    display: inline-block;
+  .dossier__verdict-label {
     font-family: var(--font-sans);
-    font-size: var(--type-meta);
+    font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
-    color: var(--color-ink-muted);
-    margin-right: var(--space-2);
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 700;
   }
+  .dossier__verdict-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-body);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+  }
+  .dossier__verdict--killed {
+    border-color: var(--color-rule-strong);
+    background: var(--color-paper-dim);
+  }
+  .dossier__verdict--killed .dossier__verdict-label { color: var(--color-ink-muted); }
+  .dossier__verdict--killed .dossier__verdict-body  { color: var(--color-ink-soft); }
 
-  .chain__steps {
-    margin-top: var(--space-4);
-    padding-left: var(--space-6);
-  }
-  .chain__steps li + li { margin-top: var(--space-2); }
-
-  .chain__verdict {
-    margin-top: var(--space-4);
-    padding-top: var(--space-3);
-    border-top: 1px dashed var(--color-rule);
-  }
-  .chain__verdict--killed {
-    color: var(--color-ink-muted);
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .dossier__article {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+    }
+    .dossier__rail {
+      flex-direction: row;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .dossier__folio { font-size: var(--type-h1); }
+    .dossier__title { font-size: var(--type-h2); }
+    .dossier__macro,
+    .dossier__verdict { grid-template-columns: 1fr; gap: var(--space-2); }
+    .dossier__step { grid-template-columns: 3rem 1fr; }
+    .dossier__step-num { font-size: var(--type-h3); }
   }
 </style>

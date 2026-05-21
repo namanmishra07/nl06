@@ -2,7 +2,6 @@
 import { getCollection } from "astro:content";
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import Prose      from "@nl06/design-system/components/Prose.astro";
 import ChainCard  from "~/components/ChainCard.astro";
 
 const all = (await getCollection("chains"))
@@ -16,105 +15,454 @@ const counts = {
   live:       all.filter((c) => c.data.status === "LIVE").length,
   unresolved: all.filter((c) => c.data.status === "UNRESOLVED").length,
   killed:     killed.length,
+  all:        all.length,
 };
+
+// Compute display numbers: chains are numbered globally in dossier order
+// (most-recently-updated first → No. 01).
+const numbering: Record<string, number> = {};
+all.forEach((c, i) => (numbering[c.id] = i + 1));
 ---
 <BaseLayout
-  title="chains.nl06"
-  description="A public window into a consequence-chain methodology."
+  title="chains.nl06 — A Register of Consequence Chains"
+  description="A four-question structure for tracing macro shifts through to the infrastructure they make necessary."
+  itemNumber="№ C01"
 >
-  <Container size="container" class="page">
-    <p class="dateline">Consequence chains &nbsp;·&nbsp; {counts.live} live &nbsp;·&nbsp; {counts.unresolved} unresolved &nbsp;·&nbsp; {counts.killed} killed</p>
-    <h1>Chains</h1>
-    <p class="sub">A four-question structure for tracing macro shifts through to the infrastructure they make necessary. Public so the reasoning can be picked apart.</p>
+  <article class="chains-index">
+    <Container size="wide" class="chains-index__inner">
+      <!-- HEAD ─────────────────────────────────────────────────── -->
+      <header class="chains-index__head">
+        <div class="chains-index__rail">
+          <span class="rail__label">Register</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">{counts.all} on file</span>
+        </div>
 
-    <section class="method">
-      <h2 class="section-head">Methodology</h2>
-      <Prose>
-        <p>Given a macro shift, the four questions:</p>
-        <ol>
-          <li><strong>First-order.</strong> What changes immediately?</li>
-          <li><strong>Second-order.</strong> What follows from that change downstream?</li>
-          <li><strong>Forced problem.</strong> What new problem becomes mandatory to solve?</li>
-          <li><strong>Infrastructure gap.</strong> What's missing that someone has to build?</li>
+        <div class="chains-index__heading">
+          <h1 class="chains-index__title">
+            <span class="chains-index__title-line">Chains.</span>
+            <span class="chains-index__title-emphasis">Four questions, traced down.</span>
+          </h1>
+          <p class="chains-index__lede">
+            A standing public log of consequence-chain reasoning. Macro shifts
+            traced through their second-order effects, the forced problems they
+            create, and the infrastructure those problems make necessary. The
+            killed entries are the more useful read &mdash; they show where the
+            reasoning breaks.
+          </p>
+        </div>
+      </header>
+
+      <!-- TALLY ────────────────────────────────────────────────── -->
+      <section class="tally">
+        <div class="tally__rail">
+          <span class="rail__label">Tally</span>
+        </div>
+        <ol class="tally__list">
+          <li class="tally__item tally__item--live">
+            <span class="tally__count">{String(counts.live).padStart(2, "0")}</span>
+            <span class="tally__label">Live</span>
+            <span class="tally__note">First two questions resolve.</span>
+          </li>
+          <li class="tally__item tally__item--unresolved">
+            <span class="tally__count">{String(counts.unresolved).padStart(2, "0")}</span>
+            <span class="tally__label">Unresolved</span>
+            <span class="tally__note">Chain holds, buyer unclear.</span>
+          </li>
+          <li class="tally__item tally__item--killed">
+            <span class="tally__count">{String(counts.killed).padStart(2, "0")}</span>
+            <span class="tally__label">Killed</span>
+            <span class="tally__note">One question broke irreparably.</span>
+          </li>
         </ol>
-        <p>A chain is <strong>LIVE</strong> if the macro shift looks real and at least the first two questions resolve cleanly. <strong>UNRESOLVED</strong> if the chain holds but the buyer is unclear. <strong>KILLED</strong> when a question breaks irreparably — usually because the second-order consequence doesn't follow, or the buyer for the missing infrastructure doesn't exist at any price.</p>
-        <p>The killed chains are the more useful read. They show where the reasoning breaks.</p>
-      </Prose>
-    </section>
-
-    <section class="section">
-      <h2 id="active" class="section-head">Active &nbsp;<span class="section-count">{active.length}</span></h2>
-      {active.length === 0 ? (
-        <p class="empty">No active chains.</p>
-      ) : (
-        <div class="chains">
-          {active.map((c) => <ChainCard chain={c} />)}
-        </div>
-      )}
-    </section>
-
-    {killed.length > 0 && (
-      <section class="section">
-        <h2 id="killed" class="section-head">Killed &nbsp;<span class="section-count">{killed.length}</span></h2>
-        <p class="section-blurb">Chains that died. The reason is the point of the entry.</p>
-        <div class="chains">
-          {killed.map((c) => <ChainCard chain={c} />)}
-        </div>
       </section>
-    )}
-  </Container>
+
+      <!-- METHODOLOGY ──────────────────────────────────────────── -->
+      <section class="method" id="methodology">
+        <header class="section-banner">
+          <span class="section-banner__num">§</span>
+          <h2 class="section-banner__title">Methodology</h2>
+          <span class="section-banner__rule" aria-hidden="true"></span>
+          <span class="section-banner__count">Four questions</span>
+        </header>
+
+        <ol class="method__steps">
+          <li class="method-step">
+            <span class="method-step__num">01</span>
+            <div class="method-step__body">
+              <h3 class="method-step__head">First-order</h3>
+              <p class="method-step__body-text">What changes immediately?</p>
+            </div>
+          </li>
+          <li class="method-step">
+            <span class="method-step__num">02</span>
+            <div class="method-step__body">
+              <h3 class="method-step__head">Second-order</h3>
+              <p class="method-step__body-text">What follows from that change downstream?</p>
+            </div>
+          </li>
+          <li class="method-step">
+            <span class="method-step__num">03</span>
+            <div class="method-step__body">
+              <h3 class="method-step__head">Forced problem</h3>
+              <p class="method-step__body-text">What new problem becomes mandatory to solve?</p>
+            </div>
+          </li>
+          <li class="method-step">
+            <span class="method-step__num">04</span>
+            <div class="method-step__body">
+              <h3 class="method-step__head">Infrastructure gap</h3>
+              <p class="method-step__body-text">What&rsquo;s missing that someone has to build?</p>
+            </div>
+          </li>
+        </ol>
+
+        <p class="method__note">
+          A chain is <strong>LIVE</strong> if the macro shift looks real and at
+          least the first two questions resolve cleanly. <strong>UNRESOLVED</strong>
+          if the chain holds but the buyer is unclear. <strong>KILLED</strong> when
+          a question breaks irreparably &mdash; usually because the second-order
+          consequence doesn&rsquo;t follow, or the buyer for the missing
+          infrastructure doesn&rsquo;t exist at any price.
+        </p>
+      </section>
+
+      <!-- ACTIVE ───────────────────────────────────────────────── -->
+      <section class="dossiers" id="active">
+        <header class="section-banner">
+          <span class="section-banner__num">I</span>
+          <h2 class="section-banner__title">Active dossiers</h2>
+          <span class="section-banner__rule" aria-hidden="true"></span>
+          <span class="section-banner__count">{active.length} on file</span>
+        </header>
+
+        {active.length === 0 ? (
+          <p class="empty">No active chains.</p>
+        ) : (
+          <ol class="dossiers__list">
+            {active.map((c) => (
+              <ChainCard chain={c} number={numbering[c.id]} />
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <!-- KILLED ───────────────────────────────────────────────── -->
+      {killed.length > 0 && (
+        <section class="dossiers dossiers--killed" id="killed">
+          <header class="section-banner section-banner--killed">
+            <span class="section-banner__num">II</span>
+            <h2 class="section-banner__title">Killed dossiers</h2>
+            <span class="section-banner__rule" aria-hidden="true"></span>
+            <span class="section-banner__count">{killed.length} archived</span>
+          </header>
+          <p class="dossiers__blurb">
+            Chains that died. The reason is the point of the entry.
+          </p>
+          <ol class="dossiers__list">
+            {killed.map((c) => (
+              <ChainCard chain={c} number={numbering[c.id]} />
+            ))}
+          </ol>
+        </section>
+      )}
+
+    </Container>
+  </article>
 </BaseLayout>
 
 <style>
-  .page { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .chains-index { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .chains-index :global(.chains-index__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
 
-  .dateline {
+  /* HEAD ─────────────────────────────────────────────────────────── */
+  .chains-index__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .chains-index__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label {
     font-family: var(--font-sans);
-    font-size: var(--type-meta);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .rail__rule { height: 1px; background: var(--color-rule); }
+  .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
   }
-  .page > h1 { margin-top: var(--space-3); }
-  .page > .sub {
-    margin-top: var(--space-4);
-    color: var(--color-ink-soft);
+
+  .chains-index__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .chains-index__title-line { display: block; }
+  .chains-index__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+  .chains-index__lede {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
     font-size: var(--type-h4);
     line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+    max-width: 42rem;
   }
 
-  .method { margin-top: var(--space-12); }
-  .section { margin-top: var(--space-16); }
-
-  .section-head {
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-rule);
+  /* TALLY ────────────────────────────────────────────────────────── */
+  .tally {
+    grid-column: 1 / -1;
+    margin-top: var(--space-10);
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+  .tally__rail { padding-top: var(--space-3); }
+  .tally__list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid var(--color-ink);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .tally__item {
+    padding: var(--space-5) var(--space-5);
+    border-right: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .tally__item:last-child { border-right: 0; }
+  .tally__item + .tally__item { margin-top: 0; }
+  .tally__count {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-display);
+    line-height: 0.9;
+    letter-spacing: var(--tracking-jumbo);
+    font-feature-settings: var(--features-tabular);
+  }
+  .tally__label {
     font-family: var(--font-sans);
-    font-size: var(--type-meta);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    margin-top: var(--space-2);
+  }
+  .tally__note {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    margin-top: var(--space-1);
+  }
+  .tally__item--live       .tally__count { color: var(--color-accent); }
+  .tally__item--live       .tally__label { color: var(--color-accent); }
+  .tally__item--unresolved .tally__count { color: var(--color-ink); }
+  .tally__item--killed     .tally__count { color: var(--color-ink-muted); }
+  .tally__item--killed     .tally__label { color: var(--color-ink-muted); }
+
+  /* SECTION BANNER ──────────────────────────────────────────────── */
+  .section-banner {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) auto 1fr auto;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-bottom: var(--space-3);
+    border-bottom: 3px solid var(--color-ink);
+    position: relative;
+  }
+  .section-banner::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -4px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .section-banner__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    line-height: 0.9;
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-jumbo);
+    text-align: right;
+  }
+  .section-banner__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h1);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+  }
+  .section-banner__rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .section-banner__count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
     font-weight: 500;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
   }
-  .section-count {
-    font-variant-numeric: tabular-nums;
-    color: var(--color-rule);
+  .section-banner--killed .section-banner__num,
+  .section-banner--killed .section-banner__title { color: var(--color-ink-muted); }
+
+  /* METHODOLOGY ────────────────────────────────────────────────── */
+  .method {
+    grid-column: 1 / -1;
+    margin-top: var(--space-14);
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8) var(--space-8);
   }
-  .section-blurb {
-    margin-top: var(--space-3);
+  .method__steps {
+    grid-column: 2 / -1;
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--color-rule);
+    border-left: 1px solid var(--color-rule);
+    max-width: 52rem;
+  }
+  .method-step {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-5);
+    border-right: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+    background: var(--color-paper);
+  }
+  .method-step + .method-step { margin-top: 0; }
+  .method-step__num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    color: var(--color-accent);
+    line-height: 0.9;
+    font-feature-settings: var(--features-tabular);
+  }
+  .method-step__head {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h4);
+    color: var(--color-ink);
+  }
+  .method-step__body-text {
+    margin-top: var(--space-2);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    line-height: var(--leading-normal);
+  }
+  .method__note {
+    grid-column: 2 / -1;
+    margin-top: var(--space-6);
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink);
+    max-width: 44rem;
+  }
+  .method__note strong {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-accent);
+    padding: 0 0.2em;
+  }
+
+  /* DOSSIERS ────────────────────────────────────────────────────── */
+  .dossiers {
+    grid-column: 1 / -1;
+    margin-top: var(--space-16);
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+  .dossiers__blurb {
+    grid-column: 2 / -1;
+    margin-top: var(--space-4);
+    font-family: var(--font-serif);
+    font-style: italic;
     color: var(--color-ink-muted);
     font-size: var(--type-small);
   }
-  .chains {
-    margin-top: var(--space-4);
+  .dossiers__list {
+    grid-column: 1 / -1;
+    margin: var(--space-6) 0 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--color-rule);
   }
+
   .empty {
+    grid-column: 2 / -1;
     margin-top: var(--space-6);
     color: var(--color-ink-muted);
   }
 
-  .method :global(.prose-flow) { margin-top: var(--space-5); }
+  /* responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .chains-index :global(.chains-index__inner),
+    .chains-index__head,
+    .tally,
+    .method,
+    .dossiers,
+    .section-banner { grid-template-columns: 1fr; }
+    .chains-index__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .chains-index__rail .rail__rule { flex: 1; }
+    .chains-index__title { font-size: var(--type-display); }
+    .tally__list { grid-template-columns: 1fr; }
+    .tally__item { border-right: 0; border-bottom: 1px solid var(--color-rule); }
+    .tally__item:last-child { border-bottom: 0; }
+    .method__steps { grid-template-columns: 1fr; }
+    .section-banner { gap: var(--space-2); }
+    .section-banner__num { font-size: var(--type-h2); }
+    .section-banner__title { font-size: var(--type-h2); }
+  }
 </style>

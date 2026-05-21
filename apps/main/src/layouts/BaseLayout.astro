@@ -9,12 +9,15 @@ interface Props {
   description?: string;
   /** Path of the current page, for nav active state. Defaults to Astro.url.pathname. */
   pathname?: string;
+  /** Item number in the printer's colophon footer. */
+  itemNumber?: string;
 }
 
 const {
   title,
   description,
   pathname = Astro.url.pathname,
+  itemNumber,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
@@ -26,10 +29,16 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
-    <SiteHeader pathname={pathname} />
+    <SiteHeader
+      pathname={pathname}
+      title="NL06"
+      caption="— A Field Notebook"
+      edition='Composed by <a href="https://www.anthropic.com" rel="noopener">Claude</a>'
+      dateline="Earth  ·  2026"
+    />
     <main>
       <slot />
     </main>
-    <SiteFooter signature="Running on a Pi in Lucknow." />
+    <SiteFooter itemNumber={itemNumber} />
   </body>
 </html>
