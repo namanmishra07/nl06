@@ -1,4 +1,15 @@
-# /website/scripts — gs subdomain data pipeline
+# /website/scripts — subdomain data pipelines
+
+Two pipelines live here:
+
+- **`build-canonical.py` + `sync-plates.py`** — the gs.nl06.com data
+  pipeline. Documented below.
+- **`sync-auctionhouse.py`** — the auctionhouse.nl06.com data pipeline.
+  See the **auctionhouse pipeline** section near the bottom.
+
+---
+
+## gs subdomain data pipeline
 
 These scripts move data from the Lucknow rig's decode log into
 `gs.nl06.com`, with zero AI in the loop. They run on the NAS,
@@ -106,3 +117,77 @@ loginctl enable-linger naman
   working tree drifts from production until you manually `git add &&
   commit && push`. That's intentional — pushing daily auto-commits to
   GitHub would just be noise.
+
+---
+
+## auctionhouse subdomain data pipeline
+
+`sync-auctionhouse.py` is the publish step for auctionhouse.nl06.com.
+The ingest, parse, and score stages live in
+`/agents/auctionhouse-backend/`; see that repo's `README.md` for
+the full chain. This script is responsible for SQLite → static JSON →
+build → wrangler deploy.
+
+### The chain
+
+```
+/agents/auctionhouse-backend/data/auctions.db   (canonical store)
+       │
+       │ sync-auctionhouse.py
+       ▼
+apps/auctionhouse/src/content/lots.json   +   meta.json
+       │
+       │ pnpm --filter @nl06/auctionhouse build
+       ▼
+apps/auctionhouse/dist/
+       │
+       │ wrangler pages deploy --project-name=nl06-auctionhouse
+       ▼
+https://auctionhouse.nl06.com
+```
+
+### Usage
+
+```bash
+./sync-auctionhouse.py             # write JSON, do not build/deploy
+./sync-auctionhouse.py --deploy    # also: pnpm build + wrangler
+./sync-auctionhouse.py --dry-run   # summarise; write nothing
+```
+
+Filter rule (configurable via `AUCTIONHOUSE_MIN_PUBLISH_SCORE`,
+default 6):
+
+```sql
+(manual_override = 'boost')
+  OR
+(status = 'active'
+ AND score >= MIN_PUBLISH_SCORE
+ AND (manual_override IS NULL OR manual_override != 'suppress'))
+```
+
+### What gets written
+
+- **`lots.json`**: the published rows. Each lot includes title, seller,
+  location, reserve, EMD, close timestamp, score, model-written reason
+  or operator's editor_note, and the MSTC source URL.
+- **`meta.json`**: pipeline freshness + counts + 30-day rolling spend.
+  Surfaced on the page so a stale `synced_at_utc` is visible without
+  opening journalctl.
+
+### Systemd
+
+The auctionhouse pipeline runs from the *backend* repo's systemd unit,
+not from this directory. The unit chain is:
+
+```
+~/.config/systemd/user/nl06-auctionhouse.timer
+   → nl06-auctionhouse.service
+   → /agents/auctionhouse-backend/scripts/nightly-run.sh
+       └ (calls sync-auctionhouse.py with --deploy as step 4 of 5)
+```
+
+If the unit fails, `nl06-auctionhouse-failure-alert.service` fires via
+`OnFailure=` and emails the journal excerpt to namanmisra9@gmail.com.
+
+Pre-requisites are the same as gs: `~/.config/nl06/cloudflare.token`
+mode 600 for wrangler.

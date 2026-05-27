@@ -1,0 +1,33 @@
+{
+  "synced_at_utc": "2026-05-27T06:20:21Z",
+  "min_publish_score": 6,
+  "counts": {
+    "total": 52,
+    "active": 40,
+    "scored_active": 40,
+    "published": 0,
+    "top_active_score": 3
+  },
+  "by_category": {
+    "arbitrage": 40
+  },
+  "last_run": {
+    "source": "score",
+    "started_at_utc": "2026-05-27T06:19:35Z",
+    "finished_at_utc": "2026-05-27T06:19:45Z",
+    "error": null,
+    "lots_seen": 0,
+    "lots_new": 0,
+    "parse_failures": 0,
+    "score_calls": 5
+  },
+  "spend_30d": {
+    "calls": 5,
+    "api_calls": 5,
+    "input_tokens": 9567,
+    "output_tokens": 491,
+    "cache_read_tk": 0,
+    "cache_create_tk": 0,
+    "usd": 0.012
+  }
+}

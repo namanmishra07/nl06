@@ -2,25 +2,64 @@
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
 
-/* Placeholder schema — what a real lot will look like once the backend
-   pulls from MSTC. Single sample row, fields blanked or italicised, used
-   purely as a typographic preview. */
-const sampleLot = {
-  lot:        "—",
-  title:      "Lot title appears here",
-  category:   "Category",
-  agency:     "Selling agency",
-  location:   "Location · State",
-  start:      "Start date",
-  close:      "Close date",
-  emd:        "Earnest money deposit",
-  reserve:    "Reserve price",
-  status:     "UPCOMING",
+// Static-time imports. sync-auctionhouse.py writes both files before the
+// build runs; an empty lots.json is the normal "no qualifying lots today"
+// state, not an error.
+import lotsData from "../content/lots.json";
+import metaData from "../content/meta.json";
+
+type Lot = {
+  id:               string;
+  source:           string;
+  source_url:       string;
+  title:            string;
+  seller:           string | null;
+  seller_category:  string;
+  location:         string | null;
+  start_price_inr:  number | null;
+  emd_inr:          number | null;
+  close_at_utc:     string | null;
+  status:           string;
+  score:            number | null;
+  category:         string | null;
+  confidence:       number | null;
+  note:             string | null;
+  note_is_editor:   boolean;
+  boosted:          boolean;
 };
+
+const lots: Lot[] = lotsData as Lot[];
+const meta:  any  = metaData;
+
+const synced     = new Date(meta.synced_at_utc);
+const syncedISO  = synced.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+const counts     = meta.counts as Record<string, number>;
+const threshold  = meta.min_publish_score as number;
+const lastRun    = meta.last_run as any | null;
+const lastRunErr = lastRun?.error as string | null;
+
+function fmtINR(rupees: number | null): string {
+  if (rupees == null) return "—";
+  if (rupees >= 10_000_000) return `₹${(rupees / 10_000_000).toFixed(2)} cr`;
+  if (rupees >= 100_000)    return `₹${(rupees / 100_000).toFixed(2)} L`;
+  return `₹${rupees.toLocaleString("en-IN")}`;
+}
+
+function fmtClose(iso: string | null): string {
+  if (!iso) return "—";
+  return iso.replace("T", " ").replace("Z", "") + " UTC";
+}
+
+function statusMark(lot: Lot): string {
+  if (lot.boosted) return "BOOSTED";
+  if (lot.status === "closed") return "CLOSED";
+  if (lot.status === "cancelled") return "CANCELLED";
+  return "ACTIVE";
+}
 ---
 <BaseLayout
   title="auctionhouse.nl06 — A register of government lots"
-  description="A tracker for government surplus and disposal auctions running on MSTC India. Backend in development."
+  description="A curated register of Indian government surplus and disposal auctions from MSTC India. Updated nightly."
   itemNumber="№ AH00"
 >
   <article class="ah">
@@ -28,9 +67,9 @@ const sampleLot = {
       <!-- HERO ─────────────────────────────────────────────────── -->
       <header class="ah__head">
         <div class="ah__rail">
-          <span class="rail__label">Status</span>
+          <span class="rail__label">Last refresh</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">Backend in development</span>
+          <span class="rail__date">{syncedISO}</span>
         </div>
 
         <div class="ah__heading">
@@ -49,12 +88,101 @@ const sampleLot = {
           </p>
 
           <p class="ah__sub">
-            Currently a placeholder. The backend &mdash; a daily ingest of MSTC&rsquo;s
-            published catalogues, deduplicated and indexed against close dates &mdash;
-            is in development. When it lands, the register fills in below.
+            Scored nightly against an editorial floor of {threshold}/10. The handful
+            of lots that clear it appear below. Everything else stays in the index but
+            does not surface.
           </p>
         </div>
       </header>
+
+      <!-- REGISTER ──────────────────────────────────────────────── -->
+      <section class="ah__register" id="register">
+        <header class="ah__banner">
+          <span class="ah__banner__num">¶</span>
+          <h2 class="ah__banner__title">The register</h2>
+          <span class="ah__banner__rule" aria-hidden="true"></span>
+          <span class="ah__banner__count">
+            {lots.length} above threshold · {counts.active} active · {counts.scored_active} scored
+          </span>
+        </header>
+
+        {lots.length === 0 ? (
+          <div class="ah__empty">
+            <p class="ah__empty-headline">
+              The register is open. No lots currently clear the editorial floor.
+            </p>
+            <p class="ah__empty-detail">
+              The pipeline ran at <time datetime={meta.synced_at_utc}>{syncedISO}</time>.
+              It tracks <strong>{counts.active}</strong> active lots across MSTC&rsquo;s
+              twenty regional offices, and has scored <strong>{counts.scored_active}</strong>
+              of them. The highest-scoring active lot today is
+              <strong> {counts.top_active_score}/10</strong>. New lots arrive nightly;
+              the floor is {threshold}/10.
+            </p>
+            {lastRunErr ? (
+              <p class="ah__empty-error">
+                Last ingestion attempt failed: <code>{lastRunErr.slice(0, 200)}</code>.
+                The page is showing the snapshot from before that failure.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <ol class="ah__register-list">
+            {lots.map((lot, i) => (
+              <li>
+                <article class="ah-lot">
+                  <aside class="ah-lot__rail">
+                    <span class="ah-lot__mark">Lot №&nbsp;{String(i + 1).padStart(2, "0")}</span>
+                    <span class:list={[
+                      "status-mark",
+                      lot.status === "active" ? "status-mark--live" : "status-mark--unresolved",
+                    ]}>{statusMark(lot)}</span>
+                    {lot.score != null ? (
+                      <span class="ah-lot__score">Score {lot.score}/10</span>
+                    ) : null}
+                    {lot.category ? (
+                      <span class="ah-lot__cat">{lot.category}</span>
+                    ) : null}
+                    {lot.close_at_utc ? (
+                      <span class="ah-lot__when">Close · {fmtClose(lot.close_at_utc)}</span>
+                    ) : null}
+                  </aside>
+
+                  <div class="ah-lot__body">
+                    <h3 class="ah-lot__title">
+                      <a href={lot.source_url} rel="noopener" target="_blank">{lot.title}</a>
+                    </h3>
+                    {lot.note ? (
+                      <p class:list={["ah-lot__note", lot.note_is_editor && "ah-lot__note--editor"]}>
+                        {lot.note}
+                      </p>
+                    ) : null}
+                    <dl class="ah-lot__rows">
+                      {lot.seller && (
+                        <div class="ah-lot__row"><dt>Selling agency</dt><dd>
+                          {lot.seller} <span class="ah-lot__chip">{lot.seller_category}</span>
+                        </dd></div>
+                      )}
+                      {lot.location && (
+                        <div class="ah-lot__row"><dt>Location</dt><dd>{lot.location}</dd></div>
+                      )}
+                      {lot.start_price_inr != null && (
+                        <div class="ah-lot__row"><dt>Reserve</dt><dd class="tabular">{fmtINR(lot.start_price_inr)}</dd></div>
+                      )}
+                      {lot.emd_inr != null && (
+                        <div class="ah-lot__row"><dt>EMD</dt><dd class="tabular">{fmtINR(lot.emd_inr)}</dd></div>
+                      )}
+                      {lot.close_at_utc && (
+                        <div class="ah-lot__row"><dt>Closes</dt><dd class="tabular">{fmtClose(lot.close_at_utc)}</dd></div>
+                      )}
+                    </dl>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
 
       <!-- METHODOLOGY ─────────────────────────────────────────── -->
       <section class="ah__method" id="methodology">
@@ -62,7 +190,7 @@ const sampleLot = {
           <span class="ah__banner__num">§</span>
           <h2 class="ah__banner__title">Methodology</h2>
           <span class="ah__banner__rule" aria-hidden="true"></span>
-          <span class="ah__banner__count">In development</span>
+          <span class="ah__banner__count">Updated nightly</span>
         </header>
 
         <ol class="ah__method-steps">
@@ -71,9 +199,9 @@ const sampleLot = {
             <div class="ah-step__body">
               <h3 class="ah-step__head">Ingest</h3>
               <p class="ah-step__text">
-                A daily crawl of MSTC&rsquo;s published catalogue pages and the
-                supporting tender notices. Each lot is captured once with
-                provenance &mdash; URL, snapshot, fetched-at timestamp.
+                A nightly crawl of MSTC&rsquo;s catalogue pages across all twenty
+                regional offices. Each auction is captured once with provenance &mdash;
+                URL, snapshot, fetched-at timestamp.
               </p>
             </div>
           </li>
@@ -83,19 +211,21 @@ const sampleLot = {
               <h3 class="ah-step__head">Normalise</h3>
               <p class="ah-step__text">
                 Lots are mapped to a single schema: selling agency, category,
-                location, reserve price, EMD, start, close. Free-text item
-                descriptions stay verbatim. No translation, no rewriting.
+                location, reserve price, EMD, start, close. Annexures &mdash;
+                the per-lot detail PDFs MSTC publishes alongside the catalogue
+                &mdash; are fetched and excerpted.
               </p>
             </div>
           </li>
           <li class="ah-step">
             <span class="ah-step__num">03</span>
             <div class="ah-step__body">
-              <h3 class="ah-step__head">Register</h3>
+              <h3 class="ah-step__head">Score</h3>
               <p class="ah-step__text">
-                The register is the public output. Filterable by category and
-                agency; sorted by close date; closed lots retained for the
-                record with their hammer outcomes where MSTC publishes them.
+                Every lot is scored 1&ndash;10 against four categories: arbitrage,
+                niche-instrument, prestige-seller, curio. Conservative by default.
+                Lots that clear {threshold}/10 surface in the register; everything
+                else stays in the index.
               </p>
             </div>
           </li>
@@ -105,48 +235,12 @@ const sampleLot = {
               <h3 class="ah-step__head">Annotate</h3>
               <p class="ah-step__text">
                 A small subset of lots gets a written note &mdash; what&rsquo;s
-                being sold, why it&rsquo;s interesting, what the close
-                attracted. Hand-written, infrequent, opinionated.
+                being sold, why it&rsquo;s interesting, what the close attracted.
+                Hand-written, infrequent, opinionated.
               </p>
             </div>
           </li>
         </ol>
-      </section>
-
-      <!-- SAMPLE LOT (typographic preview) ─────────────────────── -->
-      <section class="ah__preview" aria-labelledby="preview">
-        <header class="ah__banner">
-          <span class="ah__banner__num">¶</span>
-          <h2 id="preview" class="ah__banner__title">Schema preview</h2>
-          <span class="ah__banner__rule" aria-hidden="true"></span>
-          <span class="ah__banner__count">What a lot looks like</span>
-        </header>
-
-        <p class="ah__preview-note">
-          The shape of a future entry. Once the backend is live, this register
-          will fill with real rows pulled straight from MSTC overnight.
-        </p>
-
-        <article class="ah-lot ah-lot--placeholder">
-          <aside class="ah-lot__rail">
-            <span class="ah-lot__mark">Lot {sampleLot.lot}</span>
-            <span class:list={["status-mark", "status-mark--unresolved"]}>{sampleLot.status}</span>
-            <span class="ah-lot__when">Close · {sampleLot.close}</span>
-          </aside>
-
-          <div class="ah-lot__body">
-            <h3 class="ah-lot__title">{sampleLot.title}</h3>
-            <dl class="ah-lot__rows">
-              <div class="ah-lot__row"><dt>Selling agency</dt><dd>{sampleLot.agency}</dd></div>
-              <div class="ah-lot__row"><dt>Category</dt><dd>{sampleLot.category}</dd></div>
-              <div class="ah-lot__row"><dt>Location</dt><dd>{sampleLot.location}</dd></div>
-              <div class="ah-lot__row"><dt>Reserve</dt><dd class="tabular">{sampleLot.reserve}</dd></div>
-              <div class="ah-lot__row"><dt>EMD</dt><dd class="tabular">{sampleLot.emd}</dd></div>
-              <div class="ah-lot__row"><dt>Opens</dt><dd class="tabular">{sampleLot.start}</dd></div>
-              <div class="ah-lot__row"><dt>Closes</dt><dd class="tabular">{sampleLot.close}</dd></div>
-            </dl>
-          </div>
-        </article>
       </section>
 
       <!-- SOURCES ─────────────────────────────────────────────── -->
@@ -155,7 +249,7 @@ const sampleLot = {
           <span class="ah__banner__num">¤</span>
           <h2 class="ah__banner__title">Primary sources</h2>
           <span class="ah__banner__rule" aria-hidden="true"></span>
-          <span class="ah__banner__count">As of 2026</span>
+          <span class="ah__banner__count">As of {synced.getUTCFullYear()}</span>
         </header>
 
         <dl class="ah__sources-list">
@@ -177,7 +271,7 @@ const sampleLot = {
             </dd>
           </div>
           <div class="ah__source">
-            <dt>Selling agency catalogues</dt>
+            <dt>Selling-agency catalogues</dt>
             <dd>
               Railway divisions, defence PSUs, port trusts, central PSU mills
               and refineries each publish their own catalogues alongside the
@@ -193,6 +287,17 @@ const sampleLot = {
           watch a running system, write down what it does.
         </p>
       </section>
+
+      <!-- PIPELINE STATUS (footer note) ───────────────────────── -->
+      <footer class="ah__pipeline">
+        <p class="ah__pipeline-line">
+          Pipeline last completed
+          <time datetime={meta.synced_at_utc}>{syncedISO}</time>.
+          {counts.scored_active}/{counts.active} scored.
+          {lastRun ? `Last ingestion: ${lastRun.source} run #${lastRun.started_at_utc?.slice(0,10)}` : ""}
+          {lastRunErr ? <span class="ah__pipeline-fail"> (failed)</span> : null}
+        </p>
+      </footer>
 
       <p class="ornament" aria-hidden="true"></p>
     </Container>
@@ -285,8 +390,8 @@ const sampleLot = {
     border-top: 1px dashed var(--color-rule-strong);
   }
 
-  /* BANNER (shared) ─────────────────────────────────────────── */
-  .ah__method, .ah__preview, .ah__sources {
+  /* BANNER ──────────────────────────────────────────────────── */
+  .ah__register, .ah__method, .ah__sources {
     grid-column: 1 / -1;
     margin-top: var(--space-16);
   }
@@ -330,7 +435,151 @@ const sampleLot = {
     font-weight: 500;
   }
 
-  /* METHOD steps ─────────────────────────────────────────────── */
+  /* EMPTY STATE ─────────────────────────────────────────────── */
+  .ah__empty {
+    margin: var(--space-10) 0;
+    padding: var(--space-8);
+    background: var(--color-paper-margin);
+    border: 1px dashed var(--color-rule-strong);
+    max-width: 50rem;
+  }
+  .ah__empty-headline {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h3);
+    color: var(--color-ink);
+    margin: 0;
+  }
+  .ah__empty-detail {
+    margin-top: var(--space-4);
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .ah__empty-error {
+    margin-top: var(--space-4);
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+  }
+  .ah__empty-error code {
+    font-family: var(--font-mono);
+    background: var(--color-paper);
+    padding: 0 0.25em;
+  }
+
+  /* REGISTER LIST ───────────────────────────────────────────── */
+  .ah__register-list {
+    list-style: none;
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-8);
+  }
+
+  /* LOT card ────────────────────────────────────────────────── */
+  .ah-lot {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    padding: var(--space-8);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+  }
+  .ah-lot__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .ah-lot__mark {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h2);
+    color: var(--color-accent);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+  }
+  .ah-lot__when, .ah-lot__cat, .ah-lot__score {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .ah-lot__score { color: var(--color-accent); font-weight: 600; }
+  .ah-lot__body { max-width: 50rem; }
+  .ah-lot__title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h2);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-display);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .ah-lot__title a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--color-rule-strong);
+  }
+  .ah-lot__title a:hover { color: var(--color-accent); }
+  .ah-lot__note {
+    margin: var(--space-4) 0 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .ah-lot__note--editor {
+    font-style: normal;
+    color: var(--color-ink);
+    border-left: 3px solid var(--color-accent);
+    padding-left: var(--space-4);
+  }
+  .ah-lot__rows {
+    margin: var(--space-5) 0 0;
+    display: grid;
+    grid-template-columns: 10rem 1fr;
+    gap: var(--space-3) var(--space-6);
+  }
+  .ah-lot__row { display: contents; }
+  .ah-lot__rows dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    padding-top: 0.18em;
+  }
+  .ah-lot__rows dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    line-height: var(--leading-normal);
+  }
+  .ah-lot__rows dd.tabular { font-feature-settings: var(--features-tabular); }
+  .ah-lot__chip {
+    display: inline-block;
+    margin-left: 0.5em;
+    padding: 0 0.5em;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-meta);
+  }
+
+  /* METHODOLOGY ─────────────────────────────────────────────── */
   .ah__method-steps {
     margin: var(--space-8) 0 0;
     padding: 0;
@@ -372,94 +621,6 @@ const sampleLot = {
     color: var(--color-ink-soft);
   }
 
-  /* PREVIEW lot ─────────────────────────────────────────────── */
-  .ah__preview-note {
-    margin: var(--space-6) 0 var(--space-6);
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: var(--type-body);
-    color: var(--color-ink-soft);
-    max-width: 44rem;
-  }
-  .ah-lot {
-    display: grid;
-    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
-    gap: var(--space-8);
-    padding: var(--space-8);
-    border: 1px solid var(--color-ink);
-    background: var(--color-paper-margin);
-  }
-  .ah-lot--placeholder {
-    background-image:
-      repeating-linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--color-rule-strong) 14%, transparent) 0,
-        color-mix(in srgb, var(--color-rule-strong) 14%, transparent) 1px,
-        transparent 1px,
-        transparent 14px
-      );
-  }
-  .ah-lot__rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-  .ah-lot__mark {
-    font-family: var(--font-serif);
-    font-weight: 800;
-    font-size: var(--type-h2);
-    color: var(--color-accent);
-    line-height: 1;
-    letter-spacing: var(--tracking-display);
-  }
-  .ah-lot__when {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-  }
-  .ah-lot__body { max-width: 50rem; }
-  .ah-lot__title {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 500;
-    font-size: var(--type-h2);
-    line-height: var(--leading-snug);
-    color: var(--color-ink-muted);
-    letter-spacing: var(--tracking-display);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .ah-lot__rows {
-    margin: var(--space-5) 0 0;
-    display: grid;
-    grid-template-columns: 10rem 1fr;
-    gap: var(--space-3) var(--space-6);
-  }
-  .ah-lot__row { display: contents; }
-  .ah-lot__rows dt {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 600;
-    padding-top: 0.18em;
-  }
-  .ah-lot__rows dd {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-size: var(--type-small);
-    color: var(--color-ink-muted);
-    font-style: italic;
-    line-height: var(--leading-normal);
-  }
-  .ah-lot__rows dd.tabular { font-feature-settings: var(--features-tabular); font-style: normal; }
-
   /* SOURCES ─────────────────────────────────────────────────── */
   .ah__sources-list {
     margin: var(--space-8) 0 0;
@@ -497,6 +658,22 @@ const sampleLot = {
     max-width: 50rem;
   }
 
+  /* PIPELINE STATUS FOOTER ──────────────────────────────────── */
+  .ah__pipeline {
+    grid-column: 1 / -1;
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-rule);
+  }
+  .ah__pipeline-line {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+  }
+  .ah__pipeline-fail { color: #b94a47; }
+
   @media (max-width: 760px) {
     .ah :global(.ah__inner),
     .ah__head,
@@ -509,7 +686,7 @@ const sampleLot = {
     .ah__method-steps { grid-template-columns: 1fr; }
     .ah__banner { grid-template-columns: auto 1fr; }
     .ah__banner__rule, .ah__banner__count { display: none; }
-    .ah-lot__rail { flex-direction: row; align-items: baseline; }
+    .ah-lot__rail { flex-direction: row; align-items: baseline; flex-wrap: wrap; }
     .ah__sources-list dt { padding-top: var(--space-3); }
   }
 </style>
