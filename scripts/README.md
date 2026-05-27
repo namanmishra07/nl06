@@ -154,16 +154,26 @@ https://auctionhouse.nl06.com
 ./sync-auctionhouse.py --dry-run   # summarise; write nothing
 ```
 
-Filter rule (configurable via `AUCTIONHOUSE_MIN_PUBLISH_SCORE`,
-default 6):
+Filter rule — per-category thresholds (the editorial logic that
+distinguishes "buy material" from "interesting but not necessarily
+buy material"):
 
-```sql
-(manual_override = 'boost')
-  OR
-(status = 'active'
- AND score >= MIN_PUBLISH_SCORE
- AND (manual_override IS NULL OR manual_override != 'suppress'))
 ```
+include if:
+   manual_override = 'boost'
+OR (status = 'active' AND not suppressed AND score IS NOT NULL AND (
+     (interesting_category = 'arbitrage'        AND score >= 7)
+  OR (interesting_category = 'niche-instrument' AND score >= 5)
+  OR (interesting_category = 'prestige-seller'  AND score >= 4)
+  OR (interesting_category = 'curio'            AND score >= 4)
+  OR (seller_category IN (DRDO,CSIR,HAL,ISRO,academic) AND score >= 4)
+))
+```
+
+Every threshold is env-var-tunable
+(`AUCTIONHOUSE_THRESHOLD_{ARBITRAGE,NICHE,PRESTIGE,CURIO,PRESTIGE_FLOOR}`);
+`AUCTIONHOUSE_MIN_PUBLISH_SCORE` is a legacy uniform-override escape
+hatch that, if set, replaces every per-category threshold.
 
 ### What gets written
 

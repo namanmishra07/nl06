@@ -1,6 +1,21 @@
 {
-  "synced_at_utc": "2026-05-27T06:20:21Z",
-  "min_publish_score": 6,
+  "synced_at_utc": "2026-05-27T07:21:07Z",
+  "publish_filter": {
+    "category_thresholds": {
+      "arbitrage": 7,
+      "niche-instrument": 5,
+      "prestige-seller": 4,
+      "curio": 4
+    },
+    "prestige_categories": [
+      "DRDO",
+      "CSIR",
+      "HAL",
+      "ISRO",
+      "academic"
+    ],
+    "prestige_seller_floor": 4
+  },
   "counts": {
     "total": 52,
     "active": 40,

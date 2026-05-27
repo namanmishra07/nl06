@@ -55,11 +55,41 @@ CF_TOKEN_PATH = Path.home() / ".config" / "nl06" / "cloudflare.token"
 CF_ACCOUNT_ID = "412810aff4761352d5c33b9257311f20"
 CF_PROJECT    = "nl06-auctionhouse"
 
-# Score threshold for "publishable". Tuned against the prompt: 6 = "has
-# some hook"; 7+ = "worth featuring". Default 6 keeps the register tight
-# without being so strict that it stays empty for weeks. Override at run
-# time via the env var if you want to bring it forward or push it back.
-MIN_PUBLISH_SCORE = int(os.environ.get("AUCTIONHOUSE_MIN_PUBLISH_SCORE", "6"))
+# ── publish filter ───────────────────────────────────────────────────────────
+#
+# The prompt scores 1-10 where 7+ is "worth featuring" and 4-6 is "has some
+# hook but nothing strong enough to write up". The two-tier filter below
+# treats those tiers differently per category:
+#
+#   - `arbitrage` lots are "buy material" — the story is the deal — so they
+#     need the high bar (7+). A score-5 arbitrage lot isn't a deal worth
+#     surfacing.
+#   - `niche-instrument`, `prestige-seller`, and `curio` are "interesting
+#     regardless of whether you'd bid" — the story is the object or the
+#     seller. They get a lower bar.
+#
+# Plus a separate path: any lot from a prestige seller_category (DRDO,
+# CSIR, HAL, ISRO, academic) is surfaced at score ≥ 4 even if the model
+# tagged it as `arbitrage`. This catches mis-categorisation of prestige-
+# provenance lots and reflects the "the seller is the story" axis.
+#
+# `AUCTIONHOUSE_MIN_PUBLISH_SCORE` (env) is the legacy uniform-override
+# escape hatch — if set, it overrides every per-category threshold.
+
+PUBLISH_THRESHOLDS = {
+    "arbitrage":        int(os.environ.get("AUCTIONHOUSE_THRESHOLD_ARBITRAGE",        "7")),
+    "niche-instrument": int(os.environ.get("AUCTIONHOUSE_THRESHOLD_NICHE",            "5")),
+    "prestige-seller":  int(os.environ.get("AUCTIONHOUSE_THRESHOLD_PRESTIGE",         "4")),
+    "curio":            int(os.environ.get("AUCTIONHOUSE_THRESHOLD_CURIO",            "4")),
+}
+PRESTIGE_SELLER_CATEGORIES = ("DRDO", "CSIR", "HAL", "ISRO", "academic")
+PRESTIGE_SELLER_FLOOR      = int(os.environ.get("AUCTIONHOUSE_THRESHOLD_PRESTIGE_FLOOR", "4"))
+
+_uniform_override = os.environ.get("AUCTIONHOUSE_MIN_PUBLISH_SCORE")
+if _uniform_override is not None:
+    _val = int(_uniform_override)
+    PUBLISH_THRESHOLDS    = {k: _val for k in PUBLISH_THRESHOLDS}
+    PRESTIGE_SELLER_FLOOR = _val
 
 
 # ── DB read ──────────────────────────────────────────────────────────────────
@@ -69,9 +99,12 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def load_published_lots(conn: sqlite3.Connection, min_score: int) -> list[dict]:
-    rows = conn.execute(
-        """
+def load_published_lots(conn: sqlite3.Connection) -> list[dict]:
+    """Apply the per-category + prestige-seller publish filter. See module
+    header for the editorial logic. Order: boosted first, then highest
+    score, then by closing soonest."""
+    placeholders_prestige = ",".join("?" * len(PRESTIGE_SELLER_CATEGORIES))
+    sql = f"""
         SELECT source, source_id, source_url,
                title, seller, seller_category, location,
                start_price_inr, emd_inr, close_at_utc, status,
@@ -79,21 +112,36 @@ def load_published_lots(conn: sqlite3.Connection, min_score: int) -> list[dict]:
                manual_override, editor_note
           FROM lots
          WHERE (manual_override = 'boost')
-            OR (status = 'active'
-                AND score >= ?
-                AND (manual_override IS NULL OR manual_override != 'suppress'))
+            OR (
+                status = 'active'
+                AND (manual_override IS NULL OR manual_override != 'suppress')
+                AND score IS NOT NULL
+                AND (
+                       (interesting_category = 'arbitrage'        AND score >= ?)
+                    OR (interesting_category = 'niche-instrument' AND score >= ?)
+                    OR (interesting_category = 'prestige-seller'  AND score >= ?)
+                    OR (interesting_category = 'curio'            AND score >= ?)
+                    OR (seller_category IN ({placeholders_prestige}) AND score >= ?)
+                )
+            )
          ORDER BY (manual_override = 'boost') DESC,
                   score DESC,
                   confidence DESC,
                   close_at_utc ASC
-        """,
-        (min_score,),
-    ).fetchall()
+    """
+    params = (
+        PUBLISH_THRESHOLDS["arbitrage"],
+        PUBLISH_THRESHOLDS["niche-instrument"],
+        PUBLISH_THRESHOLDS["prestige-seller"],
+        PUBLISH_THRESHOLDS["curio"],
+        *PRESTIGE_SELLER_CATEGORIES,
+        PRESTIGE_SELLER_FLOOR,
+    )
+    rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 
 
-def load_meta(conn: sqlite3.Connection, published_count: int,
-              min_score: int) -> dict:
+def load_meta(conn: sqlite3.Connection, published_count: int) -> dict:
     """Snapshot of pipeline health, surfaced on the site so anyone can
     see whether yesterday's run worked without opening journalctl."""
     def scalar(sql: str, *params) -> int:
@@ -148,7 +196,11 @@ def load_meta(conn: sqlite3.Connection, published_count: int,
 
     return {
         "synced_at_utc":     _utcnow_iso(),
-        "min_publish_score": min_score,
+        "publish_filter": {
+            "category_thresholds":    PUBLISH_THRESHOLDS,
+            "prestige_categories":    list(PRESTIGE_SELLER_CATEGORIES),
+            "prestige_seller_floor":  PRESTIGE_SELLER_FLOOR,
+        },
         "counts": {
             "total":             total_lots,
             "active":            active_lots,
@@ -255,14 +307,18 @@ def main() -> int:
     conn = sqlite3.connect(f"file:{AUCTIONS_DB}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
 
-    rows         = load_published_lots(conn, MIN_PUBLISH_SCORE)
+    rows         = load_published_lots(conn)
     lots_payload = [project_lot(r) for r in rows]
-    meta_payload = load_meta(conn, len(lots_payload), MIN_PUBLISH_SCORE)
+    meta_payload = load_meta(conn, len(lots_payload))
     conn.close()
 
+    thr = PUBLISH_THRESHOLDS
     print(f"sync-auctionhouse: {meta_payload['counts']['active']} active lots, "
-          f"{meta_payload['counts']['scored_active']} scored, "
-          f"{len(lots_payload)} clear publish threshold (score >= {MIN_PUBLISH_SCORE})")
+          f"{meta_payload['counts']['scored_active']} scored; "
+          f"{len(lots_payload)} clear publish filter "
+          f"(arb≥{thr['arbitrage']} / niche≥{thr['niche-instrument']} / "
+          f"prestige≥{thr['prestige-seller']} / curio≥{thr['curio']} / "
+          f"prestige-seller≥{PRESTIGE_SELLER_FLOOR})")
 
     if args.dry_run:
         print("sync-auctionhouse: --dry-run; no files written, no deploy")

@@ -34,9 +34,19 @@ const meta:  any  = metaData;
 const synced     = new Date(meta.synced_at_utc);
 const syncedISO  = synced.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 const counts     = meta.counts as Record<string, number>;
-const threshold  = meta.min_publish_score as number;
+const filter     = meta.publish_filter as {
+  category_thresholds: Record<string, number>;
+  prestige_categories: string[];
+  prestige_seller_floor: number;
+};
 const lastRun    = meta.last_run as any | null;
 const lastRunErr = lastRun?.error as string | null;
+
+// Lowest score that could surface — used for the empty-state copy.
+const lowestThreshold = Math.min(
+  ...Object.values(filter.category_thresholds),
+  filter.prestige_seller_floor,
+);
 
 function fmtINR(rupees: number | null): string {
   if (rupees == null) return "—";
@@ -88,9 +98,16 @@ function statusMark(lot: Lot): string {
           </p>
 
           <p class="ah__sub">
-            Scored nightly against an editorial floor of {threshold}/10. The handful
-            of lots that clear it appear below. Everything else stays in the index but
-            does not surface.
+            Scored nightly against four axes: <em>arbitrage</em> (a deal that
+            exceeds the reserve), <em>niche-instrument</em> (a tool that
+            rarely surfaces), <em>prestige-seller</em> (the seller is the
+            story), and <em>curio</em> (the object is the story). The
+            editorial floor differs by axis — arbitrage needs to be a real
+            deal ({filter.category_thresholds["arbitrage"]}+/10); prestige
+            and curio surface earlier ({filter.category_thresholds["prestige-seller"]}+).
+            Anything from a prestige seller (DRDO, ISRO, CSIR, HAL,
+            academic) also surfaces at {filter.prestige_seller_floor}+
+            regardless of category fit.
           </p>
         </div>
       </header>
@@ -117,7 +134,7 @@ function statusMark(lot: Lot): string {
               twenty regional offices, and has scored <strong>{counts.scored_active}</strong>
               of them. The highest-scoring active lot today is
               <strong> {counts.top_active_score}/10</strong>. New lots arrive nightly;
-              the floor is {threshold}/10.
+              the lowest editorial floor is {lowestThreshold}/10 (prestige &amp; curio).
             </p>
             {lastRunErr ? (
               <p class="ah__empty-error">
@@ -222,10 +239,12 @@ function statusMark(lot: Lot): string {
             <div class="ah-step__body">
               <h3 class="ah-step__head">Score</h3>
               <p class="ah-step__text">
-                Every lot is scored 1&ndash;10 against four categories: arbitrage,
-                niche-instrument, prestige-seller, curio. Conservative by default.
-                Lots that clear {threshold}/10 surface in the register; everything
-                else stays in the index.
+                Every lot is scored 1&ndash;10 against four categories:
+                arbitrage, niche-instrument, prestige-seller, curio. The
+                editorial floor is per-category, not uniform — arbitrage
+                must be a real deal; prestige and curio surface earlier.
+                Anything from a prestige seller is included regardless of
+                category fit.
               </p>
             </div>
           </li>
