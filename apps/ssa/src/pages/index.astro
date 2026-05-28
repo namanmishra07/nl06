@@ -1,13 +1,11 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import EventCard  from "~/components/EventCard.astro";
+import Atlas      from "~/components/Atlas.astro";
+import Sparkline  from "~/components/Sparkline.astro";
 import fs from "node:fs";
 import path from "node:path";
 
-// Feed + summary JSON are produced by the ssa-pipeline and synced into
-// public/data/ before each build. If they're missing (first build before
-// the pipeline has run), render the empty state gracefully.
 interface FeedEvent {
   norad_id: number;
   object_name: string;
@@ -72,112 +70,206 @@ const summary: Summary = readJson("data/summary.json", {
   by_constellation: {},
 });
 
-// Partition out constellation events — collapsed by default per spec.
-const isConstellation = (e: FeedEvent) => Boolean(e.constellation);
-const mainEvents = feed.events.filter((e) => !isConstellation(e));
-const constellationEvents = feed.events.filter(isConstellation);
+// ── Filter to physically-sane events ─────────────────────────────────
+// Drop high-eccentric orbits where Kozai mean-element a is nonsense
+// (altitudes above ~50,000 km), and events too small to be real.
+const usable = feed.events.filter((e) =>
+  e.altitude_km > 100 && e.altitude_km < 50000 && e.dv_mps > 0.005
+);
+
+// ── Score for "worth a look" curation ────────────────────────────────
+// HIGH confidence weighs more. Station-keeping is routine and gets
+// demoted. Constellation members are also demoted (mostly Starlink
+// shell upkeep). Big Δv stays big.
+function isSK(c: string) { return c.startsWith("stationkeeping"); }
+function score(e: FeedEvent): number {
+  const conf = e.confidence === "HIGH" ? 1.6 : 0.9;
+  const routine = isSK(e.classification) ? 0.2 : 1.0;
+  const swarm = e.constellation ? 0.3 : 1.0;
+  return e.dv_mps * conf * routine * swarm;
+}
+
+const ranked = [...usable].sort((a, b) => score(b) - score(a));
+const hero = ranked.length > 0 ? ranked[0] : null;
+const shortlist = ranked.slice(1, 8); // up to 7 notables after the hero
 
 const generatedDate = new Date(feed.generated_at).toLocaleString("en-GB", {
   day: "numeric", month: "long", year: "numeric",
   hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
 });
 
-// Group constellation events by tag for the toggle summary.
-const byConst: Record<string, FeedEvent[]> = {};
-for (const e of constellationEvents) {
-  if (e.constellation) {
-    (byConst[e.constellation] ||= []).push(e);
-  }
+const classLabel: Record<string, string> = {
+  raise:               "orbit raise",
+  lower:               "orbit lower",
+  deorbit:             "deorbit",
+  plane_change:        "plane change",
+  stationkeeping_ew:   "station-keeping (E-W)",
+  stationkeeping_ns:   "station-keeping (N-S)",
+};
+
+function fmtDv(dv: number): string {
+  return dv < 0.1 ? dv.toFixed(3) : dv.toFixed(2);
 }
-const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].length);
+
+function fmtWhen(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString("en-GB", { day: "numeric", month: "long" }),
+    time: d.toLocaleTimeString("en-GB", {
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
+    }) + " UTC",
+  };
+}
+
+// Per-class counts for the strip — readable, not exhaustive.
+const counts = {
+  total:    usable.length,
+  raise:    usable.filter((e) => e.classification === "raise").length,
+  lower:    usable.filter((e) => e.classification === "lower").length,
+  plane:    usable.filter((e) => e.classification === "plane_change").length,
+  sk:       usable.filter((e) => isSK(e.classification)).length,
+  highConf: usable.filter((e) => e.confidence === "HIGH").length,
+};
 ---
 <BaseLayout
   title="SSA — Satellites that maneuvered"
-  description="Maneuver events detected from public orbital data, by orbital-mechanics inference. Updated daily."
+  description="One scatter atlas of every maneuver detected from public orbital data in the last 30 days. The featured event up top, the routine kept quiet."
   pathname="/"
   itemNumber="№ 001"
 >
-  <article class="feed">
-    <Container size="wide" class="feed__inner">
+  <article class="lately">
+    <Container size="wide" class="lately__inner">
 
-      <!-- ─────────────────────────── MASTHEAD ─────────────────────── -->
+      <!-- ─────────────────── MASTHEAD ─────────────────── -->
       <header class="masthead">
         <div class="masthead__rail">
-          <span class="rail__label">The Feed</span>
+          <span class="rail__label">The Sky, Lately</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">Updated {generatedDate} UTC</span>
+          <span class="rail__date">As of {generatedDate} UTC</span>
         </div>
 
         <h1 class="masthead__title">
-          <span class="masthead__title-pre">Satellites that</span>
-          <span class="masthead__title-main">maneuvered.</span>
+          <span class="masthead__title-pre">Thirty days of</span>
+          <span class="masthead__title-main">satellites moving.</span>
         </h1>
 
         <p class="masthead__lede">
-          Detected from public orbital data by orbital-mechanics inference &mdash;
-          a sudden break in an otherwise smooth curve.
+          Every dot below is a thruster firing detected from public orbital
+          data &mdash; not telemetry, inference.
           <a href="/method">How this works.</a>
         </p>
-
-        <ul class="strip" aria-label="At a glance">
-          <li class="strip__cell">
-            <span class="strip__num">{summary.payloads_tracked.toLocaleString()}</span>
-            <span class="strip__label">payloads tracked</span>
-          </li>
-          <li class="strip__cell">
-            <span class="strip__num">{summary.events_in_window.toLocaleString()}</span>
-            <span class="strip__label">maneuvers in last {summary.window_days} days</span>
-          </li>
-          <li class="strip__cell strip__cell--by-conf">
-            <span class="strip__num">{summary.by_confidence?.HIGH ?? 0}</span>
-            <span class="strip__label">HIGH confidence</span>
-          </li>
-        </ul>
       </header>
 
-      <!-- ────────────────────── FEED EVENTS ─────────────────────────── -->
-      {mainEvents.length === 0 ? (
-        <p class="feed__empty">
-          No non-constellation maneuvers detected in the last {summary.window_days} days,
-          or the pipeline has not yet produced its first snapshot.
+      <!-- ─────────────────── HERO ─────────────────── -->
+      {hero === null ? (
+        <p class="lately__empty">
+          No usable maneuvers in the last 30 days. The pipeline may be
+          mid-bootstrap; check back tomorrow.
         </p>
       ) : (
-        <section class="events" aria-label="Maneuver events">
-          {mainEvents.map((ev) => <EventCard event={ev} />)}
+        <section class="hero" aria-label="Featured maneuver">
+          {(() => { const w = fmtWhen(hero.detected_epoch); return (
+            <header class="hero__head">
+              <span class="hero__eyebrow">Worth a closer look</span>
+              <h2 class="hero__name">
+                <a href={`/sat/${hero.norad_id}`}>{hero.object_name ?? `NORAD ${hero.norad_id}`}</a>
+              </h2>
+              <p class="hero__meta">
+                NORAD <span class="hero__meta-em">{hero.norad_id}</span>
+                {hero.country && <><span class="hero__sep" aria-hidden="true">·</span>{hero.country}</>}
+                {hero.constellation && <><span class="hero__sep" aria-hidden="true">·</span>{hero.constellation}</>}
+                <span class="hero__sep" aria-hidden="true">·</span>{w.date}, {w.time}
+              </p>
+            </header>
+          )})()}
+
+          <div class="hero__body">
+            <p class="hero__story">
+              An <span class="hero__story-em">{classLabel[hero.classification] ?? hero.classification.replace(/_/g, " ")}</span>
+              {hero.kind === "in_plane" && hero.delta_a_km !== null ? (
+                <> &mdash; the orbit&rsquo;s size changed by <span class="hero__story-em">{hero.delta_a_km >= 0 ? "+" : ""}{hero.delta_a_km.toFixed(2)} km</span></>
+              ) : hero.delta_inc_deg !== null ? (
+                <> &mdash; the orbital plane shifted by <span class="hero__story-em">{hero.delta_inc_deg >= 0 ? "+" : ""}{hero.delta_inc_deg.toFixed(4)}°</span></>
+              ) : null}
+              {", which puts the implied velocity change at "}
+              <span class="hero__story-em">≈ {fmtDv(hero.dv_mps)} m/s</span>.
+              Confidence is <span class="hero__story-em">{hero.confidence}</span> &mdash;
+              {hero.confidence === "HIGH" ? " both the element-jump test and the SGP4 consistency check agreed." : " only the element-jump test fired, so treat this as provisional."}
+            </p>
+
+            <div class="hero__chart">
+              <Sparkline
+                epochs={hero.sparkline.epoch_iso}
+                a_km={hero.sparkline.a_km}
+                eventEpoch={hero.detected_epoch}
+                classification={hero.classification}
+                width={460}
+                height={120}
+                accentColor={hero.confidence === "HIGH" ? "var(--color-accent)" : "var(--color-ink-muted)"}
+              />
+              <span class="hero__chart-label">a(t), 90 days &mdash; the kink is the evidence</span>
+            </div>
+          </div>
         </section>
       )}
 
-      <!-- ────────────────────── CONSTELLATION DRAWER ───────────────── -->
-      {constellationEvents.length > 0 && (
-        <details class="drawer">
-          <summary class="drawer__summary">
-            <span class="drawer__label">Constellation maneuvers</span>
-            <span class="drawer__count">{constellationEvents.length} events</span>
-            <span class="drawer__hint">
-              {constGroups.map(([tag, evs], i) => (
-                <>
-                  {i > 0 && <span class="drawer__sep" aria-hidden="true">·</span>}
-                  <span class="drawer__tag">{tag}<span class="drawer__tag-n"> {evs.length}</span></span>
-                </>
-              ))}
-            </span>
-            <span class="drawer__chevron" aria-hidden="true">+</span>
-          </summary>
-          <div class="drawer__body">
-            <p class="drawer__note">
-              Constellation members maneuver near-continuously to maintain their
-              shells. They&rsquo;re kept for completeness but tucked away so they
-              don&rsquo;t crowd out single events of interest.
+      <!-- ─────────────────── ATLAS ─────────────────── -->
+      {usable.length > 0 && (
+        <section class="atlas-section" aria-label="Atlas of maneuvers">
+          <header class="atlas-section__head">
+            <h2 class="atlas-section__title">The whole month, at one glance.</h2>
+            <p class="atlas-section__sub">
+              <span class="atlas-section__num">{counts.total}</span> events.
+              <span class="atlas-section__inline">
+                {counts.raise} raise, {counts.lower} lower, {counts.plane} plane changes, {counts.sk} routine station-keeping.
+              </span>
+              <span class="atlas-section__inline">
+                {counts.highConf} high-confidence &mdash; both tests agreed.
+              </span>
+              Tap any dot to see the orbit of that satellite over 90 days.
             </p>
-            <div class="events">
-              {constellationEvents.map((ev) => <EventCard event={ev} />)}
-            </div>
-          </div>
-        </details>
+          </header>
+
+          <Atlas events={usable} />
+        </section>
       )}
 
-      <footer class="feed__foot" aria-hidden="true">
-        <span class="asterism">⁂</span>
+      <!-- ─────────────────── SHORTLIST ─────────────────── -->
+      {shortlist.length > 0 && (
+        <section class="notable" aria-label="Worth-a-look maneuvers">
+          <header class="notable__head">
+            <h2 class="notable__title">Six more, in order of how big.</h2>
+            <p class="notable__sub">Ranked by Δv, with station-keeping and constellation routine demoted.</p>
+          </header>
+          <ol class="notable__list">
+            {shortlist.map((e, i) => {
+              const w = fmtWhen(e.detected_epoch);
+              return (
+                <li class:list={["notable__row", `notable__row--${e.confidence.toLowerCase()}`]}>
+                  <span class="notable__rank">№ {String(i + 2).padStart(2, "0")}</span>
+                  <span class="notable__main">
+                    <a class="notable__name" href={`/sat/${e.norad_id}`}>
+                      {e.object_name ?? `NORAD ${e.norad_id}`}
+                    </a>
+                    <span class="notable__class">{classLabel[e.classification] ?? e.classification.replace(/_/g, " ")}</span>
+                  </span>
+                  <span class="notable__when">{w.date}</span>
+                  <span class="notable__dv">Δv ≈ {fmtDv(e.dv_mps)} m/s</span>
+                  <span class="notable__alt">alt. {Math.round(e.altitude_km).toLocaleString()} km</span>
+                  <span class:list={["notable__conf", `notable__conf--${e.confidence.toLowerCase()}`]}>{e.confidence}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+
+      <footer class="lately__foot">
+        <p class="lately__nb">
+          Names and operators are still loading &mdash; the catalog cross-reference
+          will fill in on the next nightly pass.
+        </p>
+        <span class="asterism" aria-hidden="true">⁂</span>
       </footer>
 
     </Container>
@@ -185,16 +277,16 @@ const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].le
 </BaseLayout>
 
 <style>
-  .feed {
+  .lately {
     padding-top: var(--space-12);
     padding-bottom: var(--space-20);
   }
-  .feed__inner {
+  .lately__inner {
     padding-left: var(--space-page);
     padding-right: var(--space-page);
   }
 
-  /* ─────────────────── MASTHEAD ──────────────────────── */
+  /* ─────────────────── masthead ─────────────────── */
   .masthead__rail {
     display: flex;
     align-items: center;
@@ -207,8 +299,8 @@ const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].le
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
-  .rail__label   { color: var(--color-ink); font-weight: 600; }
-  .rail__rule    { flex: 1; height: 1px; background: var(--color-rule); }
+  .rail__label { color: var(--color-ink); font-weight: 600; }
+  .rail__rule  { flex: 1; height: 1px; background: var(--color-rule); }
 
   .masthead__title {
     margin: var(--space-7) 0 var(--space-4) 0;
@@ -231,13 +323,13 @@ const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].le
     display: block;
     font-style: italic;
     font-weight: 700;
-    font-size: clamp(3rem, 8.5vw, 5.5rem);
+    font-size: clamp(2.5rem, 7.5vw, 5rem);
     color: var(--color-accent);
     letter-spacing: var(--tracking-jumbo);
     line-height: 0.95;
   }
   .masthead__lede {
-    margin: 0 0 var(--space-7) 0;
+    margin: 0 0 var(--space-12) 0;
     font-family: var(--font-serif);
     font-size: var(--type-h3);
     line-height: 1.45;
@@ -250,73 +342,47 @@ const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].le
     text-decoration: none;
     border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
   }
-  .masthead__lede a:hover {
-    border-bottom-color: var(--color-accent);
-  }
+  .masthead__lede a:hover { border-bottom-color: var(--color-accent); }
 
-  /* "At a glance" census strip */
-  .strip {
-    list-style: none;
-    margin: 0 0 var(--space-12) 0;
-    padding: var(--space-5) 0;
-    border-top: 1px solid var(--color-rule);
+  /* ─────────────────── hero ─────────────────── */
+  .hero {
+    margin-bottom: var(--space-16);
+    padding: var(--space-7) 0;
+    border-top: 3px double var(--color-rule-strong);
     border-bottom: 3px double var(--color-rule-strong);
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: var(--space-3) var(--space-10);
   }
-  .strip__cell {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.5em;
-  }
-  .strip__num {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 600;
-    font-size: 2.25rem;
-    color: var(--color-ink);
-    font-feature-settings: var(--features-oldstyle);
-    letter-spacing: -0.01em;
-    line-height: 1;
-  }
-  .strip__label {
+  .hero__eyebrow {
+    display: block;
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-weight: 500;
+    color: var(--color-accent);
+    font-weight: 700;
+    margin-bottom: var(--space-2);
   }
-
-  /* ─────────────────── FEED ──────────────────────── */
-  .events {}
-  .feed__empty {
-    margin-top: var(--space-8);
-    padding: var(--space-8);
-    border: 1px dashed var(--color-rule);
-    text-align: center;
+  .hero__name {
+    margin: 0;
     font-family: var(--font-serif);
     font-style: italic;
-    font-size: var(--type-body);
-    color: var(--color-ink-muted);
+    font-weight: 700;
+    font-size: clamp(1.8rem, 4.5vw, 3rem);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+    line-height: 1.1;
   }
-
-  /* ─────────────────── CONSTELLATION DRAWER ────────── */
-  .drawer {
-    margin-top: var(--space-10);
-    padding-top: var(--space-6);
-    border-top: 1px solid var(--color-rule);
+  .hero__name a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 140ms ease, color 140ms ease;
   }
-  .drawer__summary {
-    cursor: pointer;
-    list-style: none;
-    display: grid;
-    grid-template-columns: auto auto 1fr auto;
-    align-items: baseline;
-    gap: var(--space-3);
-    padding: var(--space-3) 0;
+  .hero__name a:hover {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+  .hero__meta {
+    margin: var(--space-2) 0 var(--space-5) 0;
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
@@ -325,64 +391,209 @@ const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].le
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
-  .drawer__summary::-webkit-details-marker { display: none; }
-  .drawer__label { color: var(--color-ink); font-weight: 700; }
-  .drawer__count {
+  .hero__meta-em { color: var(--color-ink); font-weight: 600; }
+  .hero__sep    { color: var(--color-ink-faint); margin: 0 0.45em; }
+
+  .hero__body {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: var(--space-10);
+    align-items: start;
+  }
+  .hero__story {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+    line-height: 1.55;
+    color: var(--color-ink-soft);
+  }
+  .hero__story-em {
+    color: var(--color-ink);
+    font-style: italic;
+    font-weight: 600;
+  }
+  .hero__chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .hero__chart-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+
+  /* ─────────────────── atlas section ─────────────────── */
+  .atlas-section {
+    margin-bottom: var(--space-16);
+  }
+  .atlas-section__head {
+    margin-bottom: var(--space-5);
+  }
+  .atlas-section__title {
+    margin: 0 0 var(--space-2) 0;
     font-family: var(--font-serif);
     font-style: italic;
-    text-transform: none;
-    letter-spacing: var(--tracking-normal);
-    color: var(--color-ink);
-    font-feature-settings: var(--features-oldstyle);
-  }
-  .drawer__hint {
-    color: var(--color-ink-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .drawer__sep   { color: var(--color-ink-faint); margin: 0 0.4em; }
-  .drawer__tag   { color: var(--color-ink-soft); }
-  .drawer__tag-n { color: var(--color-ink-faint); }
-  .drawer__chevron {
-    font-family: var(--font-serif);
     font-weight: 600;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .atlas-section__sub {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    color: var(--color-ink-soft);
+    line-height: 1.5;
+    max-width: 56rem;
+  }
+  .atlas-section__num {
+    font-style: italic;
+    font-weight: 700;
     color: var(--color-accent);
-    width: 1em;
-    text-align: center;
-    transition: transform 200ms ease;
+    font-feature-settings: var(--features-oldstyle);
+    margin-right: 0.1em;
   }
-  details[open] .drawer__chevron { transform: rotate(45deg); }
-  .drawer__body {
-    margin-top: var(--space-4);
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--color-rule);
+  .atlas-section__inline { color: var(--color-ink-muted); }
+
+  /* ─────────────────── notable list ─────────────────── */
+  .notable {
+    margin-bottom: var(--space-12);
   }
-  .drawer__note {
-    margin: 0 0 var(--space-5) 0;
-    max-width: 38rem;
+  .notable__head { margin-bottom: var(--space-5); }
+  .notable__title {
+    margin: 0 0 var(--space-2) 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: clamp(1.4rem, 2.6vw, 2rem);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .notable__sub {
+    margin: 0;
     font-family: var(--font-serif);
     font-style: italic;
     font-size: var(--type-small);
     color: var(--color-ink-muted);
-    line-height: 1.55;
   }
+  .notable__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .notable__row {
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .notable__row--low { opacity: 0.78; }
+  .notable__rank {
+    color: var(--color-ink-faint);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .notable__main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1em;
+  }
+  .notable__name {
+    color: var(--color-ink);
+    text-decoration: none;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    border-bottom: 1px solid transparent;
+    transition: color 140ms, border-color 140ms;
+  }
+  .notable__name:hover { color: var(--color-accent); border-bottom-color: var(--color-accent); }
+  .notable__class { color: var(--color-accent); font-weight: 700; }
+  .notable__when {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .notable__dv  { color: var(--color-ink); font-weight: 700; }
+  .notable__alt { color: var(--color-ink-soft); }
+  .notable__conf {
+    padding: 0.15em 0.55em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+  }
+  .notable__conf--high { color: var(--color-accent); }
+  .notable__conf--low  { color: var(--color-ink-muted); }
 
-  .feed__foot {
-    margin-top: var(--space-16);
-    padding-top: var(--space-8);
+  /* ─────────────────── empty + foot ─────────────────── */
+  .lately__empty {
+    margin-top: var(--space-12);
+    padding: var(--space-8);
+    border: 1px dashed var(--color-rule);
+    text-align: center;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    color: var(--color-ink-muted);
+  }
+  .lately__foot {
+    margin-top: var(--space-12);
+    padding-top: var(--space-7);
     border-top: 1px solid var(--color-rule);
     text-align: center;
   }
+  .lately__nb {
+    margin: 0 0 var(--space-3) 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+  }
   .asterism {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     color: var(--color-ink-faint);
     letter-spacing: 0.5em;
   }
 
+  /* ─────────────────── responsive ─────────────────── */
+  @media (max-width: 960px) {
+    .hero__body { grid-template-columns: 1fr; gap: var(--space-5); }
+  }
   @media (max-width: 760px) {
-    .masthead__title-main { font-size: 2.75rem; }
-    .strip { gap: var(--space-3); padding: var(--space-4) 0; }
-    .strip__num { font-size: 1.75rem; }
+    .notable__row {
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas:
+        "rank main conf"
+        "rank when when"
+        "rank dv  alt";
+      row-gap: var(--space-1);
+    }
+    .notable__rank { grid-area: rank; align-self: start; }
+    .notable__main { grid-area: main; }
+    .notable__when { grid-area: when; }
+    .notable__dv   { grid-area: dv; }
+    .notable__alt  { grid-area: alt; text-align: right; }
+    .notable__conf { grid-area: conf; }
   }
 </style>
