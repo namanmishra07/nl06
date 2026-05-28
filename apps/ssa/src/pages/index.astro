@@ -24,12 +24,6 @@ interface FeedEvent {
   sparkline: { epoch_iso: string[]; a_km: number[]; altitude_km: number[] };
 }
 interface Feed { generated_at: string; window_days: number; event_count: number; events: FeedEvent[]; }
-interface Summary {
-  generated_at: string; window_days: number; payloads_tracked: number;
-  events_in_window: number;
-  by_classification: Record<string, number>; by_kind: Record<string, number>;
-  by_confidence: Record<string, number>; by_constellation: Record<string, number>;
-}
 
 function readJson<T>(rel: string, fallback: T): T {
   try {
@@ -41,10 +35,6 @@ function readJson<T>(rel: string, fallback: T): T {
 
 const feed: Feed = readJson("data/feed.json", {
   generated_at: new Date().toISOString(), window_days: 30, event_count: 0, events: [],
-});
-const summary: Summary = readJson("data/summary.json", {
-  generated_at: new Date().toISOString(), window_days: 30, payloads_tracked: 0,
-  events_in_window: 0, by_classification: {}, by_kind: {}, by_confidence: {}, by_constellation: {},
 });
 
 const usable = feed.events.filter((e) =>
@@ -60,50 +50,125 @@ function score(e: FeedEvent): number {
 }
 const ordered = [...usable].sort((a, b) => score(b) - score(a));
 const totalEvents = ordered.length;
+
+const generatedDate = new Date(feed.generated_at);
+const generatedDisplay = generatedDate.toLocaleString("en-GB", {
+  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  hour12: false, timeZone: "UTC",
+}) + " UTC";
+
+const PLAIN_TAG: Record<string, string> = {
+  raise: "Raised", lower: "Lowered", deorbit: "Deorbit",
+  plane_change: "Plane shift",
+  stationkeeping_ew: "SK East-West",
+  stationkeeping_ns: "SK North-South",
+};
 ---
 <BaseLayout
-  title="SSA — Watch satellites move"
-  description="A guided tour through every satellite maneuver detected from public orbital data this month."
+  title="SSA — Live satellite tracker"
+  description="Satellite stalking from public orbital data: every maneuver detected in the last 30 days, in one console view."
   pathname="/"
   itemNumber="№ 001"
 >
-  <article class="theatre-page">
-    <Container size="wide" class="theatre-page__inner">
+  <article class="console-page">
+    <Container size="full" class="console-page__inner">
 
-      <header class="theatre-head">
-        <p class="theatre-head__kicker">A guided tour</p>
-        <h1 class="theatre-head__title">
-          <span class="theatre-head__title-pre">Watch satellites</span>
-          <span class="theatre-head__title-main">move.</span>
-        </h1>
-        <p class="theatre-head__lede">
-          We watch their published orbits and surface the moments those orbits
-          break &mdash; thruster firings, detected from the ground. Use the arrows
-          to step through the most notable {totalEvents} this month, or hit Play.
-          <a class="theatre-head__how" href="/method">How that works ↗</a>
-        </p>
+      <!-- ─── tracker bar ─── -->
+      <header class="trackbar">
+        <div class="trackbar__left">
+          <span class="trackbar__pulse" aria-hidden="true"></span>
+          <span class="trackbar__lbl">Tracking</span>
+          <span class="trackbar__sep">·</span>
+          <span class="trackbar__title">
+            <span class="trackbar__title-pre">Satellites in</span>
+            <span class="trackbar__title-main">motion.</span>
+          </span>
+        </div>
+        <div class="trackbar__right">
+          <span class="trackbar__stat">
+            <span class="trackbar__num">{totalEvents}</span>
+            <span class="trackbar__lbl">events · 30d</span>
+          </span>
+          <span class="trackbar__sep">·</span>
+          <span class="trackbar__stat">
+            <span class="trackbar__lbl">Last fetch</span>
+            <span class="trackbar__when">{generatedDisplay}</span>
+          </span>
+          <span class="trackbar__sep">·</span>
+          <a class="trackbar__link" href="/method">Method ↗</a>
+        </div>
       </header>
 
       {ordered.length === 0 ? (
-        <p class="theatre-page__empty">
-          No usable maneuvers in the last 30 days. The pipeline may be
-          mid-bootstrap; check back tomorrow.
+        <p class="console-empty">
+          No usable maneuvers in the last 30 days. Pipeline may be mid-bootstrap.
         </p>
       ) : (
-        <section class="theatre" aria-label="Maneuver Theatre">
+        <section class="console" aria-label="Maneuver console">
 
-          <!-- ─── The Stage ─── -->
-          <div class="stage">
-            <button class="stage__nav stage__nav--prev" id="prev-btn" type="button"
-                    aria-label="Previous maneuver (arrow left)">
-              <span aria-hidden="true">←</span>
-            </button>
+          <!-- ─── LEFT: events list ─── -->
+          <aside class="col col--events" aria-label="Event log">
+            <header class="col__head">
+              <h2 class="col__title">Event log</h2>
+              <div class="filter-chips" role="toolbar" aria-label="Filter by type">
+                <button class="fchip is-on" data-fc="raise"             type="button" title="Orbit raised">
+                  <span class="fchip__sw" style="background:#E07A30"></span>R
+                </button>
+                <button class="fchip is-on" data-fc="lower"             type="button" title="Orbit lowered">
+                  <span class="fchip__sw" style="background:#2A5B9C"></span>L
+                </button>
+                <button class="fchip is-on" data-fc="plane_change"      type="button" title="Plane shift">
+                  <span class="fchip__sw" style="background:#36906A"></span>P
+                </button>
+                <button class="fchip is-on" data-fc="stationkeeping_ew" type="button" title="SK east-west">
+                  <span class="fchip__sw" style="background:#B8B2A0"></span>SK
+                </button>
+                <button class="fchip is-on" data-fc="stationkeeping_ns" type="button" title="SK north-south">
+                  <span class="fchip__sw" style="background:#C9C1A9"></span>SK
+                </button>
+                <button class="fchip is-on" data-fc="deorbit"           type="button" title="Deorbit">
+                  <span class="fchip__sw" style="background:#C73E2E"></span>D
+                </button>
+                <button class="fchip fchip--toggle" data-fc-conf="HIGH" type="button"
+                        title="Show double-confirmed only" aria-pressed="false">
+                  ✓
+                </button>
+              </div>
+            </header>
+            <ol class="log" id="log" role="listbox" aria-label="All maneuver events">
+              {ordered.map((e, i) => {
+                const d = new Date(e.detected_epoch);
+                const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+                const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+                return (
+                  <li>
+                    <button
+                      class={`log__row log__row--${e.classification}`}
+                      type="button"
+                      role="option"
+                      data-idx={i}
+                      aria-selected="false">
+                      <span class="log__date">{date}</span>
+                      <span class="log__time">{time}</span>
+                      <span class="log__tag">{PLAIN_TAG[e.classification] ?? e.classification}</span>
+                      <span class="log__name">{e.object_name ?? `NORAD ${e.norad_id}`}</span>
+                      <span class={`log__conf log__conf--${e.confidence.toLowerCase()}`}>{e.confidence === "HIGH" ? "✓" : "·"}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <div class="col__foot">
+              <span class="col__counter" id="log-counter">— / {totalEvents}</span>
+            </div>
+          </aside>
 
-            <div class="stage__center">
+          <!-- ─── CENTER: the stage ─── -->
+          <div class="col col--stage">
+            <div class="stage">
               <svg
                 class="stage__svg"
-                viewBox="0 0 800 540"
-                width="800" height="540"
+                viewBox="0 0 700 480"
                 role="img"
                 aria-label="Animated diagram of one satellite maneuver"
               >
@@ -114,68 +179,70 @@ const totalEvents = ordered.length;
                     <stop offset="100%" stop-color="#1f3349" />
                   </radialGradient>
                   <clipPath id="t-earth-clip">
-                    <circle cx="400" cy="270" r="30" />
+                    <circle cx="350" cy="240" r="26" />
                   </clipPath>
-                  <marker id="t-arrow" markerWidth="10" markerHeight="10" refX="7" refY="5"
-                          orient="auto">
+                  <linearGradient id="sweep-grad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%"   stop-color="#1B3A5C" stop-opacity="0" />
+                    <stop offset="60%"  stop-color="#1B3A5C" stop-opacity="0" />
+                    <stop offset="100%" stop-color="#1B3A5C" stop-opacity="0.14" />
+                  </linearGradient>
+                  <marker id="t-arrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
                     <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#E07A30" />
                   </marker>
-                  <marker id="t-arrow-blue" markerWidth="10" markerHeight="10" refX="7" refY="5"
-                          orient="auto">
+                  <marker id="t-arrow-blue" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
                     <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#2A5B9C" />
                   </marker>
-                  <marker id="t-arrow-green" markerWidth="10" markerHeight="10" refX="7" refY="5"
-                          orient="auto">
+                  <marker id="t-arrow-green" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
                     <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#36906A" />
                   </marker>
                 </defs>
 
-                <!-- not-to-scale watermark -->
-                <text x="780" y="525" text-anchor="end"
-                      font-family="var(--font-sans)" font-size="9"
-                      fill="var(--color-ink-faint)"
-                      style="letter-spacing: 0.08em; text-transform: uppercase;">
-                  diagram · changes exaggerated for clarity
-                </text>
+                <!-- Scanner sweep -->
+                <g class="stage__sweep">
+                  <path d="M 350,240 L 690,240 A 340 340 0 0 1 657,323 Z" fill="url(#sweep-grad)" />
+                </g>
 
-                <!-- Background rings — the four orbital regimes, very faint -->
-                {[140, 200, 260, 305].map((r) => (
-                  <circle cx="400" cy="270" r={r}
+                <!-- Background regime rings -->
+                {[100, 150, 200, 250].map((r) => (
+                  <circle cx="350" cy="240" r={r}
                           fill="none" stroke="var(--color-rule)"
                           stroke-width="0.5"
                           stroke-dasharray="1 8" />
                 ))}
 
-                <!-- Old + new orbit rings — animated by JS -->
-                <g id="stage-orbits">
-                  <ellipse id="orbit-before" cx="400" cy="270" rx="180" ry="180"
-                           fill="none" stroke="var(--color-ink-muted)"
-                           stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
-                  <ellipse id="orbit-after"  cx="400" cy="270" rx="200" ry="200"
-                           fill="none" stroke="#E07A30" stroke-width="2.5" />
-                </g>
+                <!-- Coordinate cross-hairs (faint) -->
+                <line x1="60" y1="240" x2="640" y2="240"
+                      stroke="var(--color-rule)" stroke-width="0.4"
+                      stroke-dasharray="2 6" opacity="0.6" />
+                <line x1="350" y1="40" x2="350" y2="440"
+                      stroke="var(--color-rule)" stroke-width="0.4"
+                      stroke-dasharray="2 6" opacity="0.6" />
+
+                <!-- Old + new orbit rings -->
+                <ellipse id="orbit-before" cx="350" cy="240" rx="160" ry="160"
+                         fill="none" stroke="var(--color-ink-muted)"
+                         stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
+                <ellipse id="orbit-after"  cx="350" cy="240" rx="170" ry="170"
+                         fill="none" stroke="#E07A30" stroke-width="2.5" />
 
                 <!-- Earth -->
                 <g class="t-earth">
-                  <circle cx="400" cy="270" r="30" fill="url(#t-earth)" />
+                  <circle cx="350" cy="240" r="26" fill="url(#t-earth)" />
                   <g clip-path="url(#t-earth-clip)" fill="#1f3349" fill-opacity="0.55">
-                    <path d="M 401,260 C 408,260 411,266 409,272 C 407,277 402,279 399,278 C 396,276 396,271 398,266 C 399,263 400,260 401,260 Z" />
-                    <path d="M 394,257 C 399,254 405,254 412,257 C 408,260 402,261 397,260 C 394,260 392,259 394,257 Z" />
-                    <path d="M 386,262 C 389,259 392,263 391,269 C 390,274 387,278 385,275 C 383,272 384,266 386,262 Z" />
-                    <ellipse cx="411" cy="278" rx="4" ry="2" />
+                    <path d="M 351,233 C 358,233 360,238 358,243 C 356,247 352,249 350,248 C 348,247 348,243 349,239 C 350,236 351,233 351,233 Z" />
+                    <path d="M 344,231 C 348,228 354,228 359,231 C 356,233 351,234 347,234 C 345,234 343,233 344,231 Z" />
+                    <ellipse cx="358" cy="248" rx="3" ry="1.5" />
                   </g>
-                  <circle cx="416" cy="270" r="30" fill="#000" fill-opacity="0.16"
+                  <circle cx="364" cy="240" r="26" fill="#000" fill-opacity="0.16"
                           clip-path="url(#t-earth-clip)" />
                 </g>
 
-                <!-- Burn marker — small arrow at the satellite showing direction -->
+                <!-- Burn marker + satellite -->
                 <g id="burn-marker" opacity="0">
                   <line id="burn-line" x1="0" y1="0" x2="0" y2="0"
                         stroke="#E07A30" stroke-width="2.5"
                         marker-end="url(#t-arrow)" />
                 </g>
-
-                <!-- Satellite icon — small triangle on the orbit -->
                 <g id="satellite">
                   <circle cx="0" cy="0" r="4.5" fill="var(--color-ink)" />
                   <circle cx="0" cy="0" r="9" fill="none"
@@ -183,77 +250,78 @@ const totalEvents = ordered.length;
                           stroke-dasharray="2 3" opacity="0.5" />
                 </g>
 
-                <!-- Δv label, positioned by JS -->
+                <!-- Δ label -->
                 <text id="stage-delta-label" x="0" y="0"
                       font-family="var(--font-sans)" font-size="13" font-weight="800"
                       fill="var(--color-ink)" text-anchor="middle"
                       style="letter-spacing: 0.02em;">
                 </text>
+
+                <!-- Coordinate readout overlay (top-left corner) -->
+                <g class="stage__hud">
+                  <rect x="14" y="14" width="170" height="40" fill="var(--color-paper)" stroke="var(--color-rule)" stroke-width="0.6" rx="2" />
+                  <text x="22" y="29" font-family="var(--font-sans)" font-size="9" font-weight="700"
+                        fill="var(--color-ink-muted)" style="letter-spacing: 0.1em; text-transform: uppercase;">
+                    NORAD <tspan id="hud-norad" fill="var(--color-ink)">—</tspan>
+                  </text>
+                  <text x="22" y="44" font-family="var(--font-sans)" font-size="9" font-weight="600"
+                        fill="var(--color-ink-soft)" style="letter-spacing: 0.06em;">
+                    <tspan id="hud-coords">ALT — · INC —</tspan>
+                  </text>
+                </g>
+
+                <!-- Stage label (bottom-right corner) -->
+                <text x="686" y="468" text-anchor="end"
+                      font-family="var(--font-sans)" font-size="9"
+                      fill="var(--color-ink-faint)"
+                      style="letter-spacing: 0.08em; text-transform: uppercase;">
+                  diagram · not to scale
+                </text>
               </svg>
-            </div>
 
-            <button class="stage__nav stage__nav--next" id="next-btn" type="button"
-                    aria-label="Next maneuver (arrow right)">
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-
-          <!-- ─── Caption block ─── -->
-          <div class="caption" aria-live="polite">
-            <div class="caption__topline">
-              <span class="caption__tag" id="caption-tag"></span>
-              <span class="caption__when" id="caption-when"></span>
-            </div>
-            <h2 class="caption__sentence" id="caption-sentence"></h2>
-            <p class="caption__sub" id="caption-sub"></p>
-            <div class="caption__controls">
-              <button class="ctrl ctrl--play" id="play-btn" type="button" aria-pressed="false">
-                <span class="ctrl__icon" aria-hidden="true">▶</span>
-                <span class="ctrl__lbl ctrl__lbl--play">Auto-play</span>
-                <span class="ctrl__lbl ctrl__lbl--pause" hidden>Pause</span>
-              </button>
-              <button class="ctrl ctrl--replay" id="replay-btn" type="button">
-                <span class="ctrl__icon" aria-hidden="true">↻</span>
-                Replay
-              </button>
-              <a class="ctrl ctrl--detail" id="detail-link" href="#">
-                See this satellite's orbit history →
-              </a>
-              <span class="ctrl__counter" id="counter">1 / {totalEvents}</span>
-            </div>
-          </div>
-
-          <!-- ─── Mini strip — every event as a small dot. Click to jump. ─── -->
-          <div class="strip-wrap">
-            <p class="strip__label">All {totalEvents} maneuvers, sorted by interest. Click to jump:</p>
-            <div class="strip" id="strip" role="listbox" aria-label="All events">
-              {ordered.map((e, i) => (
-                <button class={`strip__dot strip__dot--${e.classification}`}
-                        type="button"
-                        data-idx={i}
-                        aria-label={`${e.object_name ?? `NORAD ${e.norad_id}`}, ${e.classification.replace(/_/g, " ")}, ${new Date(e.detected_epoch).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
-                        title={`${e.object_name ?? `NORAD ${e.norad_id}`} · ${e.classification.replace(/_/g, " ")}`}>
+              <!-- Stage controls (overlay) -->
+              <div class="stage__controls">
+                <button class="sctrl" id="prev-btn" type="button" aria-label="Previous (←)" title="Previous">←</button>
+                <button class="sctrl sctrl--play" id="play-btn" type="button" aria-pressed="false" title="Play (space replays)">
+                  <span id="play-icon">▶</span>
                 </button>
-              ))}
+                <button class="sctrl" id="replay-btn" type="button" title="Replay">↻</button>
+                <button class="sctrl" id="next-btn" type="button" aria-label="Next (→)" title="Next">→</button>
+              </div>
             </div>
-            <ul class="legend" aria-label="Classification legend">
-              <li><span class="legend__sw" style="background:#E07A30"></span>raise</li>
-              <li><span class="legend__sw" style="background:#2A5B9C"></span>lower</li>
-              <li><span class="legend__sw" style="background:#36906A"></span>plane shift</li>
-              <li><span class="legend__sw" style="background:#B8B2A0"></span>routine SK</li>
-              <li><span class="legend__sw" style="background:#C73E2E"></span>deorbit</li>
-            </ul>
           </div>
+
+          <!-- ─── RIGHT: detail readout ─── -->
+          <aside class="col col--detail" aria-label="Selected event detail">
+            <header class="col__head">
+              <h2 class="col__title">Readout</h2>
+              <span class="col__counter" id="detail-counter">— / {totalEvents}</span>
+            </header>
+            <div class="readout">
+              <span class="readout__tag" id="r-tag"></span>
+              <h3 class="readout__name" id="r-name"></h3>
+              <p class="readout__sentence" id="r-sentence"></p>
+
+              <dl class="readout__data">
+                <div><dt>NORAD</dt><dd id="r-norad" class="mono"></dd></div>
+                <div><dt>When</dt><dd id="r-when"></dd></div>
+                <div><dt>Where</dt><dd id="r-where"></dd></div>
+                <div><dt>Change</dt><dd id="r-change" class="mono"></dd></div>
+                <div><dt>Size</dt><dd id="r-size"></dd></div>
+                <div><dt>Confidence</dt><dd id="r-conf"></dd></div>
+                <div><dt>Est. Δv</dt><dd id="r-dv" class="mono"></dd></div>
+              </dl>
+
+              <div class="readout__chart" id="r-chart-wrap"></div>
+
+              <footer class="readout__foot">
+                <a class="readout__open" id="r-open" href="#">See history →</a>
+                <span class="readout__related" id="r-related"></span>
+              </footer>
+            </div>
+          </aside>
         </section>
       )}
-
-      <footer class="theatre-page__foot">
-        <p class="theatre-page__nb">
-          The diagram is schematic &mdash; a 1 km orbit change is invisible at scale,
-          so we exaggerate to read. The numbers on the right are real.
-          Satellite names will fill in once the public catalog re-fetches.
-        </p>
-      </footer>
     </Container>
   </article>
 
@@ -267,14 +335,11 @@ const totalEvents = ordered.length;
       if (events.length === 0) return;
 
       // ── DOM refs ────────────────────────────────────────────
-      const prevBtn  = document.getElementById("prev-btn");
-      const nextBtn  = document.getElementById("next-btn");
+      const prevBtn = document.getElementById("prev-btn");
+      const nextBtn = document.getElementById("next-btn");
       const replayBtn = document.getElementById("replay-btn");
-      const playBtn  = document.getElementById("play-btn");
-      const detailLink = document.getElementById("detail-link");
-      const counter  = document.getElementById("counter");
-      const strip    = document.getElementById("strip");
-      const stripDots = Array.from(strip.querySelectorAll(".strip__dot"));
+      const playBtn = document.getElementById("play-btn");
+      const playIcon = document.getElementById("play-icon");
 
       const orbitBefore = document.getElementById("orbit-before");
       const orbitAfter  = document.getElementById("orbit-after");
@@ -282,35 +347,45 @@ const totalEvents = ordered.length;
       const burnMarker  = document.getElementById("burn-marker");
       const burnLine    = document.getElementById("burn-line");
       const deltaLabel  = document.getElementById("stage-delta-label");
+      const hudNorad    = document.getElementById("hud-norad");
+      const hudCoords   = document.getElementById("hud-coords");
 
-      const tag = document.getElementById("caption-tag");
-      const when = document.getElementById("caption-when");
-      const sentence = document.getElementById("caption-sentence");
-      const subline = document.getElementById("caption-sub");
+      // Readout panel
+      const rTag = document.getElementById("r-tag");
+      const rName = document.getElementById("r-name");
+      const rSentence = document.getElementById("r-sentence");
+      const rNorad = document.getElementById("r-norad");
+      const rWhen = document.getElementById("r-when");
+      const rWhere = document.getElementById("r-where");
+      const rChange = document.getElementById("r-change");
+      const rSize = document.getElementById("r-size");
+      const rConf = document.getElementById("r-conf");
+      const rDv = document.getElementById("r-dv");
+      const rChartWrap = document.getElementById("r-chart-wrap");
+      const rOpen = document.getElementById("r-open");
+      const rRelated = document.getElementById("r-related");
+      const detailCounter = document.getElementById("detail-counter");
+      const logCounter = document.getElementById("log-counter");
 
-      // ── Layout constants — match SVG viewBox ───────────────
-      const CX = 400, CY = 270;
+      const logRows = Array.from(document.querySelectorAll(".log__row"));
 
-      // ── Palette ─────────────────────────────────────────────
+      // ── Constants ───────────────────────────────────────────
+      const CX = 350, CY = 240;
       const COLOR = {
-        raise:             "#E07A30",
-        lower:             "#2A5B9C",
-        plane_change:      "#36906A",
-        stationkeeping_ew: "#B8B2A0",
-        stationkeeping_ns: "#C9C1A9",
-        deorbit:           "#C73E2E",
+        raise: "#E07A30", lower: "#2A5B9C", plane_change: "#36906A",
+        stationkeeping_ew: "#B8B2A0", stationkeeping_ns: "#C9C1A9",
+        deorbit: "#C73E2E",
       };
-      const ARROW_MARKER = {
-        raise:             "url(#t-arrow)",
-        lower:             "url(#t-arrow-blue)",
-        plane_change:      "url(#t-arrow-green)",
+      const ARROW = {
+        raise: "url(#t-arrow)", lower: "url(#t-arrow-blue)",
+        plane_change: "url(#t-arrow-green)",
         stationkeeping_ew: "url(#t-arrow)",
         stationkeeping_ns: "url(#t-arrow)",
-        deorbit:           "url(#t-arrow)",
+        deorbit: "url(#t-arrow)",
       };
       const PLAIN_TAG = {
         raise: "Orbit raised", lower: "Orbit lowered",
-        deorbit: "Rapid altitude loss", plane_change: "Plane shifted",
+        deorbit: "Rapid altitude loss", plane_change: "Orbital plane shifted",
         stationkeeping_ew: "Routine east-west adjustment",
         stationkeeping_ns: "Routine north-south adjustment",
       };
@@ -322,25 +397,13 @@ const totalEvents = ordered.length;
         stationkeeping_ns: "nudged north-or-south",
       };
 
-      // ── Plain-language helpers ─────────────────────────────
+      // ── Language ────────────────────────────────────────────
       function plainAltitude(a) {
         if (a < 1000) return `low Earth orbit (${Math.round(a)} km up)`;
-        if (a < 8000) return `medium-low orbit (${(a / 1000).toFixed(1)}k km up)`;
-        if (a < 25000) return `medium Earth orbit (${(a / 1000).toFixed(0)}k km up)`;
-        if (a > 33000 && a < 38000) return `geostationary orbit (about 36k km up)`;
-        return `high orbit (${(a / 1000).toFixed(0)}k km up)`;
-      }
-      function plainDistance(km) {
-        const abs = Math.abs(km);
-        if (abs < 0.5) return `about ${(abs * 1000).toFixed(0)} metres`;
-        if (abs < 2)   return `about ${abs.toFixed(1)} km`;
-        return `about ${Math.round(abs)} km`;
-      }
-      function plainAngle(d) {
-        const abs = Math.abs(d);
-        if (abs < 0.01) return `a hundredth of a degree`;
-        if (abs < 0.1)  return `${abs.toFixed(3)}°`;
-        return `${abs.toFixed(2)}°`;
+        if (a < 8000) return `medium-low orbit (${(a / 1000).toFixed(1)}k km)`;
+        if (a < 25000) return `medium Earth orbit (${(a / 1000).toFixed(0)}k km)`;
+        if (a > 33000 && a < 38000) return `geostationary (about 36k km)`;
+        return `high orbit (${(a / 1000).toFixed(0)}k km)`;
       }
       function plainSize(dv) {
         if (dv < 0.05) return "a tiny nudge";
@@ -348,6 +411,18 @@ const totalEvents = ordered.length;
         if (dv < 5)    return "a noticeable burn";
         if (dv < 50)   return "a significant maneuver";
         return "a major maneuver";
+      }
+      function plainDistance(km) {
+        const abs = Math.abs(km);
+        if (abs < 0.5) return `about ${(abs * 1000).toFixed(0)} m`;
+        if (abs < 2)   return `about ${abs.toFixed(1)} km`;
+        return `about ${Math.round(abs)} km`;
+      }
+      function plainAngle(d) {
+        const abs = Math.abs(d);
+        if (abs < 0.01) return `under 0.01°`;
+        if (abs < 0.1)  return `${abs.toFixed(3)}°`;
+        return `${abs.toFixed(2)}°`;
       }
       function buildSentence(e) {
         const name = e.object_name || `Satellite NORAD ${e.norad_id}`;
@@ -361,76 +436,88 @@ const totalEvents = ordered.length;
         }
         return `${name} ${verb} in ${alt}.`;
       }
-      function buildSubline(e) {
-        const d = new Date(e.detected_epoch);
-        const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-        const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
-        const conf = e.confidence === "HIGH" ? "Double-confirmed" : "Single signal";
-        const size = plainSize(e.dv_mps);
-        return `${date}, ${time} UTC · ${size} · ${conf}`;
-      }
 
-      // ── Display geometry ───────────────────────────────────
-      // Map altitude regime → base orbit radius on stage.
-      function baseRadiusFor(altKm) {
-        if (altKm < 2000)  return 140;  // LEO
-        if (altKm < 7000)  return 175;
-        if (altKm < 25000) return 215;
-        return 260;                      // GEO
+      // ── Geometry ────────────────────────────────────────────
+      function baseRadius(altKm) {
+        if (altKm < 2000)  return 105;
+        if (altKm < 7000)  return 145;
+        if (altKm < 25000) return 190;
+        return 230;
       }
-      // Exaggerated radial gap between BEFORE and AFTER.
-      // Bigger Δa → bigger gap, but log-bounded so they're all readable.
       function gapForDeltaA(deltaKm) {
         const abs = Math.abs(deltaKm || 0);
-        return Math.max(10, Math.min(60, 8 + Math.log10(abs + 1) * 26));
+        return Math.max(10, Math.min(54, 8 + Math.log10(abs + 1) * 24));
       }
-      // For plane change, tilt the AFTER ring (squish y-radius).
       function tiltForDeltaInc(deltaDeg) {
         const abs = Math.abs(deltaDeg || 0);
-        return Math.max(0.04, Math.min(0.35, abs * 6));
+        return Math.max(0.05, Math.min(0.32, abs * 5));
       }
-      // Pseudo-stable orbital angle for the satellite glyph.
       function angleFor(noradId) {
         let x = noradId | 0;
         x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
         return (((x >>> 0) % 100000) / 100000) * Math.PI * 2;
       }
+      function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
 
-      // ── State + render ─────────────────────────────────────
+      // ── State ───────────────────────────────────────────────
       let currentIdx = 0;
       let animationId = null;
       let autoTimer = null;
+      const activeClasses = new Set(["raise", "lower", "plane_change", "stationkeeping_ew", "stationkeeping_ns", "deorbit"]);
+      let highOnly = false;
 
-      function setSatellitePos(x, y) {
-        satellite.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+      // ── Sparkline render ────────────────────────────────────
+      function renderSparkline(e) {
+        const sp = e.sparkline || {};
+        const ep = sp.epoch_iso || [];
+        const a  = sp.a_km || [];
+        if (ep.length < 2) return '<span class="readout__chart-empty">No 90-day series.</span>';
+        const W = 268, H = 80, m = { l: 4, r: 4, t: 8, b: 18 };
+        const iw = W - m.l - m.r, ih = H - m.t - m.b;
+        const ts = ep.map((s) => new Date(s).getTime());
+        const tMin = ts[0], tMax = ts[ts.length - 1], tSp = Math.max(1, tMax - tMin);
+        const aMin = Math.min.apply(null, a), aMax = Math.max.apply(null, a);
+        const pad = Math.max(0.001, (aMax - aMin) * 0.18);
+        const yLo = aMin - pad, yHi = aMax + pad;
+        const X = (t) => m.l + ((t - tMin) / tSp) * iw;
+        const Y = (v) => m.t + ih - ((v - yLo) / (yHi - yLo)) * ih;
+        let d = "";
+        for (let i = 0; i < ts.length; i++) {
+          d += (i === 0 ? "M" : "L") + X(ts[i]).toFixed(1) + "," + Y(a[i]).toFixed(1);
+        }
+        const evMs = new Date(e.detected_epoch).getTime();
+        const evX = (evMs >= tMin && evMs <= tMax) ? X(evMs) : null;
+        const accent = COLOR[e.classification] || "#1B3A5C";
+        return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="readout__svg" role="img" aria-label="a(t) sparkline">
+          <line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="var(--color-rule)" stroke-width="0.6"/>
+          ${evX !== null ? `<line x1="${evX}" x2="${evX}" y1="${m.t}" y2="${m.t + ih}" stroke="${accent}" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.85"/>` : ""}
+          <path d="${d}" fill="none" stroke="var(--color-ink)" stroke-width="1.1"/>
+          <text x="${m.l}" y="${H - 4}" font-family="var(--font-sans)" font-size="8" fill="var(--color-ink-muted)" style="letter-spacing:0.06em;text-transform:uppercase">a(t) · 90d · kink = burn</text>
+        </svg>`;
       }
 
+      // ── Burn arrow + label ──────────────────────────────────
       function placeBurnArrow(e, sx, sy, theta) {
-        // Direction matches classification.
         if (e.kind === "in_plane" && e.delta_a_km != null) {
           const dir = e.delta_a_km >= 0 ? 1 : -1;
-          const len = 22 + Math.log10(Math.abs(e.delta_a_km) + 1) * 14;
-          const tx = sx + dir * len * Math.cos(theta);
-          const ty = sy + dir * len * Math.sin(theta);
+          const len = 20 + Math.log10(Math.abs(e.delta_a_km) + 1) * 14;
           burnLine.setAttribute("x1", sx); burnLine.setAttribute("y1", sy);
-          burnLine.setAttribute("x2", tx); burnLine.setAttribute("y2", ty);
+          burnLine.setAttribute("x2", sx + dir * len * Math.cos(theta));
+          burnLine.setAttribute("y2", sy + dir * len * Math.sin(theta));
           burnLine.setAttribute("stroke", COLOR[e.classification]);
-          burnLine.setAttribute("marker-end", ARROW_MARKER[e.classification]);
+          burnLine.setAttribute("marker-end", ARROW[e.classification]);
         } else if (e.kind === "out_of_plane" && e.delta_inc_deg != null) {
           const dir = e.delta_inc_deg >= 0 ? 1 : -1;
-          const len = 26 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 30;
-          const tx = sx - dir * len * Math.sin(theta);
-          const ty = sy + dir * len * Math.cos(theta);
+          const len = 22 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 28;
           burnLine.setAttribute("x1", sx); burnLine.setAttribute("y1", sy);
-          burnLine.setAttribute("x2", tx); burnLine.setAttribute("y2", ty);
+          burnLine.setAttribute("x2", sx - dir * len * Math.sin(theta));
+          burnLine.setAttribute("y2", sy + dir * len * Math.cos(theta));
           burnLine.setAttribute("stroke", COLOR[e.classification]);
-          burnLine.setAttribute("marker-end", ARROW_MARKER[e.classification]);
-        } else {
-          burnLine.setAttribute("x1", 0); burnLine.setAttribute("x2", 0);
-          burnLine.setAttribute("y1", 0); burnLine.setAttribute("y2", 0);
+          burnLine.setAttribute("marker-end", ARROW[e.classification]);
         }
       }
-
       function placeDeltaLabel(e, sx, sy, theta) {
         let txt = "";
         if (e.kind === "in_plane" && e.delta_a_km != null) {
@@ -439,15 +526,14 @@ const totalEvents = ordered.length;
           txt = (e.delta_inc_deg >= 0 ? "+" : "") + Math.abs(e.delta_inc_deg).toFixed(3) + "°";
         }
         deltaLabel.textContent = txt;
-        const lx = sx + 36 * Math.cos(theta);
-        const ly = sy + 36 * Math.sin(theta) + 5;
-        deltaLabel.setAttribute("x", lx.toFixed(1));
-        deltaLabel.setAttribute("y", ly.toFixed(1));
+        deltaLabel.setAttribute("x", (sx + 32 * Math.cos(theta)).toFixed(1));
+        deltaLabel.setAttribute("y", (sy + 32 * Math.sin(theta) + 5).toFixed(1));
         deltaLabel.setAttribute("fill", COLOR[e.classification] || "var(--color-ink)");
       }
 
-      function easeInOutCubic(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      // ── Main render + animate ──────────────────────────────
+      function setSatPos(x, y) {
+        satellite.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
       }
 
       function renderAndAnimate(idx) {
@@ -455,117 +541,138 @@ const totalEvents = ordered.length;
         currentIdx = idx;
         const e = events[idx];
         if (!e) return;
-        const baseR = baseRadiusFor(e.altitude_km);
+
+        const baseR = baseRadius(e.altitude_km);
         const isPlane = e.kind === "out_of_plane";
         const dir = (e.delta_a_km ?? 0) >= 0 ? 1 : -1;
         const gap = isPlane ? 0 : gapForDeltaA(e.delta_a_km);
         const tilt = isPlane ? tiltForDeltaInc(e.delta_inc_deg) : 0;
         const beforeR = isPlane ? baseR : baseR - dir * gap * 0.5;
         const afterR  = isPlane ? baseR : baseR + dir * gap * 0.5;
-
         const accent = COLOR[e.classification] || "#1B3A5C";
         const theta = angleFor(e.norad_id);
 
-        // Reset to BEFORE state instantly.
         orbitBefore.setAttribute("rx", beforeR);
         orbitBefore.setAttribute("ry", beforeR);
-        orbitBefore.setAttribute("stroke", "var(--color-ink-muted)");
+        orbitBefore.setAttribute("opacity", "0.6");
         orbitAfter.setAttribute("rx", beforeR);
         orbitAfter.setAttribute("ry", beforeR);
         orbitAfter.setAttribute("stroke", accent);
         orbitAfter.setAttribute("opacity", "0");
+        orbitAfter.removeAttribute("transform");
         burnMarker.setAttribute("opacity", "0");
         deltaLabel.textContent = "";
 
         const sx0 = CX + beforeR * Math.cos(theta);
         const sy0 = CY + beforeR * Math.sin(theta);
-        setSatellitePos(sx0, sy0);
+        setSatPos(sx0, sy0);
         satellite.querySelector("circle:nth-child(1)").setAttribute("fill", accent);
         satellite.querySelector("circle:nth-child(2)").setAttribute("stroke", accent);
 
-        // Update caption.
-        tag.textContent = PLAIN_TAG[e.classification] || e.classification;
-        tag.style.color = accent;
-        tag.style.borderColor = accent;
-        when.textContent = new Date(e.detected_epoch).toLocaleDateString(
-          "en-GB", { day: "numeric", month: "long" }
-        );
-        sentence.textContent = buildSentence(e);
-        subline.textContent = buildSubline(e);
-        counter.textContent = `${idx + 1} / ${events.length}`;
-        detailLink.href = `/sat/${e.norad_id}`;
+        // HUD readout (top-left of stage)
+        hudNorad.textContent = e.norad_id;
+        const incTxt = e.inc_deg_at_event != null
+          ? `${e.inc_deg_at_event.toFixed(2)}°`
+          : "—";
+        hudCoords.innerHTML = `ALT <tspan fill="var(--color-ink)">${Math.round(e.altitude_km).toLocaleString()} km</tspan>  ·  INC <tspan fill="var(--color-ink)">${incTxt}</tspan>`;
 
-        // Update strip selection.
-        stripDots.forEach((d, di) => {
-          d.classList.toggle("is-current", di === idx);
+        // Right-side readout
+        const d = new Date(e.detected_epoch);
+        const dateLong = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        const timeShort = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+        rTag.textContent = PLAIN_TAG[e.classification] || e.classification;
+        rTag.style.color = accent;
+        rTag.style.borderColor = accent;
+        rName.textContent = e.object_name || `NORAD ${e.norad_id}`;
+        rSentence.textContent = buildSentence(e);
+        rNorad.textContent = e.norad_id;
+        rWhen.textContent = `${dateLong} · ${timeShort} UTC`;
+        rWhere.textContent = plainAltitude(e.altitude_km);
+        if (e.kind === "in_plane" && e.delta_a_km != null) {
+          rChange.textContent = (e.delta_a_km >= 0 ? "+" : "") + e.delta_a_km.toFixed(2) + " km";
+        } else if (e.delta_inc_deg != null) {
+          rChange.textContent = (e.delta_inc_deg >= 0 ? "+" : "") + e.delta_inc_deg.toFixed(4) + "°";
+        } else {
+          rChange.textContent = "—";
+        }
+        rSize.textContent = plainSize(e.dv_mps);
+        rConf.textContent = e.confidence === "HIGH" ? "Double-confirmed" : "Single signal";
+        rConf.className = "mono " + (e.confidence === "HIGH" ? "is-high" : "is-low");
+        rDv.textContent = e.dv_mps.toFixed(2) + " m/s";
+        rOpen.href = `/sat/${e.norad_id}`;
+        const sameSat = events.filter((x) => x.norad_id === e.norad_id).length;
+        rRelated.textContent = sameSat > 1
+          ? `${sameSat}× this month`
+          : "Only event from this satellite";
+        rChartWrap.innerHTML = renderSparkline(e);
+
+        // Counters
+        detailCounter.textContent = `${idx + 1} / ${events.length}`;
+        logCounter.textContent = `${idx + 1} / ${events.length}`;
+
+        // Log selection
+        logRows.forEach((r, ri) => {
+          const selected = ri === idx;
+          r.classList.toggle("is-current", selected);
+          r.setAttribute("aria-selected", selected ? "true" : "false");
         });
-        const cur = stripDots[idx];
-        if (cur) cur.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+        const currentRow = logRows[idx];
+        if (currentRow) currentRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
 
-        // Schedule the animation: a brief delay, then morph BEFORE→AFTER.
-        const PRE_DELAY = 280;
-        const DURATION  = 1500;
+        // Animate BEFORE→AFTER
+        const PRE_DELAY = 220;
+        const DURATION = 1400;
         const BURN_FLASH = 220;
         const start = performance.now() + PRE_DELAY;
+        let armed = false;
 
         function tick(now) {
           const t = Math.max(0, Math.min(1, (now - start) / DURATION));
           const k = easeInOutCubic(t);
 
-          // BEFORE ring fades during transition.
           orbitBefore.setAttribute("opacity", String(0.6 - 0.45 * k));
-          // AFTER ring grows / tilts.
           if (isPlane) {
-            const ry = beforeR * (1 - tilt * k);
             orbitAfter.setAttribute("rx", beforeR);
-            orbitAfter.setAttribute("ry", ry);
-            orbitAfter.setAttribute("transform", `rotate(${k * (e.delta_inc_deg >= 0 ? 18 : -18)} ${CX} ${CY})`);
+            orbitAfter.setAttribute("ry", beforeR * (1 - tilt * k));
+            orbitAfter.setAttribute("transform", `rotate(${k * (e.delta_inc_deg >= 0 ? 16 : -16)} ${CX} ${CY})`);
           } else {
             const curR = beforeR + (afterR - beforeR) * k;
             orbitAfter.setAttribute("rx", curR);
             orbitAfter.setAttribute("ry", curR);
-            orbitAfter.removeAttribute("transform");
           }
           orbitAfter.setAttribute("opacity", String(Math.min(1, k * 1.6)));
 
-          // Satellite follows along the radial transition.
           if (isPlane) {
-            // For plane change, satellite shifts along the ring slightly.
-            const newTheta = theta + (e.delta_inc_deg >= 0 ? 1 : -1) * 0.05 * k;
+            const newTheta = theta + (e.delta_inc_deg >= 0 ? 1 : -1) * 0.06 * k;
             const sx = CX + beforeR * Math.cos(newTheta);
             const sy = CY + beforeR * (1 - tilt * k) * Math.sin(newTheta);
-            setSatellitePos(sx, sy);
-            if (k > 0.5 && burnMarker.getAttribute("opacity") === "0") {
-              placeBurnArrow(e, CX + beforeR * Math.cos(theta), CY + beforeR * Math.sin(theta), theta);
+            setSatPos(sx, sy);
+            if (k > 0.45 && !armed) {
+              const sxF = CX + beforeR * Math.cos(theta);
+              const syF = CY + beforeR * Math.sin(theta);
+              placeBurnArrow(e, sxF, syF, theta);
               burnMarker.setAttribute("opacity", "1");
-              setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH * 1.4);
+              setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH * 1.6);
               placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
+              armed = true;
             }
           } else {
             const curR = beforeR + (afterR - beforeR) * k;
             const sx = CX + curR * Math.cos(theta);
             const sy = CY + curR * Math.sin(theta);
-            setSatellitePos(sx, sy);
-            // Flash burn arrow around mid-transition.
-            if (k > 0.35 && k < 0.6 && burnMarker.getAttribute("opacity") === "0") {
+            setSatPos(sx, sy);
+            if (k > 0.35 && k < 0.65 && !armed) {
               placeBurnArrow(e, sx, sy, theta);
               burnMarker.setAttribute("opacity", "1");
               setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH);
-            }
-            if (k > 0.55 && !deltaLabel.textContent) {
               placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
+              armed = true;
             }
           }
 
-          if (t < 1) {
-            animationId = requestAnimationFrame(tick);
-          } else {
-            animationId = null;
-            // Final placement of label.
-            placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
-          }
+          if (t < 1) animationId = requestAnimationFrame(tick);
+          else animationId = null;
         }
-
         animationId = requestAnimationFrame(function pre(now) {
           if (now >= start) tick(now);
           else animationId = requestAnimationFrame(pre);
@@ -573,50 +680,83 @@ const totalEvents = ordered.length;
       }
 
       // ── Navigation ─────────────────────────────────────────
-      function next() { renderAndAnimate((currentIdx + 1) % events.length); }
-      function prev() { renderAndAnimate((currentIdx - 1 + events.length) % events.length); }
+      function next() {
+        let i = (currentIdx + 1) % events.length;
+        while (!eventPassesFilter(events[i]) && i !== currentIdx) {
+          i = (i + 1) % events.length;
+        }
+        renderAndAnimate(i);
+      }
+      function prev() {
+        let i = (currentIdx - 1 + events.length) % events.length;
+        while (!eventPassesFilter(events[i]) && i !== currentIdx) {
+          i = (i - 1 + events.length) % events.length;
+        }
+        renderAndAnimate(i);
+      }
       function replay() { renderAndAnimate(currentIdx); }
 
+      function eventPassesFilter(e) {
+        if (!activeClasses.has(e.classification)) return false;
+        if (highOnly && e.confidence !== "HIGH") return false;
+        return true;
+      }
+      function applyFilters() {
+        logRows.forEach((row, i) => {
+          row.hidden = !eventPassesFilter(events[i]);
+        });
+      }
+
+      // ── Wire events ────────────────────────────────────────
       prevBtn.addEventListener("click", () => { stopAuto(); prev(); });
       nextBtn.addEventListener("click", () => { stopAuto(); next(); });
       replayBtn.addEventListener("click", () => { stopAuto(); replay(); });
-
+      logRows.forEach((row) => {
+        row.addEventListener("click", () => { stopAuto(); renderAndAnimate(+row.dataset.idx); });
+      });
       document.addEventListener("keydown", (e) => {
         if (e.target instanceof HTMLInputElement) return;
-        if (e.key === "ArrowLeft")  { stopAuto(); prev(); }
-        if (e.key === "ArrowRight") { stopAuto(); next(); }
-        if (e.key === " ") { stopAuto(); replay(); e.preventDefault(); }
+        if (e.key === "ArrowLeft")  { stopAuto(); prev();  e.preventDefault(); }
+        if (e.key === "ArrowRight") { stopAuto(); next();  e.preventDefault(); }
+        if (e.key === " ")          { stopAuto(); replay(); e.preventDefault(); }
       });
 
-      stripDots.forEach((d) => {
-        d.addEventListener("click", () => {
-          stopAuto();
-          renderAndAnimate(+d.dataset.idx);
+      document.querySelectorAll("[data-fc]").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const k = chip.dataset.fc;
+          if (activeClasses.has(k)) { activeClasses.delete(k); chip.classList.remove("is-on"); }
+          else { activeClasses.add(k); chip.classList.add("is-on"); }
+          applyFilters();
         });
       });
+      const highChip = document.querySelector('[data-fc-conf="HIGH"]');
+      if (highChip) {
+        highChip.addEventListener("click", () => {
+          highOnly = !highOnly;
+          highChip.classList.toggle("is-on", highOnly);
+          highChip.setAttribute("aria-pressed", String(highOnly));
+          applyFilters();
+        });
+      }
 
       // ── Auto-play ──────────────────────────────────────────
       function startAuto() {
         playBtn.setAttribute("aria-pressed", "true");
-        playBtn.querySelector(".ctrl__lbl--play").hidden = true;
-        playBtn.querySelector(".ctrl__lbl--pause").hidden = false;
-        playBtn.querySelector(".ctrl__icon").textContent = "❚❚";
-        autoTimer = setInterval(next, 5000);
+        playIcon.textContent = "❚❚";
+        autoTimer = setInterval(next, 4500);
       }
       function stopAuto() {
         if (!autoTimer) return;
         clearInterval(autoTimer);
         autoTimer = null;
         playBtn.setAttribute("aria-pressed", "false");
-        playBtn.querySelector(".ctrl__lbl--play").hidden = false;
-        playBtn.querySelector(".ctrl__lbl--pause").hidden = true;
-        playBtn.querySelector(".ctrl__icon").textContent = "▶";
+        playIcon.textContent = "▶";
       }
       playBtn.addEventListener("click", () => {
         if (autoTimer) stopAuto(); else startAuto();
       });
 
-      // ── First render ───────────────────────────────────────
+      // First render
       renderAndAnimate(0);
     })();
   </script>
@@ -624,278 +764,471 @@ const totalEvents = ordered.length;
 
 <style>
   /* ─── page shell ─── */
-  .theatre-page { padding-top: var(--space-10); padding-bottom: var(--space-16); }
-  .theatre-page__inner {
+  .console-page {
+    padding-top: var(--space-5);
+    padding-bottom: var(--space-6);
+  }
+  .console-page__inner {
     padding-left: var(--space-page);
     padding-right: var(--space-page);
   }
 
-  /* ─── head ─── */
-  .theatre-head { margin-bottom: var(--space-7); max-width: 60rem; }
-  .theatre-head__kicker {
-    margin: 0 0 var(--space-2) 0;
+  /* ─── tracker bar ─── */
+  .trackbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-top: 1px solid var(--color-ink);
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: var(--space-4);
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-wide);
+    letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
-    font-weight: 700;
+    font-weight: 600;
+    font-feature-settings: var(--features-tabular);
+    flex-wrap: wrap;
   }
-  .theatre-head__title {
-    margin: 0 0 var(--space-4) 0;
+  .trackbar__left, .trackbar__right {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .trackbar__pulse {
+    display: inline-block;
+    width: 0.7em;
+    height: 0.7em;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 0 var(--color-accent);
+    animation: pulse 1.8s ease-in-out infinite;
+    transform: translateY(0.05em);
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 40%, transparent); }
+    50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  }
+  .trackbar__title {
+    margin-left: var(--space-2);
     font-family: var(--font-serif);
-    color: var(--color-ink);
+    font-style: italic;
+    font-weight: 600;
+    font-size: var(--type-h3);
+    text-transform: none;
+    letter-spacing: var(--tracking-tight);
     line-height: 1;
-    letter-spacing: var(--tracking-display);
-    font-feature-settings: var(--features-display);
   }
-  .theatre-head__title-pre {
-    display: inline;
-    font-style: italic;
-    font-weight: 400;
-    font-size: clamp(2rem, 5vw, 3.5rem);
+  .trackbar__title-pre {
     color: var(--color-ink-muted);
+    font-weight: 400;
+    font-size: 0.78em;
   }
-  .theatre-head__title-main {
-    display: inline;
-    font-style: italic;
-    font-weight: 700;
-    font-size: clamp(2.5rem, 7vw, 5rem);
+  .trackbar__title-main {
     color: var(--color-accent);
-    margin-left: 0.18em;
+    margin-left: 0.2em;
   }
-  .theatre-head__lede {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: clamp(1rem, 1.4vw, 1.2rem);
-    line-height: 1.5;
-    color: var(--color-ink-soft);
+  .trackbar__sep { color: var(--color-ink-faint); }
+  .trackbar__stat { display: inline-flex; align-items: baseline; gap: 0.4em; }
+  .trackbar__num {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-oldstyle);
+    font-size: 1.4em;
+    text-transform: none;
+    line-height: 1;
   }
-  .theatre-head__how {
+  .trackbar__when {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-tabular);
+    font-size: var(--type-small);
+  }
+  .trackbar__link {
     color: var(--color-accent);
     text-decoration: none;
-    font-weight: 600;
-    border-bottom: 1px solid currentColor;
+    font-weight: 700;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
   }
 
-  /* ─── stage ─── */
-  .theatre { margin-bottom: var(--space-12); }
-  .stage {
+  /* ─── console grid ─── */
+  .console {
     display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
+    grid-template-columns: 280px 1fr 300px;
     gap: var(--space-3);
+    height: calc(100vh - 220px);
+    min-height: 560px;
+    max-height: 760px;
   }
-  .stage__center {
+  .col {
     background: var(--color-paper);
     border: 1px solid var(--color-rule);
-    padding: var(--space-3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .col__head {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .col__title {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-weight: 800;
+  }
+  .col__foot {
+    padding: var(--space-2) var(--space-4);
+    border-top: 1px solid var(--color-rule);
+    display: flex;
+    justify-content: flex-end;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
+    font-weight: 600;
+    font-feature-settings: var(--features-tabular);
+  }
+  .col__counter {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+
+  /* ─── filter chips (compact) ─── */
+  .filter-chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+  }
+  .fchip {
+    appearance: none;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule-strong);
+    color: var(--color-ink-muted);
+    padding: 0.15em 0.45em;
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    transition: color 140ms, border-color 140ms, opacity 140ms;
+  }
+  .fchip__sw {
+    width: 0.6em; height: 0.6em; border-radius: 50%; display: inline-block;
+  }
+  .fchip:not(.is-on) {
+    opacity: 0.5;
+    border-style: dashed;
+  }
+  .fchip.is-on { color: var(--color-ink); border-color: var(--color-ink); }
+  .fchip--toggle.is-on {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-paper);
+  }
+
+  /* ─── event log ─── */
+  .log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .log__row {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--color-rule);
+    border-left: 3px solid transparent;
+    width: 100%;
+    padding: 0.55em 0.7em 0.55em 0.75em;
+    text-align: left;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: 0.35em 0.55em;
+    align-items: baseline;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    transition: background 120ms, border-color 120ms;
+  }
+  .log__row--raise        { border-left-color: #E07A30; }
+  .log__row--lower        { border-left-color: #2A5B9C; }
+  .log__row--plane_change { border-left-color: #36906A; }
+  .log__row--stationkeeping_ew,
+  .log__row--stationkeeping_ns { border-left-color: #B8B2A0; }
+  .log__row--deorbit      { border-left-color: #C73E2E; }
+  .log__row:hover { background: var(--color-paper-dim); }
+  .log__row.is-current {
+    background: var(--color-paper-margin);
+    border-left-width: 5px;
+  }
+  .log__date {
+    font-weight: 700;
+    color: var(--color-ink);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+  }
+  .log__time {
+    color: var(--color-ink-muted);
+    letter-spacing: 0.04em;
+    font-size: 0.7rem;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+  .log__tag {
+    grid-column: 1 / 3;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .log__name {
+    grid-column: 3 / 4;
+    grid-row: 1 / 3;
+    align-self: center;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-small);
+    color: var(--color-ink);
+    text-align: right;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .log__conf {
+    grid-column: 4 / 5;
+    grid-row: 1 / 3;
+    align-self: center;
+    font-weight: 800;
+    font-size: 0.9rem;
+  }
+  .log__conf--high { color: var(--color-accent); }
+  .log__conf--low  { color: var(--color-ink-faint); }
+
+  /* ─── stage ─── */
+  .col--stage {
+    background: var(--color-paper);
+    overflow: hidden;
+  }
+  .stage {
     position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
   .stage__svg {
     display: block;
     width: 100%;
-    height: auto;
-    max-width: 800px;
-    margin: 0 auto;
+    height: 100%;
+    flex: 1;
   }
-  .stage__nav {
-    appearance: none;
-    background: transparent;
-    border: 1px solid var(--color-rule-strong);
-    color: var(--color-ink-soft);
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 1.5rem;
-    width: 3rem; height: 3rem;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: color 140ms, border-color 140ms, transform 140ms;
-  }
-  .stage__nav:hover {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-    transform: scale(1.06);
-  }
-
-  .t-earth {
-    transform-origin: 400px 270px;
+  .stage__sweep {
+    transform-origin: 50% 50%;
     transform-box: view-box;
-    animation: t-earth-spin 80s linear infinite;
+    animation: sweep-spin 12s linear infinite;
   }
-  @keyframes t-earth-spin {
+  @keyframes sweep-spin {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .t-earth { animation: none; }
+  .t-earth {
+    transform-origin: 350px 240px;
+    transform-box: view-box;
+    animation: earth-spin 80s linear infinite;
+  }
+  @keyframes earth-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
   }
 
-  /* ─── caption ─── */
-  .caption {
-    margin-top: var(--space-5);
-    padding: var(--space-5) 0;
-    border-top: 1px solid var(--color-rule);
-    max-width: 56rem;
-  }
-  .caption__topline {
+  .stage__controls {
+    position: absolute;
+    bottom: var(--space-3);
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    align-items: baseline;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-    margin-bottom: var(--space-3);
-  }
-  .caption__tag {
-    padding: 0.2em 0.7em;
+    align-items: center;
+    gap: var(--space-2);
+    background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+    border: 1px solid var(--color-rule);
     border-radius: 999px;
-    border: 1px solid currentColor;
+    padding: 0.35em 0.45em;
+  }
+  .sctrl {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--color-ink-soft);
     font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
+    font-size: 1rem;
+    width: 2.2em; height: 2.2em;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color 140ms, background 140ms;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sctrl:hover { color: var(--color-accent); background: var(--color-paper-dim); }
+  .sctrl--play[aria-pressed="true"] {
+    color: var(--color-paper);
+    background: var(--color-accent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage__sweep, .t-earth, .trackbar__pulse { animation: none; }
+  }
+
+  /* ─── readout ─── */
+  .readout {
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    overflow-y: auto;
+    flex: 1;
+  }
+  .readout__tag {
+    display: inline-block;
+    padding: 0.15em 0.55em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     font-weight: 800;
     color: var(--color-accent);
+    margin-bottom: var(--space-2);
   }
-  .caption__when {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-weight: 600;
-  }
-  .caption__sentence {
+  .readout__name {
     margin: 0 0 var(--space-2) 0;
     font-family: var(--font-serif);
     font-style: italic;
     font-weight: 700;
-    font-size: clamp(1.5rem, 3.4vw, 2.6rem);
-    line-height: 1.18;
+    font-size: var(--type-h3);
+    line-height: 1.15;
     color: var(--color-ink);
     letter-spacing: var(--tracking-tight);
   }
-  .caption__sub {
-    margin: 0 0 var(--space-4) 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-body);
-    color: var(--color-ink-soft);
-    font-weight: 500;
-  }
-  .caption__controls {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-3) var(--space-5);
-  }
-  .ctrl {
-    appearance: none;
-    background: transparent;
-    border: 1px solid var(--color-rule-strong);
-    padding: 0.5em 1em;
-    border-radius: 999px;
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink);
-    font-weight: 700;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5em;
-    text-decoration: none;
-    transition: color 140ms, border-color 140ms, background 140ms;
-  }
-  .ctrl:hover { color: var(--color-accent); border-color: var(--color-accent); }
-  .ctrl__icon { font-size: 0.9em; line-height: 1; }
-  .ctrl__counter {
+  .readout__sentence {
+    margin: 0 0 var(--space-3) 0;
     font-family: var(--font-serif);
     font-style: italic;
-    font-feature-settings: var(--features-oldstyle);
-    color: var(--color-ink-muted);
-    margin-left: auto;
-    font-size: var(--type-body);
+    font-size: var(--type-small);
+    line-height: 1.5;
+    color: var(--color-ink-soft);
   }
-  .ctrl--play[aria-pressed="true"] {
-    color: var(--color-paper);
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-  .ctrl--detail { color: var(--color-accent); }
-
-  /* ─── strip ─── */
-  .strip-wrap {
-    margin-top: var(--space-7);
-    padding-top: var(--space-5);
-    border-top: 1px solid var(--color-rule);
-  }
-  .strip__label {
+  .readout__data {
     margin: 0 0 var(--space-3) 0;
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    row-gap: 0.18em;
+    column-gap: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+  }
+  .readout__data > div { display: contents; }
+  .readout__data dt {
+    color: var(--color-ink-muted);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    padding-top: 0.15em;
+  }
+  .readout__data dd {
+    margin: 0;
+    color: var(--color-ink);
+    font-weight: 500;
+  }
+  .readout__data .mono {
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    font-weight: 600;
+  }
+  .readout__data .is-high { color: var(--color-accent); }
+  .readout__data .is-low  { color: var(--color-ink-muted); }
+
+  .readout__chart {
+    margin: var(--space-3) 0;
+    padding: var(--space-2);
+    background: var(--color-paper-dim);
+    border: 1px solid var(--color-rule);
+  }
+  .readout__svg { display: block; width: 100%; }
+  .readout__chart-empty {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    font-size: var(--type-small);
+    text-align: center;
+    display: block;
+    padding: var(--space-3);
+  }
+  .readout__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--color-rule);
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
     color: var(--color-ink-muted);
     font-weight: 600;
   }
-  .strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    max-height: 7rem;
-    overflow-y: auto;
-    padding-bottom: 4px;
+  .readout__open {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-weight: 800;
+    border-bottom: 1px solid currentColor;
   }
-  .strip__dot {
-    appearance: none;
-    border: 0;
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    background: var(--color-ink-faint);
-    cursor: pointer;
-    padding: 0;
-    flex-shrink: 0;
-    transition: transform 120ms, opacity 120ms, outline 120ms;
-  }
-  .strip__dot--raise        { background: #E07A30; }
-  .strip__dot--lower        { background: #2A5B9C; }
-  .strip__dot--plane_change { background: #36906A; }
-  .strip__dot--stationkeeping_ew,
-  .strip__dot--stationkeeping_ns { background: #B8B2A0; opacity: 0.5; }
-  .strip__dot--deorbit      { background: #C73E2E; }
-  .strip__dot:hover { transform: scale(1.45); opacity: 1; }
-  .strip__dot.is-current {
-    transform: scale(1.7);
-    outline: 2px solid var(--color-ink);
-    outline-offset: 2px;
-    opacity: 1;
-  }
-
-  .legend {
-    list-style: none;
-    margin: var(--space-3) 0 0 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
+  .readout__related {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
     color: var(--color-ink-muted);
-    font-weight: 500;
-  }
-  .legend li {
-    display: inline-flex; align-items: center; gap: 0.4em;
-  }
-  .legend__sw {
-    width: 0.7em; height: 0.7em; border-radius: 50%; display: inline-block;
+    font-size: var(--type-small);
   }
 
-  /* ─── empty + foot ─── */
-  .theatre-page__empty {
-    margin: var(--space-12) 0;
+  /* ─── empty ─── */
+  .console-empty {
+    margin: var(--space-12);
     padding: var(--space-8);
     border: 1px dashed var(--color-rule);
     text-align: center;
@@ -903,26 +1236,24 @@ const totalEvents = ordered.length;
     font-style: italic;
     color: var(--color-ink-muted);
   }
-  .theatre-page__foot {
-    margin-top: var(--space-10);
-    padding-top: var(--space-5);
-    border-top: 1px solid var(--color-rule);
-  }
-  .theatre-page__nb {
-    margin: 0;
-    max-width: 60rem;
-    font-family: var(--font-sans);
-    font-size: var(--type-small);
-    color: var(--color-ink-muted);
-    line-height: 1.5;
-  }
 
   /* ─── responsive ─── */
-  @media (max-width: 760px) {
-    .stage { grid-template-columns: auto 1fr auto; gap: var(--space-2); }
-    .stage__nav { width: 2.4rem; height: 2.4rem; font-size: 1.2rem; }
-    .caption__controls { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-    .ctrl__counter { margin-left: 0; }
-    .strip__dot { width: 10px; height: 10px; }
+  @media (max-width: 1100px) {
+    .console {
+      grid-template-columns: 240px 1fr 280px;
+    }
+  }
+  @media (max-width: 900px) {
+    .console {
+      display: flex;
+      flex-direction: column;
+      height: auto;
+      max-height: none;
+      min-height: 0;
+    }
+    .col--events { order: 1; max-height: 30vh; flex: 0 0 auto; }
+    .col--stage  { order: 2; min-height: 50vh; }
+    .col--detail { order: 3; }
+    .stage__svg { height: 50vh; }
   }
 </style>
