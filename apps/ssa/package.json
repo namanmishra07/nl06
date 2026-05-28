@@ -15,9 +15,11 @@
     "@nl06/design-system": "workspace:*",
     "astro": "^5.1.5",
     "katex": "^0.16.11",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "three": "0.166.1"
   },
   "devDependencies": {
+    "@types/three": "0.166.0",
     "typescript": "^5.7.2"
   }
 }

@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
+import Stage3D    from "~/components/Stage3D.astro";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -108,30 +109,30 @@ const PLAIN_TAG: Record<string, string> = {
 
           <!-- ─── LEFT: events list ─── -->
           <aside class="col col--events" aria-label="Event log">
-            <header class="col__head">
-              <h2 class="col__title">Event log</h2>
+            <header class="col__head col__head--stacked">
+              <div class="col__head-row">
+                <h2 class="col__title">Event log</h2>
+                <span class="col__counter" id="log-counter">— / {totalEvents}</span>
+              </div>
               <div class="filter-chips" role="toolbar" aria-label="Filter by type">
                 <button class="fchip is-on" data-fc="raise"             type="button" title="Orbit raised">
-                  <span class="fchip__sw" style="background:#E07A30"></span>R
+                  <span class="fchip__sw" style="background:#E07A30"></span><span class="fchip__lbl">Raise</span>
                 </button>
                 <button class="fchip is-on" data-fc="lower"             type="button" title="Orbit lowered">
-                  <span class="fchip__sw" style="background:#2A5B9C"></span>L
+                  <span class="fchip__sw" style="background:#2A5B9C"></span><span class="fchip__lbl">Lower</span>
                 </button>
                 <button class="fchip is-on" data-fc="plane_change"      type="button" title="Plane shift">
-                  <span class="fchip__sw" style="background:#36906A"></span>P
+                  <span class="fchip__sw" style="background:#36906A"></span><span class="fchip__lbl">Plane</span>
                 </button>
-                <button class="fchip is-on" data-fc="stationkeeping_ew" type="button" title="SK east-west">
-                  <span class="fchip__sw" style="background:#B8B2A0"></span>SK
-                </button>
-                <button class="fchip is-on" data-fc="stationkeeping_ns" type="button" title="SK north-south">
-                  <span class="fchip__sw" style="background:#C9C1A9"></span>SK
+                <button class="fchip is-on" data-fc-group="sk"          type="button" title="Routine station-keeping">
+                  <span class="fchip__sw" style="background:#B8B2A0"></span><span class="fchip__lbl">SK</span>
                 </button>
                 <button class="fchip is-on" data-fc="deorbit"           type="button" title="Deorbit">
-                  <span class="fchip__sw" style="background:#C73E2E"></span>D
+                  <span class="fchip__sw" style="background:#C73E2E"></span><span class="fchip__lbl">Deorbit</span>
                 </button>
                 <button class="fchip fchip--toggle" data-fc-conf="HIGH" type="button"
                         title="Show double-confirmed only" aria-pressed="false">
-                  ✓
+                  ✓ Confirmed only
                 </button>
               </div>
             </header>
@@ -158,127 +159,12 @@ const PLAIN_TAG: Record<string, string> = {
                 );
               })}
             </ol>
-            <div class="col__foot">
-              <span class="col__counter" id="log-counter">— / {totalEvents}</span>
-            </div>
           </aside>
 
-          <!-- ─── CENTER: the stage ─── -->
+          <!-- ─── CENTER: the 3D stage ─── -->
           <div class="col col--stage">
             <div class="stage">
-              <svg
-                class="stage__svg"
-                viewBox="0 0 700 480"
-                role="img"
-                aria-label="Animated diagram of one satellite maneuver"
-              >
-                <defs>
-                  <radialGradient id="t-earth" cx="38%" cy="38%" r="65%">
-                    <stop offset="0%"  stop-color="#6f93b9" />
-                    <stop offset="58%" stop-color="#3a5a7e" />
-                    <stop offset="100%" stop-color="#1f3349" />
-                  </radialGradient>
-                  <clipPath id="t-earth-clip">
-                    <circle cx="350" cy="240" r="26" />
-                  </clipPath>
-                  <linearGradient id="sweep-grad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%"   stop-color="#1B3A5C" stop-opacity="0" />
-                    <stop offset="60%"  stop-color="#1B3A5C" stop-opacity="0" />
-                    <stop offset="100%" stop-color="#1B3A5C" stop-opacity="0.14" />
-                  </linearGradient>
-                  <marker id="t-arrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
-                    <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#E07A30" />
-                  </marker>
-                  <marker id="t-arrow-blue" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
-                    <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#2A5B9C" />
-                  </marker>
-                  <marker id="t-arrow-green" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
-                    <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#36906A" />
-                  </marker>
-                </defs>
-
-                <!-- Scanner sweep -->
-                <g class="stage__sweep">
-                  <path d="M 350,240 L 690,240 A 340 340 0 0 1 657,323 Z" fill="url(#sweep-grad)" />
-                </g>
-
-                <!-- Background regime rings -->
-                {[100, 150, 200, 250].map((r) => (
-                  <circle cx="350" cy="240" r={r}
-                          fill="none" stroke="var(--color-rule)"
-                          stroke-width="0.5"
-                          stroke-dasharray="1 8" />
-                ))}
-
-                <!-- Coordinate cross-hairs (faint) -->
-                <line x1="60" y1="240" x2="640" y2="240"
-                      stroke="var(--color-rule)" stroke-width="0.4"
-                      stroke-dasharray="2 6" opacity="0.6" />
-                <line x1="350" y1="40" x2="350" y2="440"
-                      stroke="var(--color-rule)" stroke-width="0.4"
-                      stroke-dasharray="2 6" opacity="0.6" />
-
-                <!-- Old + new orbit rings -->
-                <ellipse id="orbit-before" cx="350" cy="240" rx="160" ry="160"
-                         fill="none" stroke="var(--color-ink-muted)"
-                         stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
-                <ellipse id="orbit-after"  cx="350" cy="240" rx="170" ry="170"
-                         fill="none" stroke="#E07A30" stroke-width="2.5" />
-
-                <!-- Earth -->
-                <g class="t-earth">
-                  <circle cx="350" cy="240" r="26" fill="url(#t-earth)" />
-                  <g clip-path="url(#t-earth-clip)" fill="#1f3349" fill-opacity="0.55">
-                    <path d="M 351,233 C 358,233 360,238 358,243 C 356,247 352,249 350,248 C 348,247 348,243 349,239 C 350,236 351,233 351,233 Z" />
-                    <path d="M 344,231 C 348,228 354,228 359,231 C 356,233 351,234 347,234 C 345,234 343,233 344,231 Z" />
-                    <ellipse cx="358" cy="248" rx="3" ry="1.5" />
-                  </g>
-                  <circle cx="364" cy="240" r="26" fill="#000" fill-opacity="0.16"
-                          clip-path="url(#t-earth-clip)" />
-                </g>
-
-                <!-- Burn marker + satellite -->
-                <g id="burn-marker" opacity="0">
-                  <line id="burn-line" x1="0" y1="0" x2="0" y2="0"
-                        stroke="#E07A30" stroke-width="2.5"
-                        marker-end="url(#t-arrow)" />
-                </g>
-                <g id="satellite">
-                  <circle cx="0" cy="0" r="4.5" fill="var(--color-ink)" />
-                  <circle cx="0" cy="0" r="9" fill="none"
-                          stroke="var(--color-ink)" stroke-width="0.8"
-                          stroke-dasharray="2 3" opacity="0.5" />
-                </g>
-
-                <!-- Δ label -->
-                <text id="stage-delta-label" x="0" y="0"
-                      font-family="var(--font-sans)" font-size="13" font-weight="800"
-                      fill="var(--color-ink)" text-anchor="middle"
-                      style="letter-spacing: 0.02em;">
-                </text>
-
-                <!-- Coordinate readout overlay (top-left corner) -->
-                <g class="stage__hud">
-                  <rect x="14" y="14" width="170" height="40" fill="var(--color-paper)" stroke="var(--color-rule)" stroke-width="0.6" rx="2" />
-                  <text x="22" y="29" font-family="var(--font-sans)" font-size="9" font-weight="700"
-                        fill="var(--color-ink-muted)" style="letter-spacing: 0.1em; text-transform: uppercase;">
-                    NORAD <tspan id="hud-norad" fill="var(--color-ink)">—</tspan>
-                  </text>
-                  <text x="22" y="44" font-family="var(--font-sans)" font-size="9" font-weight="600"
-                        fill="var(--color-ink-soft)" style="letter-spacing: 0.06em;">
-                    <tspan id="hud-coords">ALT — · INC —</tspan>
-                  </text>
-                </g>
-
-                <!-- Stage label (bottom-right corner) -->
-                <text x="686" y="468" text-anchor="end"
-                      font-family="var(--font-sans)" font-size="9"
-                      fill="var(--color-ink-faint)"
-                      style="letter-spacing: 0.08em; text-transform: uppercase;">
-                  diagram · not to scale
-                </text>
-              </svg>
-
+              <Stage3D />
               <!-- Stage controls (overlay) -->
               <div class="stage__controls">
                 <button class="sctrl" id="prev-btn" type="button" aria-label="Previous (←)" title="Previous">←</button>
@@ -288,6 +174,7 @@ const PLAIN_TAG: Record<string, string> = {
                 <button class="sctrl" id="replay-btn" type="button" title="Replay">↻</button>
                 <button class="sctrl" id="next-btn" type="button" aria-label="Next (→)" title="Next">→</button>
               </div>
+              <p class="stage__hint">Drag to rotate the view.</p>
             </div>
           </div>
 
@@ -341,15 +228,6 @@ const PLAIN_TAG: Record<string, string> = {
       const playBtn = document.getElementById("play-btn");
       const playIcon = document.getElementById("play-icon");
 
-      const orbitBefore = document.getElementById("orbit-before");
-      const orbitAfter  = document.getElementById("orbit-after");
-      const satellite   = document.getElementById("satellite");
-      const burnMarker  = document.getElementById("burn-marker");
-      const burnLine    = document.getElementById("burn-line");
-      const deltaLabel  = document.getElementById("stage-delta-label");
-      const hudNorad    = document.getElementById("hud-norad");
-      const hudCoords   = document.getElementById("hud-coords");
-
       // Readout panel
       const rTag = document.getElementById("r-tag");
       const rName = document.getElementById("r-name");
@@ -370,7 +248,6 @@ const PLAIN_TAG: Record<string, string> = {
       const logRows = Array.from(document.querySelectorAll(".log__row"));
 
       // ── Constants ───────────────────────────────────────────
-      const CX = 350, CY = 240;
       const COLOR = {
         raise: "#E07A30", lower: "#2A5B9C", plane_change: "#36906A",
         stationkeeping_ew: "#B8B2A0", stationkeeping_ns: "#C9C1A9",
@@ -437,33 +314,8 @@ const PLAIN_TAG: Record<string, string> = {
         return `${name} ${verb} in ${alt}.`;
       }
 
-      // ── Geometry ────────────────────────────────────────────
-      function baseRadius(altKm) {
-        if (altKm < 2000)  return 105;
-        if (altKm < 7000)  return 145;
-        if (altKm < 25000) return 190;
-        return 230;
-      }
-      function gapForDeltaA(deltaKm) {
-        const abs = Math.abs(deltaKm || 0);
-        return Math.max(10, Math.min(54, 8 + Math.log10(abs + 1) * 24));
-      }
-      function tiltForDeltaInc(deltaDeg) {
-        const abs = Math.abs(deltaDeg || 0);
-        return Math.max(0.05, Math.min(0.32, abs * 5));
-      }
-      function angleFor(noradId) {
-        let x = noradId | 0;
-        x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
-        return (((x >>> 0) % 100000) / 100000) * Math.PI * 2;
-      }
-      function easeInOutCubic(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      }
-
       // ── State ───────────────────────────────────────────────
       let currentIdx = 0;
-      let animationId = null;
       let autoTimer = null;
       const activeClasses = new Set(["raise", "lower", "plane_change", "stationkeeping_ew", "stationkeeping_ns", "deorbit"]);
       let highOnly = false;
@@ -498,85 +350,22 @@ const PLAIN_TAG: Record<string, string> = {
         </svg>`;
       }
 
-      // ── Burn arrow + label ──────────────────────────────────
-      function placeBurnArrow(e, sx, sy, theta) {
-        if (e.kind === "in_plane" && e.delta_a_km != null) {
-          const dir = e.delta_a_km >= 0 ? 1 : -1;
-          const len = 20 + Math.log10(Math.abs(e.delta_a_km) + 1) * 14;
-          burnLine.setAttribute("x1", sx); burnLine.setAttribute("y1", sy);
-          burnLine.setAttribute("x2", sx + dir * len * Math.cos(theta));
-          burnLine.setAttribute("y2", sy + dir * len * Math.sin(theta));
-          burnLine.setAttribute("stroke", COLOR[e.classification]);
-          burnLine.setAttribute("marker-end", ARROW[e.classification]);
-        } else if (e.kind === "out_of_plane" && e.delta_inc_deg != null) {
-          const dir = e.delta_inc_deg >= 0 ? 1 : -1;
-          const len = 22 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 28;
-          burnLine.setAttribute("x1", sx); burnLine.setAttribute("y1", sy);
-          burnLine.setAttribute("x2", sx - dir * len * Math.sin(theta));
-          burnLine.setAttribute("y2", sy + dir * len * Math.cos(theta));
-          burnLine.setAttribute("stroke", COLOR[e.classification]);
-          burnLine.setAttribute("marker-end", ARROW[e.classification]);
-        }
-      }
-      function placeDeltaLabel(e, sx, sy, theta) {
-        let txt = "";
-        if (e.kind === "in_plane" && e.delta_a_km != null) {
-          txt = (e.delta_a_km >= 0 ? "+" : "") + e.delta_a_km.toFixed(2) + " km";
-        } else if (e.delta_inc_deg != null) {
-          txt = (e.delta_inc_deg >= 0 ? "+" : "") + Math.abs(e.delta_inc_deg).toFixed(3) + "°";
-        }
-        deltaLabel.textContent = txt;
-        deltaLabel.setAttribute("x", (sx + 32 * Math.cos(theta)).toFixed(1));
-        deltaLabel.setAttribute("y", (sy + 32 * Math.sin(theta) + 5).toFixed(1));
-        deltaLabel.setAttribute("fill", COLOR[e.classification] || "var(--color-ink)");
-      }
-
-      // ── Main render + animate ──────────────────────────────
-      function setSatPos(x, y) {
-        satellite.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
-      }
-
+      // ── Render: hand the event to the 3D stage, fill DOM panels ───
       function renderAndAnimate(idx) {
-        if (animationId) cancelAnimationFrame(animationId);
         currentIdx = idx;
         const e = events[idx];
         if (!e) return;
 
-        const baseR = baseRadius(e.altitude_km);
-        const isPlane = e.kind === "out_of_plane";
-        const dir = (e.delta_a_km ?? 0) >= 0 ? 1 : -1;
-        const gap = isPlane ? 0 : gapForDeltaA(e.delta_a_km);
-        const tilt = isPlane ? tiltForDeltaInc(e.delta_inc_deg) : 0;
-        const beforeR = isPlane ? baseR : baseR - dir * gap * 0.5;
-        const afterR  = isPlane ? baseR : baseR + dir * gap * 0.5;
         const accent = COLOR[e.classification] || "#1B3A5C";
-        const theta = angleFor(e.norad_id);
 
-        orbitBefore.setAttribute("rx", beforeR);
-        orbitBefore.setAttribute("ry", beforeR);
-        orbitBefore.setAttribute("opacity", "0.6");
-        orbitAfter.setAttribute("rx", beforeR);
-        orbitAfter.setAttribute("ry", beforeR);
-        orbitAfter.setAttribute("stroke", accent);
-        orbitAfter.setAttribute("opacity", "0");
-        orbitAfter.removeAttribute("transform");
-        burnMarker.setAttribute("opacity", "0");
-        deltaLabel.textContent = "";
+        // Drive the 3D stage. If it hasn't booted yet, stash for it.
+        if (window.__ssaStage && typeof window.__ssaStage.setEvent === "function") {
+          window.__ssaStage.setEvent(e);
+        } else {
+          window.__ssaStagePending = e;
+        }
 
-        const sx0 = CX + beforeR * Math.cos(theta);
-        const sy0 = CY + beforeR * Math.sin(theta);
-        setSatPos(sx0, sy0);
-        satellite.querySelector("circle:nth-child(1)").setAttribute("fill", accent);
-        satellite.querySelector("circle:nth-child(2)").setAttribute("stroke", accent);
-
-        // HUD readout (top-left of stage)
-        hudNorad.textContent = e.norad_id;
-        const incTxt = e.inc_deg_at_event != null
-          ? `${e.inc_deg_at_event.toFixed(2)}°`
-          : "—";
-        hudCoords.innerHTML = `ALT <tspan fill="var(--color-ink)">${Math.round(e.altitude_km).toLocaleString()} km</tspan>  ·  INC <tspan fill="var(--color-ink)">${incTxt}</tspan>`;
-
-        // Right-side readout
+        // Right-side readout panel.
         const d = new Date(e.detected_epoch);
         const dateLong = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
         const timeShort = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
@@ -618,65 +407,12 @@ const PLAIN_TAG: Record<string, string> = {
         });
         const currentRow = logRows[idx];
         if (currentRow) currentRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
 
-        // Animate BEFORE→AFTER
-        const PRE_DELAY = 220;
-        const DURATION = 1400;
-        const BURN_FLASH = 220;
-        const start = performance.now() + PRE_DELAY;
-        let armed = false;
-
-        function tick(now) {
-          const t = Math.max(0, Math.min(1, (now - start) / DURATION));
-          const k = easeInOutCubic(t);
-
-          orbitBefore.setAttribute("opacity", String(0.6 - 0.45 * k));
-          if (isPlane) {
-            orbitAfter.setAttribute("rx", beforeR);
-            orbitAfter.setAttribute("ry", beforeR * (1 - tilt * k));
-            orbitAfter.setAttribute("transform", `rotate(${k * (e.delta_inc_deg >= 0 ? 16 : -16)} ${CX} ${CY})`);
-          } else {
-            const curR = beforeR + (afterR - beforeR) * k;
-            orbitAfter.setAttribute("rx", curR);
-            orbitAfter.setAttribute("ry", curR);
-          }
-          orbitAfter.setAttribute("opacity", String(Math.min(1, k * 1.6)));
-
-          if (isPlane) {
-            const newTheta = theta + (e.delta_inc_deg >= 0 ? 1 : -1) * 0.06 * k;
-            const sx = CX + beforeR * Math.cos(newTheta);
-            const sy = CY + beforeR * (1 - tilt * k) * Math.sin(newTheta);
-            setSatPos(sx, sy);
-            if (k > 0.45 && !armed) {
-              const sxF = CX + beforeR * Math.cos(theta);
-              const syF = CY + beforeR * Math.sin(theta);
-              placeBurnArrow(e, sxF, syF, theta);
-              burnMarker.setAttribute("opacity", "1");
-              setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH * 1.6);
-              placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
-              armed = true;
-            }
-          } else {
-            const curR = beforeR + (afterR - beforeR) * k;
-            const sx = CX + curR * Math.cos(theta);
-            const sy = CY + curR * Math.sin(theta);
-            setSatPos(sx, sy);
-            if (k > 0.35 && k < 0.65 && !armed) {
-              placeBurnArrow(e, sx, sy, theta);
-              burnMarker.setAttribute("opacity", "1");
-              setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH);
-              placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
-              armed = true;
-            }
-          }
-
-          if (t < 1) animationId = requestAnimationFrame(tick);
-          else animationId = null;
+      function triggerReplay() {
+        if (window.__ssaStage && typeof window.__ssaStage.replay === "function") {
+          window.__ssaStage.replay();
         }
-        animationId = requestAnimationFrame(function pre(now) {
-          if (now >= start) tick(now);
-          else animationId = requestAnimationFrame(pre);
-        });
       }
 
       // ── Navigation ─────────────────────────────────────────
@@ -694,7 +430,7 @@ const PLAIN_TAG: Record<string, string> = {
         }
         renderAndAnimate(i);
       }
-      function replay() { renderAndAnimate(currentIdx); }
+      function replay() { triggerReplay(); }
 
       function eventPassesFilter(e) {
         if (!activeClasses.has(e.classification)) return false;
@@ -726,6 +462,22 @@ const PLAIN_TAG: Record<string, string> = {
           const k = chip.dataset.fc;
           if (activeClasses.has(k)) { activeClasses.delete(k); chip.classList.remove("is-on"); }
           else { activeClasses.add(k); chip.classList.add("is-on"); }
+          applyFilters();
+        });
+      });
+      // Group chip for SK (controls both stationkeeping_ew + stationkeeping_ns).
+      document.querySelectorAll("[data-fc-group='sk']").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const on = chip.classList.contains("is-on");
+          if (on) {
+            activeClasses.delete("stationkeeping_ew");
+            activeClasses.delete("stationkeeping_ns");
+            chip.classList.remove("is-on");
+          } else {
+            activeClasses.add("stationkeeping_ew");
+            activeClasses.add("stationkeeping_ns");
+            chip.classList.add("is-on");
+          }
           applyFilters();
         });
       });
@@ -883,6 +635,18 @@ const PLAIN_TAG: Record<string, string> = {
     gap: var(--space-2);
     flex-wrap: wrap;
   }
+  /* Stacked variant: title row on top, chips row below. */
+  .col__head--stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+  .col__head-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
   .col__title {
     margin: 0;
     font-family: var(--font-sans);
@@ -913,18 +677,19 @@ const PLAIN_TAG: Record<string, string> = {
     font-weight: 600;
   }
 
-  /* ─── filter chips (compact) ─── */
+  /* ─── filter chips: one wrapping row beneath the title ─── */
   .filter-chips {
-    display: inline-flex;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.25em;
+    gap: 0.32em;
   }
   .fchip {
     appearance: none;
     background: var(--color-paper);
     border: 1px solid var(--color-rule-strong);
     color: var(--color-ink-muted);
-    padding: 0.15em 0.45em;
+    padding: 0.22em 0.55em;
     border-radius: 999px;
     font-family: var(--font-sans);
     font-size: 0.65rem;
@@ -934,17 +699,25 @@ const PLAIN_TAG: Record<string, string> = {
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 0.25em;
-    transition: color 140ms, border-color 140ms, opacity 140ms;
+    gap: 0.35em;
+    line-height: 1;
+    transition: color 140ms, border-color 140ms, opacity 140ms, background 140ms;
+    white-space: nowrap;
   }
   .fchip__sw {
     width: 0.6em; height: 0.6em; border-radius: 50%; display: inline-block;
+    flex-shrink: 0;
   }
+  .fchip__lbl { letter-spacing: 0.06em; }
   .fchip:not(.is-on) {
-    opacity: 0.5;
+    opacity: 0.55;
     border-style: dashed;
   }
+  .fchip:hover { color: var(--color-ink); border-color: var(--color-ink); }
   .fchip.is-on { color: var(--color-ink); border-color: var(--color-ink); }
+  .fchip--toggle {
+    margin-left: auto;
+  }
   .fchip--toggle.is-on {
     background: var(--color-accent);
     border-color: var(--color-accent);
@@ -1049,31 +822,6 @@ const PLAIN_TAG: Record<string, string> = {
     flex-direction: column;
     overflow: hidden;
   }
-  .stage__svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-    flex: 1;
-  }
-  .stage__sweep {
-    transform-origin: 50% 50%;
-    transform-box: view-box;
-    animation: sweep-spin 12s linear infinite;
-  }
-  @keyframes sweep-spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-  }
-  .t-earth {
-    transform-origin: 350px 240px;
-    transform-box: view-box;
-    animation: earth-spin 80s linear infinite;
-  }
-  @keyframes earth-spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-  }
-
   .stage__controls {
     position: absolute;
     bottom: var(--space-3);
@@ -1108,8 +856,21 @@ const PLAIN_TAG: Record<string, string> = {
     background: var(--color-accent);
   }
 
+  .stage__hint {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .stage__sweep, .t-earth, .trackbar__pulse { animation: none; }
+    .trackbar__pulse { animation: none; }
   }
 
   /* ─── readout ─── */

@@ -1,0 +1,597 @@
+---
+/**
+ * Stage3D.astro — three.js canvas that renders the maneuver stage.
+ * The host page (index.astro) calls `window.__ssaStage.setEvent(idx)` and
+ * `__ssaStage.replay()`. We keep the global namespace lean: one object.
+ *
+ * Earth is a sphere with a CanvasTexture drawn at runtime (rough continent
+ * silhouettes on a blue-green disc; no external image asset).
+ *
+ * Orbits are TorusGeometry tubes tilted by each event's inclination.
+ * The satellite is a small sphere that rides the morphing orbit during
+ * the BEFORE→AFTER animation. The burn arrow is an ArrowHelper that
+ * stays visible after the animation finishes (per the brief).
+ *
+ * Editorial palette: cream paper-cream background, ink-blue accents,
+ * no dark starfield.
+ */
+---
+
+<div class="stage3d">
+  <canvas id="stage-canvas"></canvas>
+
+  <!-- HUD overlay -->
+  <div class="hud">
+    <div class="hud__line">
+      <span class="hud__label">NORAD</span>
+      <span class="hud__value" id="hud-norad">—</span>
+    </div>
+    <div class="hud__line">
+      <span class="hud__label">ALT</span>
+      <span class="hud__value" id="hud-alt">—</span>
+      <span class="hud__sep" aria-hidden="true">·</span>
+      <span class="hud__label">INC</span>
+      <span class="hud__value" id="hud-inc">—</span>
+    </div>
+  </div>
+
+  <p class="stage3d__note">3D diagram · not to scale</p>
+</div>
+
+<script>
+  import * as THREE from "three";
+
+  type ManeuverEvent = {
+    norad_id: number;
+    detected_epoch: string;
+    classification: string;
+    kind: "in_plane" | "out_of_plane";
+    delta_a_km: number | null;
+    delta_inc_deg: number | null;
+    dv_mps: number;
+    altitude_km: number;
+    inc_deg_at_event: number | null;
+    confidence: "HIGH" | "LOW";
+    object_name?: string;
+  };
+
+  const COLOR: Record<string, number> = {
+    raise:             0xE07A30,
+    lower:             0x2A5B9C,
+    plane_change:      0x36906A,
+    stationkeeping_ew: 0xB8B2A0,
+    stationkeeping_ns: 0xC9C1A9,
+    deorbit:           0xC73E2E,
+  };
+
+  const canvas = document.getElementById("stage-canvas") as HTMLCanvasElement | null;
+  if (!canvas) throw new Error("Stage canvas missing");
+
+  // ── Scene ─────────────────────────────────────────────────
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xFAF8F3);
+
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 4000);
+  camera.position.set(0, 280, 600);
+  camera.lookAt(0, 0, 0);
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // ── Lighting ──────────────────────────────────────────────
+  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(180, 120, 220);
+  const fill = new THREE.DirectionalLight(0x7faecf, 0.25);
+  fill.position.set(-200, 100, -200);
+  scene.add(ambient, sun, fill);
+
+  // ── Earth (procedural CanvasTexture) ──────────────────────
+  function makeEarthTexture(): THREE.CanvasTexture {
+    const SIZE = 1024;
+    const c = document.createElement("canvas");
+    c.width = SIZE;
+    c.height = SIZE / 2;
+    const ctx = c.getContext("2d")!;
+
+    // Ocean
+    const g = ctx.createLinearGradient(0, 0, 0, c.height);
+    g.addColorStop(0, "#3e6492");
+    g.addColorStop(0.5, "#2f5077");
+    g.addColorStop(1, "#3e6492");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, c.width, c.height);
+
+    // Continents — rough stylised blobs in equirectangular space.
+    // Each blob: cx (0-1024 = -180°→180°), cy (0-512 = 90°→-90°).
+    ctx.fillStyle = "#3a5a3e";
+    function blob(cx: number, cy: number, rx: number, ry: number, rot = 0) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Africa
+    blob(560, 290, 60, 110, 0);
+    blob(540, 220, 55, 40, 0.2);
+    // Eurasia
+    blob(640, 200, 180, 70, -0.05);
+    blob(720, 240, 80, 45, 0.1);
+    blob(820, 240, 50, 40, 0.05);
+    // North America
+    blob(220, 200, 110, 80, -0.2);
+    blob(160, 180, 60, 40, 0);
+    // South America
+    blob(310, 320, 50, 100, 0.18);
+    // Australia
+    blob(820, 360, 65, 35, 0);
+    // Antarctica strip
+    ctx.fillStyle = "#cfd6da";
+    ctx.fillRect(0, c.height - 22, c.width, 22);
+    // Greenland-ish
+    ctx.fillStyle = "#cfd6da";
+    blob(420, 90, 40, 35, 0);
+    // Soft cloud wisps
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    for (let i = 0; i < 14; i++) {
+      const x = (i * 91 + 50) % c.width;
+      const y = 60 + ((i * 47) % (c.height - 120));
+      blob(x, y, 80 + (i * 11) % 60, 12 + (i * 5) % 8, (i * 0.3) % Math.PI);
+    }
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  const earthRadius = 50;
+  const earthTexture = makeEarthTexture();
+  const earthMat = new THREE.MeshPhongMaterial({
+    map: earthTexture,
+    shininess: 6,
+    specular: 0x1a2233,
+  });
+  const earthGeo = new THREE.SphereGeometry(earthRadius, 64, 64);
+  const earth = new THREE.Mesh(earthGeo, earthMat);
+  earth.rotation.z = THREE.MathUtils.degToRad(23.5); // axial tilt for character
+  scene.add(earth);
+
+  // Atmosphere halo (faint outer sphere)
+  const atmoGeo = new THREE.SphereGeometry(earthRadius * 1.04, 64, 64);
+  const atmoMat = new THREE.MeshBasicMaterial({
+    color: 0x7eaad9, transparent: true, opacity: 0.12, side: THREE.BackSide,
+  });
+  scene.add(new THREE.Mesh(atmoGeo, atmoMat));
+
+  // ── Faint regime guide rings (LEO/MEO-low/MEO/GEO) ────────
+  function guideRing(r: number) {
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 256; i++) {
+      const t = (i / 256) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(t) * r, 0, Math.sin(t) * r));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xC9C1A9, transparent: true, opacity: 0.18,
+    });
+    return new THREE.Line(geo, mat);
+  }
+  [120, 175, 230, 290].forEach((r) => scene.add(guideRing(r)));
+
+  // ── Group that holds the current event's orbits + satellite ─
+  const eventGroup = new THREE.Group();
+  scene.add(eventGroup);
+
+  // ── Mouse-drag camera rotation ─────────────────────────────
+  let camAzimuth = 0;
+  let camPolar = 1.05;
+  const camRadius = 660;
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  function applyCamera() {
+    const r = camRadius;
+    camera.position.set(
+      r * Math.sin(camPolar) * Math.sin(camAzimuth),
+      r * Math.cos(camPolar),
+      r * Math.sin(camPolar) * Math.cos(camAzimuth),
+    );
+    camera.lookAt(0, 0, 0);
+  }
+  applyCamera();
+
+  canvas.addEventListener("pointerdown", (e) => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    camAzimuth -= dx * 0.005;
+    camPolar = Math.max(0.25, Math.min(Math.PI - 0.25, camPolar - dy * 0.005));
+    applyCamera();
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    dragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
+  });
+  canvas.addEventListener("pointerleave", () => { dragging = false; });
+
+  // ── Resize ────────────────────────────────────────────────
+  function resize() {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  const ro = new ResizeObserver(resize);
+  ro.observe(canvas);
+  resize();
+
+  // ── Helpers ───────────────────────────────────────────────
+  function baseRadius(altKm: number) {
+    if (altKm < 2000)  return 110;
+    if (altKm < 7000)  return 150;
+    if (altKm < 25000) return 200;
+    return 260;
+  }
+  function gapForDeltaA(deltaKm: number | null) {
+    const abs = Math.abs(deltaKm || 0);
+    return Math.max(10, Math.min(56, 8 + Math.log10(abs + 1) * 26));
+  }
+  function angleFor(noradId: number) {
+    let x = noradId | 0;
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    return (((x >>> 0) % 100000) / 100000) * Math.PI * 2;
+  }
+  function nodeAngleFor(noradId: number) {
+    // distinct salt so longitude of ascending node ≠ true anomaly
+    let x = (noradId * 17 + 3) | 0;
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    return (((x >>> 0) % 100000) / 100000) * Math.PI * 2;
+  }
+  function easeInOutCubic(t: number) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  // Build an orbit Line (thin tube would need extra geometry — Line is
+  // cheap and reads fine on cream paper).
+  function makeOrbitLine(r: number, color: number, opacity: number, width = 2): THREE.Line {
+    const pts: THREE.Vector3[] = [];
+    const N = 256;
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(t) * r, 0, Math.sin(t) * r));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({
+      color, transparent: true, opacity, linewidth: width,
+    });
+    return new THREE.Line(geo, mat);
+  }
+
+  function setOrbitRadius(line: THREE.Line, r: number) {
+    const N = 256;
+    const positions = (line.geometry as THREE.BufferGeometry).attributes.position
+      .array as Float32Array;
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      positions[i * 3]     = Math.cos(t) * r;
+      positions[i * 3 + 1] = 0;
+      positions[i * 3 + 2] = Math.sin(t) * r;
+    }
+    (line.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true;
+  }
+
+  // ── Per-event state ───────────────────────────────────────
+  type EventVisual = {
+    event: ManeuverEvent;
+    beforeOrbit: THREE.Line;
+    afterOrbit: THREE.Line;
+    satellite: THREE.Mesh;
+    arrow: THREE.ArrowHelper | null;
+    incRad: number;
+    nodeRad: number;
+    theta: number;
+    beforeR: number;
+    afterR: number;
+  };
+  let current: EventVisual | null = null;
+  let animationStart = 0;
+  const ANIM_DURATION = 1500;
+  const PRE_DELAY = 200;
+  let animating = false;
+
+  function disposeCurrent() {
+    if (!current) return;
+    [current.beforeOrbit, current.afterOrbit, current.satellite].forEach((o) => {
+      eventGroup.remove(o);
+      ((o as any).geometry as THREE.BufferGeometry)?.dispose();
+      const m = (o as any).material;
+      if (Array.isArray(m)) m.forEach((mm) => mm.dispose());
+      else m?.dispose();
+    });
+    if (current.arrow) {
+      eventGroup.remove(current.arrow);
+      current.arrow.dispose();
+    }
+    current = null;
+  }
+
+  function applyOrbitOrientation(orbit: THREE.Line, inc: number, node: number) {
+    orbit.rotation.set(0, 0, 0);
+    orbit.rotateY(node);    // rotate around Y by longitude of ascending node
+    orbit.rotateX(inc);     // tilt by inclination
+  }
+
+  function placeSatellite(theta: number, r: number, inc: number, node: number): THREE.Vector3 {
+    // Position in orbital-plane local coords (x, 0, z), then rotated by node + inc.
+    const localX = Math.cos(theta) * r;
+    const localZ = Math.sin(theta) * r;
+    // tilt by inc around X axis (so localY becomes -localZ * sin)
+    const tiltedX = localX;
+    const tiltedY = -localZ * Math.sin(inc);
+    const tiltedZ =  localZ * Math.cos(inc);
+    // rotate by node around Y axis
+    const cosN = Math.cos(node), sinN = Math.sin(node);
+    return new THREE.Vector3(
+      cosN * tiltedX + sinN * tiltedZ,
+      tiltedY,
+      -sinN * tiltedX + cosN * tiltedZ,
+    );
+  }
+
+  function setEvent(e: ManeuverEvent) {
+    disposeCurrent();
+
+    const baseR = baseRadius(e.altitude_km);
+    const isPlane = e.kind === "out_of_plane";
+    const dir = (e.delta_a_km ?? 0) >= 0 ? 1 : -1;
+    const gap = isPlane ? 0 : gapForDeltaA(e.delta_a_km);
+    const beforeR = isPlane ? baseR : baseR - dir * gap * 0.5;
+    const afterR  = isPlane ? baseR : baseR + dir * gap * 0.5;
+    const color = COLOR[e.classification] ?? 0x14181F;
+    const theta = angleFor(e.norad_id);
+    const node = nodeAngleFor(e.norad_id);
+
+    // Inclination from event data, capped to a visually-pleasing range.
+    const incDeg = e.inc_deg_at_event ?? 30;
+    const inc = THREE.MathUtils.degToRad(Math.max(0, Math.min(89, incDeg)));
+    const incAfter = isPlane && e.delta_inc_deg != null
+      ? THREE.MathUtils.degToRad(Math.max(0, Math.min(89, incDeg + e.delta_inc_deg * 10))) // exaggerated
+      : inc;
+
+    const beforeOrbit = makeOrbitLine(beforeR, 0x767A82, 0.55);
+    const afterOrbit  = makeOrbitLine(beforeR, color, 0);
+    applyOrbitOrientation(beforeOrbit, inc, node);
+    applyOrbitOrientation(afterOrbit, inc, node);
+    eventGroup.add(beforeOrbit);
+    eventGroup.add(afterOrbit);
+
+    const satGeo = new THREE.SphereGeometry(3.6, 16, 16);
+    const satMat = new THREE.MeshBasicMaterial({ color });
+    const satellite = new THREE.Mesh(satGeo, satMat);
+    eventGroup.add(satellite);
+
+    // Initial position on the BEFORE ring.
+    satellite.position.copy(placeSatellite(theta, beforeR, inc, node));
+
+    current = {
+      event: e, beforeOrbit, afterOrbit, satellite,
+      arrow: null,
+      incRad: inc, nodeRad: node, theta, beforeR, afterR,
+    };
+
+    // Update HUD overlay.
+    setHud(e);
+
+    animationStart = performance.now() + PRE_DELAY;
+    animating = true;
+  }
+
+  function drawBurnArrow(e: ManeuverEvent, satPos: THREE.Vector3) {
+    if (!current) return;
+    // Direction: radial out/in for in_plane, tangential along the orbit
+    // (perpendicular to radial in the orbital plane) for out_of_plane.
+    const inc = current.incRad, node = current.nodeRad, theta = current.theta;
+    const radialLocal = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));
+    const tangentialLocal = new THREE.Vector3(-Math.sin(theta), 0, Math.cos(theta));
+    function rotate(v: THREE.Vector3): THREE.Vector3 {
+      const tiltedX = v.x;
+      const tiltedY = -v.z * Math.sin(inc);
+      const tiltedZ =  v.z * Math.cos(inc);
+      const cosN = Math.cos(node), sinN = Math.sin(node);
+      return new THREE.Vector3(
+        cosN * tiltedX + sinN * tiltedZ,
+        tiltedY,
+        -sinN * tiltedX + cosN * tiltedZ,
+      );
+    }
+    let dir: THREE.Vector3, length: number;
+    if (e.kind === "in_plane" && e.delta_a_km != null) {
+      const sign = e.delta_a_km >= 0 ? 1 : -1;
+      dir = rotate(radialLocal.clone().multiplyScalar(sign));
+      length = 20 + Math.log10(Math.abs(e.delta_a_km) + 1) * 18;
+    } else if (e.kind === "out_of_plane" && e.delta_inc_deg != null) {
+      const sign = e.delta_inc_deg >= 0 ? 1 : -1;
+      dir = rotate(tangentialLocal.clone().multiplyScalar(sign));
+      length = 22 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 30;
+    } else {
+      return;
+    }
+    dir.normalize();
+    const arrow = new THREE.ArrowHelper(
+      dir, satPos.clone(), length,
+      COLOR[e.classification] ?? 0x14181F,
+      length * 0.28, length * 0.18,
+    );
+    eventGroup.add(arrow);
+    if (current.arrow) {
+      eventGroup.remove(current.arrow);
+      current.arrow.dispose();
+    }
+    current.arrow = arrow;
+  }
+
+  function setHud(e: ManeuverEvent) {
+    const nEl = document.getElementById("hud-norad");
+    const aEl = document.getElementById("hud-alt");
+    const iEl = document.getElementById("hud-inc");
+    if (nEl) nEl.textContent = String(e.norad_id);
+    if (aEl) aEl.textContent = `${Math.round(e.altitude_km).toLocaleString()} km`;
+    if (iEl) iEl.textContent = e.inc_deg_at_event != null
+      ? `${e.inc_deg_at_event.toFixed(2)}°` : "—";
+  }
+
+  // ── Animation loop ────────────────────────────────────────
+  let lastT = performance.now();
+  function frame() {
+    requestAnimationFrame(frame);
+    const now = performance.now();
+    const dt = now - lastT;
+    lastT = now;
+
+    // Earth slowly spins.
+    earth.rotation.y += dt * 0.00012;
+
+    if (current && animating) {
+      const t = Math.max(0, Math.min(1, (now - animationStart) / ANIM_DURATION));
+      const k = easeInOutCubic(t);
+      const e = current.event;
+      const isPlane = e.kind === "out_of_plane";
+
+      // BEFORE orbit fades.
+      (current.beforeOrbit.material as THREE.LineBasicMaterial).opacity = 0.55 - 0.4 * k;
+      // AFTER orbit grows in radius (or tilts).
+      const curR = current.beforeR + (current.afterR - current.beforeR) * k;
+      setOrbitRadius(current.afterOrbit, curR);
+      (current.afterOrbit.material as THREE.LineBasicMaterial).opacity = Math.min(1, k * 1.6);
+
+      // For plane change, also tilt the AFTER orbit.
+      if (isPlane && e.delta_inc_deg != null) {
+        const incNow = current.incRad + (e.delta_inc_deg * Math.PI / 180) * 10 * k;
+        current.afterOrbit.rotation.set(0, 0, 0);
+        current.afterOrbit.rotateY(current.nodeRad);
+        current.afterOrbit.rotateX(incNow);
+        // Satellite follows the tilting orbit.
+        const sp = placeSatellite(current.theta, current.beforeR, incNow, current.nodeRad);
+        current.satellite.position.copy(sp);
+      } else {
+        const sp = placeSatellite(current.theta, curR, current.incRad, current.nodeRad);
+        current.satellite.position.copy(sp);
+      }
+
+      // Fire burn arrow at ~60% of the animation; KEEPS visible after.
+      if (k > 0.55 && !current.arrow) {
+        drawBurnArrow(e, current.satellite.position);
+      }
+
+      if (t >= 1) {
+        animating = false;
+        // Ensure the burn arrow is drawn at final position.
+        if (!current.arrow) {
+          drawBurnArrow(e, current.satellite.position);
+        }
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(frame);
+
+  // ── Public surface ────────────────────────────────────────
+  // The page's existing JS calls these.
+  (window as any).__ssaStage = {
+    setEvent,
+    replay: () => {
+      if (current) {
+        animationStart = performance.now() + PRE_DELAY;
+        animating = true;
+        // Reset AFTER orbit to BEFORE radius before re-animating.
+        setOrbitRadius(current.afterOrbit, current.beforeR);
+        (current.afterOrbit.material as THREE.LineBasicMaterial).opacity = 0;
+        (current.beforeOrbit.material as THREE.LineBasicMaterial).opacity = 0.55;
+        if (current.arrow) {
+          eventGroup.remove(current.arrow);
+          current.arrow.dispose();
+          current.arrow = null;
+        }
+        applyOrbitOrientation(current.afterOrbit, current.incRad, current.nodeRad);
+        current.satellite.position.copy(
+          placeSatellite(current.theta, current.beforeR, current.incRad, current.nodeRad),
+        );
+      }
+    },
+  };
+
+  // Page may have already requested an event before this script booted.
+  if ((window as any).__ssaStagePending != null) {
+    setEvent((window as any).__ssaStagePending);
+    (window as any).__ssaStagePending = null;
+  }
+</script>
+
+<style>
+  .stage3d {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--color-paper);
+  }
+  .stage3d canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: grab;
+    touch-action: none;
+  }
+  .stage3d canvas:active { cursor: grabbing; }
+
+  .stage3d__note {
+    position: absolute;
+    bottom: var(--space-2);
+    right: var(--space-3);
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+    pointer-events: none;
+  }
+
+  .hud {
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
+    font-family: var(--font-sans);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 700;
+    pointer-events: none;
+    min-width: 160px;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+  .hud__line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4em;
+    line-height: 1.5;
+  }
+  .hud__label { color: var(--color-ink-muted); }
+  .hud__value { color: var(--color-ink); font-weight: 800; }
+  .hud__sep   { color: var(--color-ink-faint); margin: 0 0.2em; }
+</style>
