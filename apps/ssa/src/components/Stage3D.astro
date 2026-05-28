@@ -72,7 +72,7 @@
   scene.background = new THREE.Color(0xFAF8F3);
 
   const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 6000);
-  camera.position.set(0, 420, 960);
+  camera.position.set(0, 340, 780);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -189,7 +189,7 @@
   // ── Mouse-drag camera rotation ─────────────────────────────
   let camAzimuth = 0;
   let camPolar = 1.05;
-  const camRadius = 1050;
+  const camRadius = 850;
   let dragging = false;
   let lastX = 0, lastY = 0;
   function applyCamera() {
@@ -299,15 +299,17 @@
     arrow: THREE.ArrowHelper | null;
     incRad: number;
     nodeRad: number;
-    theta: number;
+    satTheta: number;          // continuously advancing orbital angle
     beforeR: number;
     afterR: number;
+    cycleStart: number;        // performance.now() when this event began looping
   };
   let current: EventVisual | null = null;
-  let animationStart = 0;
-  const ANIM_DURATION = 1500;
-  const PRE_DELAY = 200;
-  let animating = false;
+  // Continuous loop: morph → hold → reverse-morph (smooth reset).
+  const MORPH_MS = 1800;
+  const HOLD_MS  = 2200;
+  const RESET_MS = 700;
+  const CYCLE_MS = MORPH_MS + HOLD_MS + RESET_MS;
 
   function disposeCurrent() {
     if (!current) return;
@@ -386,14 +388,12 @@
     current = {
       event: e, beforeOrbit, afterOrbit, satellite,
       arrow: null,
-      incRad: inc, nodeRad: node, theta, beforeR, afterR,
+      incRad: inc, nodeRad: node, satTheta: theta, beforeR, afterR,
+      cycleStart: performance.now(),
     };
 
     // Update HUD overlay.
     setHud(e);
-
-    animationStart = performance.now() + PRE_DELAY;
-    animating = true;
   }
 
   function drawBurnArrow(e: ManeuverEvent, satPos: THREE.Vector3) {
@@ -450,6 +450,28 @@
       ? `${e.inc_deg_at_event.toFixed(2)}°` : "—";
   }
 
+  // Kepler-third angular speed: rad/sec given orbital radius r.
+  // Calibrated so r=110 (LEO) → ~12 s/rev, r=260 (GEO) → ~43 s/rev.
+  const KEPLER_K = 605;
+  function angularSpeed(r: number) {
+    return KEPLER_K / Math.pow(Math.max(r, 1), 1.5);
+  }
+
+  // Phase decomposition for the continuous loop.
+  function phaseFor(elapsedMs: number) {
+    const m = elapsedMs % CYCLE_MS;
+    if (m < MORPH_MS) {
+      const t = m / MORPH_MS;
+      return { phase: "morph" as const, t, k: easeInOutCubic(t) };
+    }
+    if (m < MORPH_MS + HOLD_MS) {
+      return { phase: "hold" as const, t: 1, k: 1 };
+    }
+    const t = (m - MORPH_MS - HOLD_MS) / RESET_MS;
+    // During reset, k goes from 1 back to 0 (reverse-morph).
+    return { phase: "reset" as const, t, k: 1 - easeInOutCubic(t) };
+  }
+
   // ── Animation loop ────────────────────────────────────────
   let lastT = performance.now();
   function frame() {
@@ -461,44 +483,49 @@
     // Earth slowly spins.
     earth.rotation.y += dt * 0.00012;
 
-    if (current && animating) {
-      const t = Math.max(0, Math.min(1, (now - animationStart) / ANIM_DURATION));
-      const k = easeInOutCubic(t);
+    if (current) {
       const e = current.event;
       const isPlane = e.kind === "out_of_plane";
+      const elapsed = now - current.cycleStart;
+      const { phase, k } = phaseFor(elapsed);
 
-      // BEFORE orbit fades.
-      (current.beforeOrbit.material as THREE.LineBasicMaterial).opacity = 0.55 - 0.4 * k;
-      // AFTER orbit grows in radius (or tilts).
+      // Orbit radius interpolated along k (k=0 ↔ BEFORE, k=1 ↔ AFTER).
       const curR = current.beforeR + (current.afterR - current.beforeR) * k;
       setOrbitRadius(current.afterOrbit, curR);
-      (current.afterOrbit.material as THREE.LineBasicMaterial).opacity = Math.min(1, k * 1.6);
 
-      // For plane change, also tilt the AFTER orbit.
+      // Opacities.
+      (current.beforeOrbit.material as THREE.LineBasicMaterial).opacity =
+        0.55 * (1 - k);
+      (current.afterOrbit.material as THREE.LineBasicMaterial).opacity =
+        Math.min(1, k * 1.4);
+
+      // For plane change, also tilt the AFTER orbit by k.
+      let incForSat = current.incRad;
       if (isPlane && e.delta_inc_deg != null) {
         const incNow = current.incRad + (e.delta_inc_deg * Math.PI / 180) * 10 * k;
         current.afterOrbit.rotation.set(0, 0, 0);
         current.afterOrbit.rotateY(current.nodeRad);
         current.afterOrbit.rotateX(incNow);
-        // Satellite follows the tilting orbit.
-        const sp = placeSatellite(current.theta, current.beforeR, incNow, current.nodeRad);
-        current.satellite.position.copy(sp);
-      } else {
-        const sp = placeSatellite(current.theta, curR, current.incRad, current.nodeRad);
-        current.satellite.position.copy(sp);
+        incForSat = incNow;
       }
 
-      // Fire burn arrow at ~60% of the animation; KEEPS visible after.
-      if (k > 0.55 && !current.arrow) {
+      // Continuously advance the satellite's orbital angle.
+      const omega = angularSpeed(curR);
+      current.satTheta += omega * (dt / 1000);
+      const sp = placeSatellite(current.satTheta, curR, incForSat, current.nodeRad);
+      current.satellite.position.copy(sp);
+
+      // Fire the burn arrow once per cycle at the morph apex (~k = 0.6),
+      // capture its 3D position there, leave it fixed for the rest of
+      // the morph + hold. Clear it at the start of the reset phase so
+      // the next cycle's burn fires cleanly.
+      if (phase === "morph" && k > 0.6 && !current.arrow) {
         drawBurnArrow(e, current.satellite.position);
       }
-
-      if (t >= 1) {
-        animating = false;
-        // Ensure the burn arrow is drawn at final position.
-        if (!current.arrow) {
-          drawBurnArrow(e, current.satellite.position);
-        }
+      if (phase === "reset" && current.arrow) {
+        eventGroup.remove(current.arrow);
+        current.arrow.dispose();
+        current.arrow = null;
       }
     }
 
@@ -512,21 +539,13 @@
     setEvent,
     replay: () => {
       if (current) {
-        animationStart = performance.now() + PRE_DELAY;
-        animating = true;
-        // Reset AFTER orbit to BEFORE radius before re-animating.
-        setOrbitRadius(current.afterOrbit, current.beforeR);
-        (current.afterOrbit.material as THREE.LineBasicMaterial).opacity = 0;
-        (current.beforeOrbit.material as THREE.LineBasicMaterial).opacity = 0.55;
+        // Start the next loop from the beginning of the morph phase.
+        current.cycleStart = performance.now();
         if (current.arrow) {
           eventGroup.remove(current.arrow);
           current.arrow.dispose();
           current.arrow = null;
         }
-        applyOrbitOrientation(current.afterOrbit, current.incRad, current.nodeRad);
-        current.satellite.position.copy(
-          placeSatellite(current.theta, current.beforeR, current.incRad, current.nodeRad),
-        );
       }
     },
   };
