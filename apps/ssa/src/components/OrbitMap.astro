@@ -1,21 +1,27 @@
 ---
 /**
- * OrbitMap.astro — a stylised 2-D orbital diagram.
+ * OrbitMap.astro — animated 2-D orbital diagram (not a 3-D globe).
  *
- * Earth sits at the centre. Around it, concentric orbital shells
- * represent LEO / Polar / MEO / GEO (radii are visual, not literal).
- * Each event is plotted as a dot on its shell at a randomised angle
- * (seeded by NORAD ID so positions are stable build-to-build).
+ * Earth at centre with rough continental silhouettes and a day/night
+ * terminator. Around it, concentric shells (LEO / MEO-low / MEO / GEO)
+ * rotate at relative speeds matching real orbital periods (LEO fastest,
+ * GEO slowest). A thin radar sweep rotates around the disc.
  *
- * Dots are coloured by classification and gently pulse on a loop.
- * Hover shows a tooltip; click opens the same focus panel as the
- * old atlas. Honours prefers-reduced-motion.
+ * Each maneuver event is a dot on its shell with a soft pulsing halo.
+ * Clicking a dot draws a small radial / tangential arrow showing the
+ * direction of the maneuver: outward for raise, inward for lower,
+ * tangential along the shell for plane change.
+ *
+ * All animation is CSS / inline SVG; honours prefers-reduced-motion.
  */
 
 interface Event {
   norad_id: number;
   detected_epoch: string;
   classification: string;
+  kind: "in_plane" | "out_of_plane";
+  delta_a_km: number | null;
+  delta_inc_deg: number | null;
   dv_mps: number;
   altitude_km: number;
   confidence: "HIGH" | "LOW";
@@ -27,52 +33,50 @@ interface Props {
   size?: number;
 }
 
-const { events, size = 760 } = Astro.props;
+const { events, size = 780 } = Astro.props;
 const W = size;
 const H = size;
 const cx = W / 2;
 const cy = H / 2;
 
-// Stylised shell radii (px) and the altitude bucket each represents.
-// Sizes are chosen for visual balance, not log scale.
 const SHELLS = [
-  { key: "leo",    altMin: 150,    altMax: 2000,    r: 110, label: "LEO",   altLabel: "400-2,000 km" },
-  { key: "polar",  altMin: 2000,   altMax: 7000,    r: 175, label: "MEO low", altLabel: "2-7k km" },
-  { key: "meo",    altMin: 7000,   altMax: 25000,   r: 240, label: "MEO",   altLabel: "GPS · GLONASS" },
-  { key: "geo",    altMin: 25000,  altMax: 60000,   r: 320, label: "GEO",   altLabel: "35,786 km · weather + comms" },
+  { key: "leo",   altMin: 150,   altMax: 2000,  r: 122, spin: 26, label: "LEO",      altLabel: "400-2,000 km" },
+  { key: "polar", altMin: 2000,  altMax: 7000,  r: 184, spin: 42, label: "MEO low",  altLabel: "2-7k km" },
+  { key: "meo",   altMin: 7000,  altMax: 25000, r: 250, spin: 70, label: "MEO",      altLabel: "GPS · GLONASS" },
+  { key: "geo",   altMin: 25000, altMax: 60000, r: 322, spin: 110, label: "GEO",     altLabel: "35,786 km · weather + comms" },
 ];
 
 const COLOR: Record<string, string> = {
-  raise:             "#E07A30", // brighter rust
-  lower:             "#2A5B9C", // saturated blue
-  plane_change:      "#36906A", // saturated green
-  stationkeeping_ew: "#B8B2A0", // grey for routine
+  raise:             "#E07A30",
+  lower:             "#2A5B9C",
+  plane_change:      "#36906A",
+  stationkeeping_ew: "#B8B2A0",
   stationkeeping_ns: "#C9C1A9",
-  deorbit:           "#C73E2E", // red
+  deorbit:           "#C73E2E",
 };
 
-// Stable pseudo-angle from NORAD id so dots don't jitter between builds.
+// Stable pseudo-angle so dots don't jitter build-to-build.
 function angle(norad: number, salt = 0): number {
-  // xorshift-ish hash → [0, 2π)
   let x = (norad + salt) | 0;
   x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
-  const u = ((x >>> 0) % 100000) / 100000;
-  return u * Math.PI * 2;
+  return (((x >>> 0) % 100000) / 100000) * Math.PI * 2;
 }
 
-// Project each event onto a shell.
 function placeEvent(e: Event, i: number) {
   const shell = SHELLS.find((s) => e.altitude_km >= s.altMin && e.altitude_km < s.altMax)
               || (e.altitude_km < 150 ? SHELLS[0] : SHELLS[SHELLS.length - 1]);
-  // Multiple events per satellite get nudged so they don't overlap.
   const t = angle(e.norad_id, i * 7);
   const x = cx + shell.r * Math.cos(t);
   const y = cy + shell.r * Math.sin(t);
-  const r = Math.max(3, Math.min(10, 2 + Math.log10(e.dv_mps + 1) * 6));
+  const r = Math.max(3.5, Math.min(11, 2.4 + Math.log10(e.dv_mps + 1) * 6.4));
   return { x, y, r, shell, t };
 }
 
 const placed = events.map((e, i) => ({ event: e, ...placeEvent(e, i) }));
+
+// Small, hand-tuned continent shapes for the Earth disc.
+// (Stylised; they evoke "Earth," not a literal Mercator.)
+const earthR = 42;
 ---
 
 <figure class="orbit-map">
@@ -85,33 +89,56 @@ const placed = events.map((e, i) => ({ event: e, ...placeEvent(e, i) }));
     aria-label="Orbital map showing detected maneuvers around Earth"
   >
     <defs>
-      <!-- Soft Earth gradient: blue/green disc, no shading drama. -->
-      <radialGradient id="earth-grad" cx="50%" cy="50%" r="50%">
-        <stop offset="0%"  stop-color="#5a7da5" />
-        <stop offset="65%" stop-color="#3a5a7e" />
-        <stop offset="100%" stop-color="#243d57" />
+      <radialGradient id="earth-grad" cx="38%" cy="38%" r="65%">
+        <stop offset="0%"  stop-color="#6f93b9" />
+        <stop offset="58%" stop-color="#3a5a7e" />
+        <stop offset="100%" stop-color="#1f3349" />
       </radialGradient>
+      <!-- Soft sweep gradient — bright on the leading edge, fading behind. -->
+      <linearGradient id="sweep-grad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"   stop-color="#1B3A5C" stop-opacity="0" />
+        <stop offset="65%"  stop-color="#1B3A5C" stop-opacity="0" />
+        <stop offset="100%" stop-color="#1B3A5C" stop-opacity="0.18" />
+      </linearGradient>
+      <!-- Clip path for continent silhouettes — only inside Earth disc. -->
+      <clipPath id="earth-clip">
+        <circle cx={cx} cy={cy} r={earthR - 0.5} />
+      </clipPath>
+      <!-- Marker for the orbit-change arrow tip. -->
+      <marker id="change-arrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5"
+              orient="auto">
+        <path d="M0,1 L7,4.5 L0,8 L1.6,4.5 Z" fill="var(--color-ink)" />
+      </marker>
     </defs>
 
-    <!-- Subtle shell halos (very low opacity) -->
-    {SHELLS.map((s) => (
-      <circle cx={cx} cy={cy} r={s.r + 4}
-              fill="none"
-              stroke="#1B3A5C"
-              stroke-opacity="0.04"
-              stroke-width="8" />
-    ))}
+    <!-- Sweep — a fan-shaped sector that rotates around Earth. -->
+    <g class="orbit-map__sweep">
+      <path d={`M ${cx} ${cy} L ${cx + SHELLS[SHELLS.length - 1].r + 18} ${cy} A ${SHELLS[SHELLS.length - 1].r + 18} ${SHELLS[SHELLS.length - 1].r + 18} 0 0 1 ${cx + (SHELLS[SHELLS.length - 1].r + 18) * Math.cos(Math.PI / 9)} ${cy + (SHELLS[SHELLS.length - 1].r + 18) * Math.sin(Math.PI / 9)} Z`}
+            fill="url(#sweep-grad)" />
+    </g>
 
-    <!-- Orbital shell rings -->
+    <!-- Shell halos (very low opacity wash, give shells weight). -->
     {SHELLS.map((s) => (
       <circle cx={cx} cy={cy} r={s.r}
               fill="none"
-              stroke="var(--color-rule-strong)"
-              stroke-width="0.8"
-              stroke-dasharray={s.key === "geo" ? "4 4" : "1 5"} />
+              stroke="#1B3A5C"
+              stroke-opacity="0.03"
+              stroke-width="14" />
     ))}
 
-    <!-- Shell labels along the right -->
+    <!-- Orbital shells with rotating dashed patterns. -->
+    {SHELLS.map((s) => (
+      <g class={`orbit-map__shell orbit-map__shell--${s.key}`}
+         style={`--spin-dur:${s.spin}s; transform-origin:${cx}px ${cy}px`}>
+        <circle cx={cx} cy={cy} r={s.r}
+                fill="none"
+                stroke="var(--color-rule-strong)"
+                stroke-width={s.key === "geo" ? "1" : "0.7"}
+                stroke-dasharray={s.key === "geo" ? "6 5" : "2 7"} />
+      </g>
+    ))}
+
+    <!-- Shell labels (counter-rotated by being outside the rotating group). -->
     {SHELLS.map((s) => (
       <>
         <line x1={cx + s.r} x2={cx + s.r + 18} y1={cy} y2={cy}
@@ -130,26 +157,70 @@ const placed = events.map((e, i) => ({ event: e, ...placeEvent(e, i) }));
       </>
     ))}
 
-    <!-- Earth -->
-    <circle cx={cx} cy={cy} r="36" fill="url(#earth-grad)" />
-    <text x={cx} y={cy + 5} text-anchor="middle"
-          font-family="var(--font-sans)" font-size="10" font-weight="600"
-          fill="#FAF8F3"
-          style="letter-spacing: 0.16em; text-transform: uppercase;">
-      Earth
-    </text>
+    <!-- Compass tick marks on the GEO ring (N/E/S/W). -->
+    {[0, 90, 180, 270].map((deg) => {
+      const r1 = SHELLS[SHELLS.length - 1].r;
+      const a = (deg - 90) * (Math.PI / 180);
+      const x1 = cx + (r1 - 4) * Math.cos(a);
+      const y1 = cy + (r1 - 4) * Math.sin(a);
+      const x2 = cx + (r1 + 4) * Math.cos(a);
+      const y2 = cy + (r1 + 4) * Math.sin(a);
+      return (
+        <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="var(--color-ink-muted)" stroke-width="0.8" />
+      );
+    })}
 
-    <!-- Maneuver dots -->
-    {placed.map(({ event, x, y, r }, i) => {
+    <!-- ───────────── Earth ───────────── -->
+    <g class="orbit-map__earth">
+      <circle cx={cx} cy={cy} r={earthR} fill="url(#earth-grad)" />
+
+      <!-- Hand-drawn-feeling continent silhouettes, clipped to Earth disc. -->
+      <g clip-path="url(#earth-clip)" fill="#1f3349" fill-opacity="0.55">
+        <!-- Africa-ish blob -->
+        <path d={`M ${cx + 2} ${cy - 12}
+                  C ${cx + 11} ${cy - 10}, ${cx + 14} ${cy - 2}, ${cx + 11} ${cy + 7}
+                  C ${cx + 8} ${cy + 14}, ${cx + 2} ${cy + 16}, ${cx - 2} ${cy + 13}
+                  C ${cx - 6} ${cy + 9}, ${cx - 5} ${cy + 1}, ${cx - 1} ${cy - 7}
+                  C ${cx} ${cy - 10}, ${cx + 1} ${cy - 12}, ${cx + 2} ${cy - 12} Z`} />
+        <!-- Eurasia-ish band -->
+        <path d={`M ${cx - 9} ${cy - 14}
+                  C ${cx - 2} ${cy - 19}, ${cx + 7} ${cy - 18}, ${cx + 15} ${cy - 13}
+                  C ${cx + 12} ${cy - 10}, ${cx + 4} ${cy - 8}, ${cx - 4} ${cy - 10}
+                  C ${cx - 9} ${cy - 11}, ${cx - 11} ${cy - 12}, ${cx - 9} ${cy - 14} Z`} />
+        <!-- Americas-ish suggestion on the left -->
+        <path d={`M ${cx - 16} ${cy - 8}
+                  C ${cx - 12} ${cy - 12}, ${cx - 8} ${cy - 7}, ${cx - 9} ${cy + 2}
+                  C ${cx - 11} ${cy + 8}, ${cx - 14} ${cy + 14}, ${cx - 17} ${cy + 10}
+                  C ${cx - 19} ${cy + 5}, ${cx - 18} ${cy - 2}, ${cx - 16} ${cy - 8} Z`} />
+        <!-- Australia-ish dot -->
+        <ellipse cx={cx + 13} cy={cy + 11} rx="5.5" ry="3" />
+      </g>
+
+      <!-- Day/night terminator: subtle dark crescent on the right -->
+      <circle cx={cx + 22} cy={cy} r={earthR}
+              fill="#000" fill-opacity="0.16"
+              clip-path="url(#earth-clip)" />
+
+      <!-- A faint highlight on the upper-left for atmosphere. -->
+      <ellipse cx={cx - earthR * 0.35} cy={cy - earthR * 0.5}
+               rx={earthR * 0.5} ry={earthR * 0.22}
+               fill="#fff" fill-opacity="0.08" />
+    </g>
+
+    <!-- ───────────── Maneuver dots ───────────── -->
+    {placed.map(({ event, x, y, r, shell, t }, i) => {
       const color = COLOR[event.classification] ?? "var(--color-ink)";
-      const ringOpacity = event.confidence === "HIGH" ? 0.7 : 0;
+      const ringOpacity = event.confidence === "HIGH" ? 0.85 : 0;
       return (
         <a href={`/sat/${event.norad_id}`} class="orbit-map__dot-link">
-          <g class="orbit-map__dot-group" style={`animation-delay: ${(i * 53) % 2400}ms`}>
+          <g class="orbit-map__dot-group" style={`animation-delay:${(i * 73) % 2800}ms`}>
             <circle
               class="orbit-map__halo"
-              cx={x} cy={y} r={r * 2.4}
-              fill={color} opacity={ringOpacity}
+              cx={x} cy={y} r={r * 2.3}
+              fill={color}
+              opacity={ringOpacity}
+              style={`animation-delay:${(i * 211) % 3400}ms`}
             />
             <circle
               class="orbit-map__dot"
@@ -157,18 +228,24 @@ const placed = events.map((e, i) => ({ event: e, ...placeEvent(e, i) }));
               fill={color}
               data-norad={event.norad_id}
               data-class={event.classification}
+              data-kind={event.kind}
               data-conf={event.confidence}
               data-epoch-ms={new Date(event.detected_epoch).getTime()}
               data-name={event.object_name ?? `NORAD ${event.norad_id}`}
               data-dv={event.dv_mps}
               data-alt={event.altitude_km}
-              data-base-r={r}
-              data-color={color}
+              data-delta-a={event.delta_a_km ?? ""}
+              data-delta-inc={event.delta_inc_deg ?? ""}
+              data-shell-r={shell.r}
+              data-theta={t}
             />
           </g>
         </a>
       );
     })}
+
+    <!-- Empty group where JS draws the "orbit change" arrow on click. -->
+    <g class="orbit-map__change" pointer-events="none" />
   </svg>
 </figure>
 
@@ -183,10 +260,43 @@ const placed = events.map((e, i) => ({ event: e, ...placeEvent(e, i) }));
     display: block;
     width: 100%;
     height: auto;
-    max-width: 760px;
+    max-width: 780px;
     margin: 0 auto;
   }
 
+  /* ─── shells rotate at orbit-realistic relative speeds ─── */
+  .orbit-map__shell {
+    animation: shell-spin var(--spin-dur, 30s) linear infinite;
+    transform-box: view-box;
+  }
+  @keyframes shell-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* ─── radar sweep ─── */
+  .orbit-map__sweep {
+    transform-origin: 50% 50%;
+    transform-box: view-box;
+    animation: sweep-spin 14s linear infinite;
+  }
+  @keyframes sweep-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* ─── Earth — slow, almost imperceptible rotation for life. ─── */
+  .orbit-map__earth {
+    transform-origin: 50% 50%;
+    transform-box: view-box;
+    animation: earth-spin 80s linear infinite;
+  }
+  @keyframes earth-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* ─── dots ─── */
   .orbit-map__dot-link { pointer-events: bounding-box; cursor: pointer; }
   .orbit-map__dot {
     transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -201,37 +311,62 @@ const placed = events.map((e, i) => ({ event: e, ...placeEvent(e, i) }));
   .orbit-map__dot-group {
     animation: orbit-fade-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
-
   @keyframes orbit-pulse {
-    0%, 100% { transform: scale(0.6); opacity: 0.5; }
-    50%      { transform: scale(1.1); opacity: 0.05; }
+    0%, 100% { transform: scale(0.55); opacity: 0.6; }
+    50%      { transform: scale(1.15); opacity: 0.05; }
   }
   @keyframes orbit-fade-in {
     from { opacity: 0; transform: scale(0.3); }
     to   { opacity: 1; transform: scale(1); }
   }
 
-  .orbit-map__dot-link:hover .orbit-map__dot {
-    transform: scale(1.7);
-  }
+  .orbit-map__dot-link:hover .orbit-map__dot { transform: scale(1.7); }
   .orbit-map__dot-link:hover .orbit-map__halo {
     animation-play-state: paused;
-    opacity: 0.35;
+    opacity: 0.4;
     transform: scale(1.8);
   }
 
-  /* JS-applied states (focus + filter) */
+  /* JS-applied states */
   .orbit-map__dot--dimmed   { opacity: 0.1; }
   .orbit-map__dot--related  { opacity: 1 !important; stroke: var(--color-ink); stroke-width: 1.5; }
   .orbit-map__dot--selected {
-    transform: scale(1.9);
+    transform: scale(1.95);
     stroke: var(--color-ink);
     stroke-width: 2;
   }
 
+  /* Orbit-change arrow group (drawn by JS on click). */
+  .orbit-map__change line,
+  .orbit-map__change path {
+    stroke: var(--color-ink);
+    stroke-width: 1.6;
+    fill: none;
+    opacity: 0;
+    animation: change-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .orbit-map__change text {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    fill: var(--color-ink);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0;
+    animation: change-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) 120ms forwards;
+  }
+  @keyframes change-in {
+    from { opacity: 0; }
+    to   { opacity: 0.85; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .orbit-map__shell,
+    .orbit-map__sweep,
+    .orbit-map__earth,
     .orbit-map__halo,
-    .orbit-map__dot-group { animation: none; opacity: 0.3; }
+    .orbit-map__dot-group { animation: none; }
+    .orbit-map__halo { opacity: 0.3; }
     .orbit-map__dot { transition: none; }
   }
 </style>

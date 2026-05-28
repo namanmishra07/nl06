@@ -424,6 +424,60 @@ const counts = {
         if (focusCard) focusCard.hidden = true;
         if (focusPh) focusPh.hidden = false;
         clearRelated();
+        clearChange();
+      }
+
+      // Draw a small radial / tangential arrow into the orbit map
+      // showing the direction of the maneuver.
+      const changeLayer = document.querySelector(".orbit-map__change");
+      function clearChange() {
+        if (changeLayer) changeLayer.innerHTML = "";
+      }
+      function drawChange(dot, e) {
+        if (!changeLayer) return;
+        clearChange();
+        const cxV = 390, cyV = 390; // matches OrbitMap viewBox centre at size=780
+        const px = +dot.getAttribute("cx");
+        const py = +dot.getAttribute("cy");
+        const theta = +dot.dataset.theta; // angle from centre
+        const ns = "http://www.w3.org/2000/svg";
+        const arrow = document.createElementNS(ns, "g");
+        const tip = document.createElementNS(ns, "line");
+        const lbl = document.createElementNS(ns, "text");
+        let labelText = "";
+        if (e.kind === "in_plane" && e.delta_a_km != null) {
+          // Radial: outward for raise (+Δa), inward for lower (-Δa).
+          const dir = e.delta_a_km >= 0 ? 1 : -1;
+          const len = Math.min(46, 18 + Math.log10(Math.abs(e.delta_a_km) + 1) * 14);
+          const x2 = px + dir * len * Math.cos(theta);
+          const y2 = py + dir * len * Math.sin(theta);
+          tip.setAttribute("x1", px); tip.setAttribute("y1", py);
+          tip.setAttribute("x2", x2); tip.setAttribute("y2", y2);
+          tip.setAttribute("marker-end", "url(#change-arrow)");
+          labelText = (e.delta_a_km >= 0 ? "+" : "") + e.delta_a_km.toFixed(1) + " km";
+          lbl.setAttribute("x", x2 + dir * 6 * Math.cos(theta));
+          lbl.setAttribute("y", y2 + dir * 6 * Math.sin(theta) - 4);
+          lbl.setAttribute("text-anchor", dir > 0 ? "start" : "end");
+        } else if (e.kind === "out_of_plane" && e.delta_inc_deg != null) {
+          // Tangential along the shell.
+          const dir = e.delta_inc_deg >= 0 ? 1 : -1;
+          const len = Math.min(50, 24 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 22);
+          const tx = px - dir * len * Math.sin(theta);
+          const ty = py + dir * len * Math.cos(theta);
+          tip.setAttribute("x1", px); tip.setAttribute("y1", py);
+          tip.setAttribute("x2", tx); tip.setAttribute("y2", ty);
+          tip.setAttribute("marker-end", "url(#change-arrow)");
+          labelText = (e.delta_inc_deg >= 0 ? "+" : "") + Math.abs(e.delta_inc_deg).toFixed(3) + "°";
+          lbl.setAttribute("x", tx - dir * 4 * Math.sin(theta));
+          lbl.setAttribute("y", ty + dir * 4 * Math.cos(theta) - 4);
+          lbl.setAttribute("text-anchor", "middle");
+        }
+        if (labelText) {
+          lbl.textContent = labelText;
+          arrow.appendChild(tip);
+          arrow.appendChild(lbl);
+          changeLayer.appendChild(arrow);
+        }
       }
 
       function updateFocus(dot, pinned) {
@@ -457,6 +511,7 @@ const counts = {
           pinnedDot = dot;
           dots.forEach((d) => d.classList.toggle("orbit-map__dot--selected", d === dot));
           setRelated(norad);
+          drawChange(dot, e);
         }
       }
 
@@ -519,20 +574,26 @@ const counts = {
     color: var(--color-ink-muted);
     font-weight: 700;
   }
+  /* Headline back to editorial Source Serif italic for consistency with
+     the rest of nl06; sans stays for chrome and numbers. */
   .hero-head__title {
     margin: 0 0 var(--space-5) 0;
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(2.2rem, 6vw, 4.5rem);
-    line-height: 1.02;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(2.4rem, 6.5vw, 5rem);
+    line-height: 1;
     color: var(--color-ink);
-    letter-spacing: -0.025em;
+    letter-spacing: var(--tracking-display);
+    font-feature-settings: var(--features-display);
   }
   .hero-head__num {
     display: inline-block;
     color: var(--color-accent);
-    font-feature-settings: "tnum" 1, "lnum" 1;
-    margin-right: 0.18em;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-feature-settings: var(--features-oldstyle);
+    margin-right: 0.15em;
   }
   .hero-head__text {
     color: var(--color-ink);
@@ -593,11 +654,12 @@ const counts = {
   .map-sec__head { margin-bottom: var(--space-5); }
   .map-sec__title {
     margin: 0 0 var(--space-2) 0;
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
     color: var(--color-ink);
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-tight);
   }
   .map-sec__sub {
     margin: 0;
@@ -827,12 +889,13 @@ const counts = {
   .featured__tag--deorbit           { background: var(--ssa-deorbit); }
   .featured__sentence {
     margin: 0;
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: clamp(1.4rem, 3.2vw, 2.4rem);
-    line-height: 1.2;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3.4vw, 2.5rem);
+    line-height: 1.18;
     color: var(--color-ink);
-    letter-spacing: -0.015em;
+    letter-spacing: var(--tracking-tight);
   }
   .featured__when {
     margin: var(--space-3) 0 var(--space-4) 0;
@@ -915,12 +978,13 @@ const counts = {
   }
   .card__sentence {
     margin: var(--space-3) 0 var(--space-3) 0;
-    font-family: var(--font-sans);
-    font-weight: 700;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
     font-size: var(--type-h3);
     line-height: 1.25;
     color: var(--color-ink);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--tracking-tight);
   }
   .card__size {
     margin: 0;
