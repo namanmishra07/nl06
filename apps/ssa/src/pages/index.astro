@@ -167,12 +167,9 @@ const PLAIN_TAG: Record<string, string> = {
               <Stage3D />
               <!-- Stage controls (overlay) -->
               <div class="stage__controls">
-                <button class="sctrl" id="prev-btn" type="button" aria-label="Previous (←)" title="Previous">←</button>
-                <button class="sctrl sctrl--play" id="play-btn" type="button" aria-pressed="false" title="Play (space replays)">
-                  <span id="play-icon">▶</span>
-                </button>
-                <button class="sctrl" id="replay-btn" type="button" title="Replay">↻</button>
-                <button class="sctrl" id="next-btn" type="button" aria-label="Next (→)" title="Next">→</button>
+                <button class="sctrl" id="prev-btn" type="button" aria-label="Previous (←)" title="Previous (← key)">←</button>
+                <button class="sctrl" id="replay-btn" type="button" title="Replay (space)">↻</button>
+                <button class="sctrl" id="next-btn" type="button" aria-label="Next (→)" title="Next (→ key)">→</button>
               </div>
               <p class="stage__hint">Drag to rotate the view.</p>
             </div>
@@ -225,8 +222,6 @@ const PLAIN_TAG: Record<string, string> = {
       const prevBtn = document.getElementById("prev-btn");
       const nextBtn = document.getElementById("next-btn");
       const replayBtn = document.getElementById("replay-btn");
-      const playBtn = document.getElementById("play-btn");
-      const playIcon = document.getElementById("play-icon");
 
       // Readout panel
       const rTag = document.getElementById("r-tag");
@@ -316,7 +311,6 @@ const PLAIN_TAG: Record<string, string> = {
 
       // ── State ───────────────────────────────────────────────
       let currentIdx = 0;
-      let autoTimer = null;
       const activeClasses = new Set(["raise", "lower", "plane_change", "stationkeeping_ew", "stationkeeping_ns", "deorbit"]);
       let highOnly = false;
 
@@ -444,17 +438,17 @@ const PLAIN_TAG: Record<string, string> = {
       }
 
       // ── Wire events ────────────────────────────────────────
-      prevBtn.addEventListener("click", () => { stopAuto(); prev(); });
-      nextBtn.addEventListener("click", () => { stopAuto(); next(); });
-      replayBtn.addEventListener("click", () => { stopAuto(); replay(); });
+      prevBtn.addEventListener("click", () => { prev(); });
+      nextBtn.addEventListener("click", () => { next(); });
+      replayBtn.addEventListener("click", () => { replay(); });
       logRows.forEach((row) => {
-        row.addEventListener("click", () => { stopAuto(); renderAndAnimate(+row.dataset.idx); });
+        row.addEventListener("click", () => { renderAndAnimate(+row.dataset.idx); });
       });
       document.addEventListener("keydown", (e) => {
         if (e.target instanceof HTMLInputElement) return;
-        if (e.key === "ArrowLeft")  { stopAuto(); prev();  e.preventDefault(); }
-        if (e.key === "ArrowRight") { stopAuto(); next();  e.preventDefault(); }
-        if (e.key === " ")          { stopAuto(); replay(); e.preventDefault(); }
+        if (e.key === "ArrowLeft")  { prev();  e.preventDefault(); }
+        if (e.key === "ArrowRight") { next();  e.preventDefault(); }
+        if (e.key === " ")          { replay(); e.preventDefault(); }
       });
 
       document.querySelectorAll("[data-fc]").forEach((chip) => {
@@ -490,23 +484,6 @@ const PLAIN_TAG: Record<string, string> = {
           applyFilters();
         });
       }
-
-      // ── Auto-play ──────────────────────────────────────────
-      function startAuto() {
-        playBtn.setAttribute("aria-pressed", "true");
-        playIcon.textContent = "❚❚";
-        autoTimer = setInterval(next, 4500);
-      }
-      function stopAuto() {
-        if (!autoTimer) return;
-        clearInterval(autoTimer);
-        autoTimer = null;
-        playBtn.setAttribute("aria-pressed", "false");
-        playIcon.textContent = "▶";
-      }
-      playBtn.addEventListener("click", () => {
-        if (autoTimer) stopAuto(); else startAuto();
-      });
 
       // First render
       renderAndAnimate(0);
@@ -851,10 +828,6 @@ const PLAIN_TAG: Record<string, string> = {
     justify-content: center;
   }
   .sctrl:hover { color: var(--color-accent); background: var(--color-paper-dim); }
-  .sctrl--play[aria-pressed="true"] {
-    color: var(--color-paper);
-    background: var(--color-accent);
-  }
 
   .stage__hint {
     position: absolute;

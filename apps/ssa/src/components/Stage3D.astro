@@ -71,8 +71,8 @@
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xFAF8F3);
 
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 4000);
-  camera.position.set(0, 280, 600);
+  const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 6000);
+  camera.position.set(0, 420, 960);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -189,7 +189,7 @@
   // ── Mouse-drag camera rotation ─────────────────────────────
   let camAzimuth = 0;
   let camPolar = 1.05;
-  const camRadius = 660;
+  const camRadius = 1050;
   let dragging = false;
   let lastX = 0, lastY = 0;
   function applyCamera() {
