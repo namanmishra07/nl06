@@ -15,9 +15,10 @@ interface HistoryEntry {
 
 const entries = (history.entries ?? []) as HistoryEntry[];
 
-const monthShort = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+// ── Date helpers ────────────────────────────────────────────────
+const monthNames = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 function toRoman(n: number): string {
@@ -32,199 +33,294 @@ function toRoman(n: number): string {
   return out;
 }
 
-// Each entry is a typographic "specimen" whose treatment depends on
-// its bucket. Every 7th becomes a column-breaking PULL — display-size,
-// dramatic — regardless of its length. The others are bucketed by word
-// count, which gives short punchy quotes more visual real estate.
-type Bucket = "pull" | "headline" | "lead" | "body" | "footnote";
+// ── Build the calendar atlas ────────────────────────────────────
+// Index entries by ISO date for O(1) lookup per cell.
+const entriesByDate = new Map(entries.map((e) => [e.date_ist, e]));
 
-function bucketize(quote: string, i: number): Bucket {
-  if (i % 7 === 0) return "pull";
-  const w = quote.split(/\s+/).length;
-  if (w <= 7)  return "headline";
-  if (w <= 12) return "lead";
-  if (w <= 17) return "body";
-  return "footnote";
+// Render months from the earliest entry's month through the latest's.
+// (When the agent runs forward indefinitely, more months appear naturally.)
+const allDates = entries.map((e) => e.date_ist).sort();
+const [eY, eM] = (allDates[0] ?? "2026-04-01").split("-").map(Number);
+const [lY, lM] = (allDates[allDates.length - 1] ?? "2026-05-01").split("-").map(Number);
+
+interface CalCell {
+  empty: boolean;
+  blank: boolean;  // in-month day with no entry
+  day?: number;
+  entry?: HistoryEntry;
 }
 
-// Pre-compute everything the template needs.
-const specimens = entries.map((e, i) => {
-  const [Y, M, D] = e.date_ist.split("-").map(Number);
+interface Month {
+  year: number;
+  month: number;
+  label: string;
+  yearRoman: string;
+  count: number;
+  cells: CalCell[];
+}
+
+function buildMonth(year: number, month: number): Month {
+  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
+  // JS getUTCDay: 0=Sun..6=Sat. Convert to Mon-start: 0=Mon..6=Sun.
+  const firstDow = (firstOfMonth.getUTCDay() + 6) % 7;
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const cells: CalCell[] = [];
+
+  for (let i = 0; i < firstDow; i++) cells.push({ empty: true, blank: false });
+
+  let count = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const entry = entriesByDate.get(key);
+    if (entry) count++;
+    cells.push({
+      empty: false,
+      blank: !entry,
+      day: d,
+      entry: entry ?? undefined,
+    });
+  }
+  // Pad trailing so we always have full 7-cell rows.
+  while (cells.length % 7 !== 0) cells.push({ empty: true, blank: false });
+
   return {
-    ...e,
-    bucket: bucketize(e.quote, i),
-    day: D,
-    month: monthShort[M - 1],
-    year: Y,
-    yearRoman: toRoman(Y),
-    // Asterism + ornament markers used by pull-quotes.
-    initial: e.quote[0],
-    rest: e.quote.slice(1),
+    year,
+    month,
+    label: monthNames[month - 1],
+    yearRoman: toRoman(year),
+    count,
+    cells,
   };
-});
+}
 
+const months: Month[] = [];
+{
+  let y = eY;
+  let m = eM;
+  while (y < lY || (y === lY && m <= lM)) {
+    months.push(buildMonth(y, m));
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+}
+
+// Newest entry is the default for the reading panel.
 const total = entries.length;
-const yearMain = entries.length > 0
-  ? Number(entries[0].date_ist.slice(0, 4))
-  : new Date().getFullYear();
-const volRoman = toRoman(yearMain);
+const defaultEntry = entries[0] ?? null;
 
-// Author census — show all three with their dot colors.
-const census: { key: string; label: string; n: number }[] = [
-  "claude", "openai", "gemini",
-].map((key) => ({
+// Author census, in canonical order.
+const census = (["claude", "openai", "gemini"] as const).map((key) => ({
   key,
   label: entries.find((e) => e.author_key === key)?.author
-       ?? key.charAt(0).toUpperCase() + key.slice(1),
+       ?? key[0].toUpperCase() + key.slice(1),
   n: entries.filter((e) => e.author_key === key).length,
 }));
+
+// Day-of-week column headers (Mon-start).
+const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 ---
 <BaseLayout
   title="Marginalia — NL06"
-  description="A folio of one-line aphorisms composed daily for the nl06.com footer by Claude, ChatGPT, and Gemini. Read in any order — the eye is in charge."
+  description="A daily atlas of one-line aphorisms composed for the nl06.com footer by Claude, ChatGPT, and Gemini. Click a day to read its line."
   pathname="/quotes"
   itemNumber="№ 006"
 >
-  <article class="sheet">
-    <Container size="wide" class="sheet__inner">
+  <article class="atlas-sheet">
+    <Container size="wide" class="atlas-sheet__inner">
 
-      <!-- ─────────────────────────── MASTHEAD ─────────────────────────── -->
-      <header class="sheet__head">
-        <div class="sheet__rail">
-          <span class="rail__num">Sheet IV</span>
+      <!-- ─────────────────────────── MASTHEAD ─────────────────────── -->
+      <header class="masthead">
+        <div class="masthead__rail">
+          <span class="rail__label">Marginalia</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">Vol. I · {volRoman}</span>
+          <span class="rail__edition">A Daily Atlas · Vol. I</span>
         </div>
 
-        <h1 class="sheet__title">
-          <span class="sheet__title-pre">A folio of</span>
-          <span class="sheet__title-main">Marginalia<span class="sheet__title-comma" aria-hidden="true">,</span></span>
-          <span class="sheet__title-post">composed in transit between three hands.</span>
-        </h1>
+        <h1 class="masthead__title">Marginalia.</h1>
 
-        <div class="sheet__below">
-          <p class="sheet__epigraph">
-            One short line a day, pinned to the footer of <em>nl06.com</em>
-            until tomorrow&rsquo;s takes its place. This is where they come
-            to be remembered. <span class="sheet__epigraph-aside">Read in any
-            order &mdash; the eye is in charge.</span>
-          </p>
+        <p class="masthead__lede">
+          A daily atlas of aphorisms &mdash; composed, in turn, by Claude,
+          ChatGPT, and Gemini. <span class="masthead__instruction">Tap a
+          filled day to read its line.</span>
+        </p>
 
-          <dl class="sheet__census" aria-label="Edition census">
-            <div class="census__row">
-              <dt>Pieces</dt>
-              <dd><span class="census__num">{total}</span></dd>
-            </div>
-            <div class="census__row">
-              <dt>Hands</dt>
-              <dd class="census__hands">
-                {census.map((c, i) => (
-                  <span class="census__hand">
-                    {i > 0 && <span class="census__sep" aria-hidden="true">·</span>}
-                    <span class={`census__dot census__dot--${c.key}`} aria-hidden="true"></span>
-                    <span class="census__name">{c.label}</span>
-                    <span class="census__count">{c.n}</span>
-                  </span>
-                ))}
-              </dd>
-            </div>
-            <div class="census__row">
-              <dt>Pressed</dt>
-              <dd>Daily, 03:30 IST</dd>
-            </div>
-          </dl>
-        </div>
+        <ul class="census" aria-label="Edition census">
+          <li class="census__cell">
+            <span class="census__num">{total}</span>
+            <span class="census__label">pieces</span>
+          </li>
+          {census.map((c) => (
+            <li class="census__cell census__cell--author">
+              <span class={`census__dot census__dot--${c.key}`} aria-hidden="true"></span>
+              <span class="census__name">{c.label}</span>
+              <span class="census__count">{c.n}</span>
+            </li>
+          ))}
+          <li class="census__cell census__cell--time">
+            <span class="census__pressed">Pressed daily, 03:30 IST</span>
+          </li>
+        </ul>
       </header>
 
-      <!-- ─────────────────────────── MOSAIC ─────────────────────────── -->
-      <div class="mosaic">
-        {specimens.map((s, i) => (
-          s.bucket === "pull" ? (
-            <figure class={`spec spec--pull spec--${s.author_key}`}>
-              <div class="pull__frame">
-                <div class="pull__rail">
-                  <span class="pull__day" aria-hidden="true">{s.day}</span>
-                  <span class="pull__month" aria-hidden="true">{s.month}</span>
-                  <span class="pull__year" aria-hidden="true">{s.yearRoman}</span>
-                </div>
-                <div class="pull__body">
-                  <blockquote class="pull__quote">
-                    <span class="pull__mark" aria-hidden="true">&ldquo;</span>{s.quote}
-                  </blockquote>
-                  <figcaption class="pull__stamp">
-                    <span class="pull__pilcrow" aria-hidden="true">❡</span>
-                    <a class="pull__author" href={s.author_url} rel="noopener">{s.author}</a>
-                    <span class="pull__stamp-rule" aria-hidden="true"></span>
-                    <span class="pull__stamp-meta">№ {String(i + 1).padStart(3, "0")}</span>
-                  </figcaption>
-                </div>
-              </div>
-            </figure>
-          ) : (
-            <figure class={`spec spec--${s.bucket} spec--${s.author_key}`}>
-              {s.bucket === "headline" ? (
-                <blockquote class="spec__quote spec__quote--headline">
-                  <span class="spec__initial" aria-hidden="true">{s.initial}</span><span class="spec__rest">{s.rest}</span>
-                </blockquote>
-              ) : (
-                <blockquote class={`spec__quote spec__quote--${s.bucket}`}>
-                  <span class="spec__mark" aria-hidden="true">&ldquo;</span>{s.quote}
-                </blockquote>
-              )}
-              <figcaption class="spec__stamp">
-                <span class={`spec__dot spec__dot--${s.author_key}`} aria-hidden="true"></span>
-                <a class="spec__author" href={s.author_url} rel="noopener">{s.author}</a>
-                <span class="spec__date">
-                  <span class="spec__day-num">{s.day}</span>&thinsp;{s.month}&thinsp;{s.yearRoman}
-                </span>
-              </figcaption>
-            </figure>
-          )
-        ))}
-      </div>
-
-      {entries.length === 0 && (
-        <p class="sheet__empty">
-          The folio is empty. Tomorrow&rsquo;s line will be the first.
+      {defaultEntry === null ? (
+        <p class="atlas-sheet__empty">
+          The atlas is empty. Tomorrow&rsquo;s line will be the first.
         </p>
+      ) : (
+        <>
+          <!-- ───────────────────── READING PANEL ─────────────────── -->
+          <section class="reading" id="reading" aria-live="polite" aria-atomic="true">
+            {entries.map((e, i) => (
+              <article
+                class:list={["leaf", `leaf--${e.author_key}`, i === 0 && "is-active"]}
+                data-q={e.date_ist}
+                id={`q-${e.date_ist}`}
+              >
+                <blockquote class="leaf__text">
+                  <span class="leaf__mark" aria-hidden="true">&ldquo;</span>{e.quote}
+                </blockquote>
+                <footer class="leaf__meta">
+                  <span class={`leaf__dot leaf__dot--${e.author_key}`} aria-hidden="true"></span>
+                  <a class="leaf__author" href={e.author_url} rel="noopener">{e.author}</a>
+                  <span class="leaf__sep" aria-hidden="true">·</span>
+                  <span class="leaf__date">{e.date_display}</span>
+                  <span class="leaf__sep" aria-hidden="true">·</span>
+                  <span class="leaf__num">№ {String(entries.length - i).padStart(3, "0")}</span>
+                </footer>
+              </article>
+            ))}
+          </section>
+
+          <!-- ───────────────────── ATLAS GRID ───────────────────── -->
+          <section class="atlas" aria-label="Calendar atlas">
+            {months.map((mo) => (
+              <article class="month">
+                <header class="month__head">
+                  <h2 class="month__name">{mo.label}</h2>
+                  <span class="month__year" aria-hidden="true">{mo.yearRoman}</span>
+                  <span class="month__rule" aria-hidden="true"></span>
+                  <span class="month__count">{mo.count} {mo.count === 1 ? "piece" : "pieces"}</span>
+                </header>
+                <div class="cal" role="grid" aria-label={`${mo.label} ${mo.year}`}>
+                  {DOW.map((d, i) => (
+                    <span class="cal__dow" role="columnheader" aria-label={["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][i]}>{d}</span>
+                  ))}
+                  {mo.cells.map((c) => (
+                    c.empty ? (
+                      <span class="cal__cell cal__cell--empty" role="gridcell" aria-hidden="true"></span>
+                    ) : c.entry ? (
+                      <a
+                        class:list={["cal__cell", "cal__cell--filled", `cal__cell--${c.entry.author_key}`]}
+                        href={`#q-${c.entry.date_ist}`}
+                        data-q={c.entry.date_ist}
+                        role="gridcell"
+                        aria-label={`Quote by ${c.entry.author} on ${c.entry.date_display}`}
+                      >
+                        <span class="cal__day">{c.day}</span>
+                      </a>
+                    ) : (
+                      <span class="cal__cell cal__cell--blank" role="gridcell">
+                        <span class="cal__day">{c.day}</span>
+                      </span>
+                    )
+                  ))}
+                </div>
+              </article>
+            ))}
+          </section>
+        </>
       )}
 
-      <footer class="sheet__foot" aria-hidden="true">
-        <span class="sheet__asterism">⁂</span>
+      <footer class="atlas-sheet__foot" aria-hidden="true">
+        <span class="asterism">⁂</span>
       </footer>
 
     </Container>
   </article>
+
+  <script is:inline>
+    (function () {
+      var days = document.querySelectorAll('.cal__cell--filled');
+      var leaves = document.querySelectorAll('.leaf');
+      if (!days.length || !leaves.length) return;
+
+      // If the URL arrived with a hash, jump to that entry immediately.
+      function applyHash() {
+        var hash = window.location.hash;
+        if (!hash || !hash.startsWith('#q-')) return;
+        var q = hash.slice(3);
+        select(q, false);
+      }
+
+      function select(q, scroll) {
+        var found = false;
+        leaves.forEach(function (l) {
+          var match = l.getAttribute('data-q') === q;
+          l.classList.toggle('is-active', match);
+          if (match) found = true;
+        });
+        if (!found) return;
+        days.forEach(function (d) {
+          d.classList.toggle('is-selected', d.getAttribute('data-q') === q);
+        });
+        if (scroll) {
+          var panel = document.getElementById('reading');
+          if (panel) {
+            var rect = panel.getBoundingClientRect();
+            if (rect.top < 0 || rect.bottom > window.innerHeight) {
+              panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        }
+      }
+
+      days.forEach(function (d) {
+        d.addEventListener('click', function (e) {
+          e.preventDefault();
+          var q = d.getAttribute('data-q');
+          history.replaceState(null, '', '#q-' + q);
+          select(q, true);
+        });
+      });
+
+      applyHash();
+    })();
+  </script>
 </BaseLayout>
 
 <style>
-  /* ─────────────────────── per-LLM accents ─────────────────────── */
-  /* Three quiet hues that sit on cream paper without competing
-     with the ink-blue site accent. Used as a CSS var so each
-     specimen scopes its accent cleanly. */
-  .spec--claude { --acc: #A8512A; }   /* warm rust  */
-  .spec--openai { --acc: #2E7E5D; }   /* muted green */
-  .spec--gemini { --acc: #1B3A5C; }   /* ink blue   */
+  /* ─────────────────── per-LLM hues ──────────────────── */
+  /* Restrained — three muted tones that share weight with cream paper. */
+  :root {
+    --claude: #A8512A;   /* warm rust    */
+    --openai: #2E7E5D;   /* muted green  */
+    --gemini: #1B3A5C;   /* ink blue (= site accent) */
+  }
 
-  .census__dot--claude { background: #A8512A; }
-  .census__dot--openai { background: #2E7E5D; }
-  .census__dot--gemini { background: #1B3A5C; }
-  .spec__dot--claude   { background: #A8512A; }
-  .spec__dot--openai   { background: #2E7E5D; }
-  .spec__dot--gemini   { background: #1B3A5C; }
+  .leaf--claude { --acc: var(--claude); }
+  .leaf--openai { --acc: var(--openai); }
+  .leaf--gemini { --acc: var(--gemini); }
 
-  /* ─────────────────────── PAGE FRAME ─────────────────────── */
-  .sheet {
+  .leaf__dot--claude,  .census__dot--claude  { background: var(--claude); }
+  .leaf__dot--openai,  .census__dot--openai  { background: var(--openai); }
+  .leaf__dot--gemini,  .census__dot--gemini  { background: var(--gemini); }
+
+  .cal__cell--claude { --cell: var(--claude); }
+  .cal__cell--openai { --cell: var(--openai); }
+  .cal__cell--gemini { --cell: var(--gemini); }
+
+  /* ─────────────────── page frame ──────────────────── */
+  .atlas-sheet {
     padding-top: var(--space-12);
     padding-bottom: var(--space-20);
   }
-  .sheet__inner {
+  .atlas-sheet__inner {
     padding-left: var(--space-page);
     padding-right: var(--space-page);
   }
 
-  /* ─────────────────────── MASTHEAD ─────────────────────── */
-  .sheet__rail {
+  /* ─────────────────── masthead ──────────────────── */
+  .masthead__rail {
     display: flex;
     align-items: center;
     gap: var(--space-3);
@@ -236,120 +332,75 @@ const census: { key: string; label: string; n: number }[] = [
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
-  .rail__num   { color: var(--color-ink); font-weight: 600; }
-  .rail__rule  { flex: 1; height: 1px; background: var(--color-rule); }
-  .rail__date  { font-feature-settings: var(--features-tabular); }
+  .rail__label    { color: var(--color-ink); font-weight: 600; }
+  .rail__rule     { flex: 1; height: 1px; background: var(--color-rule); }
+  .rail__edition  { font-feature-settings: var(--features-tabular); }
 
-  .sheet__title {
-    margin: var(--space-7) 0 var(--space-8) 0;
+  .masthead__title {
+    margin: var(--space-8) 0 var(--space-4) 0;
     font-family: var(--font-serif);
-    color: var(--color-ink);
-    line-height: 1;
-    letter-spacing: var(--tracking-display);
-    font-feature-settings: var(--features-display);
-  }
-  .sheet__title-pre {
-    display: block;
-    font-style: italic;
-    font-weight: 400;
-    font-size: 1.4rem;
-    color: var(--color-ink-muted);
-    letter-spacing: var(--tracking-tight);
-    margin-bottom: var(--space-2);
-  }
-  .sheet__title-main {
-    display: block;
     font-style: italic;
     font-weight: 700;
-    font-size: clamp(3rem, 9vw, 6rem);
+    font-size: clamp(3rem, 7vw, 5rem);
+    letter-spacing: var(--tracking-display);
+    line-height: 1;
     color: var(--color-accent);
-    letter-spacing: var(--tracking-jumbo);
-    line-height: 0.92;
-  }
-  .sheet__title-comma {
-    color: var(--color-ink);
-    font-weight: 400;
-  }
-  .sheet__title-post {
-    display: block;
-    font-style: italic;
-    font-weight: 500;
-    font-size: clamp(1.4rem, 3.2vw, 2.25rem);
-    color: var(--color-ink-soft);
-    letter-spacing: var(--tracking-tight);
-    margin-top: var(--space-3);
+    font-feature-settings: var(--features-display);
   }
 
-  /* MASTHEAD ↓ epigraph + census, separated from mosaic by a double rule */
-  .sheet__below {
-    display: grid;
-    grid-template-columns: 1.6fr 1fr;
-    gap: var(--space-12);
-    padding-top: var(--space-7);
-    padding-bottom: var(--space-10);
-    border-top: 3px double var(--color-rule-strong);
-    border-bottom: 3px double var(--color-rule-strong);
-  }
-  .sheet__epigraph {
-    margin: 0;
+  .masthead__lede {
+    margin: 0 0 var(--space-7) 0;
     font-family: var(--font-serif);
-    font-size: var(--type-body);
-    line-height: var(--leading-prose);
+    font-size: var(--type-h3);
+    line-height: 1.45;
     color: var(--color-ink-soft);
     max-width: 38rem;
+    font-weight: 400;
   }
-  .sheet__epigraph em {
-    font-style: italic;
-    color: var(--color-ink);
-  }
-  .sheet__epigraph-aside {
-    color: var(--color-accent);
+  .masthead__instruction {
+    color: var(--color-ink-muted);
     font-style: italic;
   }
 
-  .sheet__census {
-    margin: 0;
-    display: grid;
-    grid-template-columns: 5rem 1fr;
-    gap: var(--space-4) var(--space-5);
+  /* Census strip — single horizontal row, restrained labels. */
+  .census {
+    list-style: none;
+    margin: 0 0 var(--space-12) 0;
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-7);
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
     font-weight: 500;
-    align-content: start;
-  }
-  .census__row { display: contents; }
-  .sheet__census dt {
-    color: var(--color-ink);
-    font-weight: 600;
-    padding-top: 0.2em;
-  }
-  .sheet__census dd {
-    margin: 0;
-    color: var(--color-ink-soft);
-    font-family: var(--font-serif);
-    font-size: var(--type-small);
-    text-transform: none;
-    letter-spacing: var(--tracking-normal);
     font-feature-settings: var(--features-tabular);
   }
-  .census__num {
-    font-weight: 600;
-    color: var(--color-ink);
-    font-size: 1.05em;
-  }
-  .census__hands {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0.5em;
-  }
-  .census__hand {
+  .census__cell {
     display: inline-flex;
     align-items: baseline;
-    gap: 0.35em;
+    gap: 0.4em;
+  }
+  .census__num {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.4em;
+    color: var(--color-ink);
+    font-weight: 600;
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .census__label {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-soft);
+    font-size: var(--type-small);
   }
   .census__dot {
     display: inline-block;
@@ -363,110 +414,145 @@ const census: { key: string; label: string; n: number }[] = [
     font-weight: 600;
   }
   .census__count {
+    font-family: var(--font-serif);
+    font-style: italic;
     font-feature-settings: var(--features-oldstyle);
     color: var(--color-ink-muted);
-    font-style: italic;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-size: var(--type-small);
     margin-left: 0.1em;
   }
-  .census__sep {
-    color: var(--color-ink-faint);
-    margin-right: 0.15em;
+  .census__pressed {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-soft);
+    font-size: var(--type-small);
   }
 
-  /* ─────────────────────── THE MOSAIC ─────────────────────── */
-  /* CSS multi-column packing — items flow naturally, fill column 1
-     top-to-bottom, then column 2, then column 3. Pull-quotes use
-     column-span:all to break out as full-width feature spreads.
-
-     Critical: break-inside: avoid keeps a specimen whole. */
-  .mosaic {
-    margin-top: var(--space-12);
-    column-count: 3;
-    column-gap: var(--space-12);
-    column-rule: 1px solid var(--color-rule);
-  }
-
-  /* ─────────────────────── SPECIMEN BASE ─────────────────────── */
-  .spec {
-    break-inside: avoid;
-    margin: 0 0 var(--space-10) 0;
-    padding: 0 0 0 var(--space-4);
-    border-left: 1px solid var(--color-rule);
+  /* ─────────────────── reading panel ──────────────────── */
+  .reading {
     position: relative;
-    transition: border-color 220ms ease;
+    margin: 0 0 var(--space-16) 0;
+    min-height: 14rem;
   }
-  .spec:hover {
-    border-left-color: var(--acc, var(--color-accent));
+  .leaf {
+    display: none;
+    max-width: 42rem;
+  }
+  .leaf.is-active {
+    display: block;
+    animation: leaf-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @keyframes leaf-in {
+    from { opacity: 0; transform: translateY(0.5rem); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
-  .spec__quote {
+  .leaf__text {
     margin: 0;
     font-family: var(--font-serif);
     font-style: italic;
+    font-weight: 500;
+    font-size: clamp(1.5rem, 3.4vw, 2.5rem);
+    line-height: 1.25;
     color: var(--color-ink);
     letter-spacing: var(--tracking-tight);
     text-indent: -0.4em;
   }
-  .spec__mark {
-    color: var(--acc, var(--color-accent));
+  .leaf__mark {
+    color: var(--acc);
     font-weight: 800;
-    font-size: 1.35em;
+    font-size: 1.3em;
     line-height: 0;
     vertical-align: -0.1em;
     margin-right: 0.04em;
   }
 
-  /* HEADLINE — short, punchy. Drop-cap initial in the LLM colour. */
-  .spec__quote--headline {
-    font-size: 1.875rem;
-    line-height: 1.18;
-    font-weight: 500;
-    text-indent: 0;
-  }
-  .spec__initial {
-    float: left;
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 700;
-    font-size: 3.6em;
-    line-height: 0.82;
-    color: var(--acc, var(--color-accent));
-    margin: 0.05em 0.08em -0.1em 0;
-    font-feature-settings: var(--features-display);
-  }
-  .spec__rest { color: inherit; }
-
-  /* LEAD — medium. Hung quote mark in colour. */
-  .spec__quote--lead {
-    font-size: 1.4rem;
-    line-height: 1.3;
-    font-weight: 500;
-  }
-  /* BODY — most quotes land here. */
-  .spec__quote--body {
-    font-size: 1.0625rem;
-    line-height: 1.5;
-  }
-  /* FOOTNOTE — long. Tucked compactly, paper-dim tint, vertical bar. */
-  .spec--footnote {
-    background: var(--color-paper-dim);
-    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
-    border-left: 2px solid var(--acc, var(--color-rule));
-    margin-left: -1px;
-  }
-  .spec__quote--footnote {
-    font-size: 0.95rem;
-    line-height: 1.55;
-    color: var(--color-ink-soft);
-  }
-
-  /* The STAMP — universal author + date signature. */
-  .spec__stamp {
-    margin-top: var(--space-3);
+  .leaf__meta {
+    margin-top: var(--space-6);
     display: flex;
     align-items: baseline;
-    gap: 0.55em;
     flex-wrap: wrap;
+    gap: 0.55em;
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .leaf__dot {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    transform: translateY(0.05em);
+  }
+  .leaf__author {
+    color: var(--acc);
+    text-decoration: none;
+    font-weight: 700;
+    border-bottom: 1px solid transparent;
+    transition: border-color 140ms ease;
+  }
+  .leaf__author:hover {
+    border-bottom-color: var(--acc);
+  }
+  .leaf__sep { color: var(--color-ink-faint); }
+  .leaf__date {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .leaf__num {
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-oldstyle), "tnum" 1;
+  }
+
+  /* ─────────────────── atlas (calendar) ──────────────────── */
+  .atlas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: var(--space-10) var(--space-12);
+    padding-top: var(--space-7);
+    border-top: 1px solid var(--color-rule);
+  }
+  .month { min-width: 0; }
+  .month__head {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    align-items: baseline;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .month__name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: var(--type-h3);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .month__year {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+  .month__rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .month__count {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
@@ -475,227 +561,120 @@ const census: { key: string; label: string; n: number }[] = [
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
-  .spec__dot {
-    display: inline-block;
-    width: 0.55em;
-    height: 0.55em;
-    border-radius: 50%;
-    flex-shrink: 0;
-    transform: translateY(0.06em);
-  }
-  .spec__author {
-    color: var(--acc, var(--color-ink));
-    text-decoration: none;
-    border-bottom: 1px solid transparent;
-    transition: border-color 140ms ease;
-    font-weight: 700;
-  }
-  .spec__author:hover {
-    border-bottom-color: var(--acc, var(--color-accent));
-  }
-  .spec__date {
-    color: var(--color-ink-muted);
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: var(--type-meta);
-    text-transform: none;
-    letter-spacing: var(--tracking-normal);
-    font-feature-settings: var(--features-oldstyle);
-    margin-left: auto;
-  }
-  .spec__day-num {
-    color: var(--color-ink);
-    font-weight: 600;
-  }
 
-  /* ─────────────────────── PULL-QUOTE ─────────────────────── */
-  /* Every 7th specimen breaks the columns into a full-width feature.
-     Big italic display type with a marginal date numeral. The dramatic
-     punctuation that anchors the mosaic. */
-  .spec--pull {
-    column-span: all;
-    -webkit-column-span: all;
-    border-left: 0;
-    padding: 0;
-    margin: var(--space-12) 0 var(--space-12) 0;
-  }
-  .pull__frame {
+  /* The grid itself — 7 cols, dow header + day rows. */
+  .cal {
     display: grid;
-    grid-template-columns: 9rem 1fr;
-    gap: var(--space-12);
-    align-items: start;
-    padding: var(--space-10) 0;
-    border-top: 1px solid var(--color-ink);
-    border-bottom: 1px solid var(--color-ink);
-    position: relative;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.35rem;
   }
-  /* Double-rule above and below — printed-edition framing. */
-  .pull__frame::before {
-    content: "";
-    position: absolute;
-    left: 0; right: 0; top: -5px;
-    border-top: 1px solid var(--color-ink);
-  }
-  .pull__frame::after {
-    content: "";
-    position: absolute;
-    left: 0; right: 0; bottom: -5px;
-    border-bottom: 1px solid var(--color-ink);
-  }
-  .pull__rail {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    padding-right: var(--space-4);
-    border-right: 1px solid var(--color-rule);
-  }
-  .pull__day {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 400;
-    font-size: clamp(4.5rem, 11vw, 8rem);
-    line-height: 0.82;
-    color: var(--acc);
-    font-feature-settings: var(--features-oldstyle);
-    letter-spacing: -0.04em;
-  }
-  .pull__month {
-    margin-top: var(--space-2);
+  .cal__dow {
+    text-align: center;
     font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    font-weight: 600;
-    letter-spacing: var(--tracking-wide);
-    text-transform: uppercase;
-    color: var(--color-ink);
-  }
-  .pull__year {
-    margin-top: var(--space-1);
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: var(--type-small);
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-  }
-  .pull__body {
-    min-width: 0;
-  }
-  .pull__quote {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 500;
-    font-size: clamp(1.75rem, 4.2vw, 3.25rem);
-    line-height: 1.08;
-    color: var(--color-ink);
-    letter-spacing: var(--tracking-display);
-    text-indent: -0.4em;
-  }
-  .pull__mark {
-    color: var(--acc);
-    font-weight: 800;
-    font-size: 1.4em;
-    line-height: 0;
-    vertical-align: -0.1em;
-    margin-right: 0.04em;
-  }
-  .pull__stamp {
-    margin-top: var(--space-7);
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
+    font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
+    color: var(--color-ink-faint);
     font-weight: 600;
-  }
-  .pull__pilcrow {
-    color: var(--acc);
-    font-size: 1.4em;
-    font-weight: 400;
-  }
-  .pull__author {
-    color: var(--acc);
-    text-decoration: none;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 35%, transparent);
-    transition: border-color 140ms ease;
-    font-weight: 700;
-  }
-  .pull__author:hover {
-    border-bottom-color: var(--acc);
-  }
-  .pull__stamp-rule {
-    flex: 1;
-    height: 1px;
-    background: var(--color-rule);
-  }
-  .pull__stamp-meta {
-    font-feature-settings: var(--features-oldstyle);
-    color: var(--color-ink-muted);
-    font-weight: 500;
+    padding-bottom: 0.4rem;
   }
 
-  /* ─────────────────────── EMPTY + FOOT ─────────────────────── */
-  .sheet__empty {
+  /* Day cell — uniform aspect ratio, day numeral oldstyle. */
+  .cal__cell {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-serif);
+    font-feature-settings: var(--features-oldstyle);
+    color: var(--color-ink-faint);
+    font-size: var(--type-small);
+    line-height: 1;
+    border-radius: 50%;
+    position: relative;
+  }
+  .cal__cell--empty { visibility: hidden; }
+  .cal__cell--blank {
+    color: var(--color-ink-faint);
+  }
+  /* Filled day — disc in LLM colour, day numeral in cream. */
+  .cal__cell--filled {
+    background: var(--cell);
+    color: var(--color-paper);
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      box-shadow 180ms ease;
+    font-feature-settings: var(--features-oldstyle), "lnum" 1;
+  }
+  .cal__cell--filled:hover,
+  .cal__cell--filled:focus-visible {
+    transform: scale(1.12);
+    outline: none;
+  }
+  .cal__cell--filled.is-selected {
+    transform: scale(1.12);
+    /* Ring matches the cell colour at higher contrast. */
+    box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 3px var(--color-ink);
+  }
+  .cal__cell--filled:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 3px var(--color-accent);
+  }
+  .cal__day {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 0.85em;
+    letter-spacing: -0.01em;
+  }
+
+  /* ─────────────────── empty + foot ──────────────────── */
+  .atlas-sheet__empty {
     margin-top: var(--space-10);
     font-family: var(--font-serif);
     font-style: italic;
     font-size: var(--type-body);
     color: var(--color-ink-muted);
   }
-  .sheet__foot {
+  .atlas-sheet__foot {
     margin-top: var(--space-16);
     padding-top: var(--space-8);
     border-top: 1px solid var(--color-rule);
     text-align: center;
   }
-  .sheet__asterism {
+  .asterism {
     font-size: 1.5rem;
     color: var(--color-ink-faint);
     letter-spacing: 0.5em;
   }
 
-  /* ─────────────────────── RESPONSIVE ─────────────────────── */
-  @media (max-width: 1024px) {
-    .mosaic { column-count: 2; column-gap: var(--space-10); }
-    .sheet__below {
+  /* ─────────────────── responsive ──────────────────── */
+  @media (max-width: 760px) {
+    .masthead__title { font-size: 2.75rem; }
+    .masthead__lede  { font-size: var(--type-body); }
+
+    .census {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-2);
+    }
+
+    .leaf__text { font-size: 1.4rem; }
+    .leaf__meta { font-size: var(--type-marginalia); gap: 0.4em; }
+
+    .atlas {
       grid-template-columns: 1fr;
       gap: var(--space-8);
     }
+    .cal { gap: 0.3rem; }
   }
-  @media (max-width: 760px) {
-    .sheet__title { margin-top: var(--space-5); }
-    .sheet__title-main { letter-spacing: -0.025em; }
 
-    .sheet__census { grid-template-columns: 1fr; gap: var(--space-2); }
-    .sheet__census dt { padding-top: var(--space-3); }
-
-    .mosaic {
-      column-count: 1;
-      column-rule: 0;
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    .leaf.is-active { animation: none; }
+    .cal__cell--filled:hover,
+    .cal__cell--filled.is-selected {
+      transform: none;
     }
-
-    .pull__frame {
-      grid-template-columns: 1fr;
-      gap: var(--space-5);
-      padding: var(--space-7) 0;
-    }
-    .pull__rail {
-      flex-direction: row;
-      align-items: baseline;
-      gap: var(--space-3);
-      padding-right: 0;
-      padding-bottom: var(--space-3);
-      border-right: 0;
-      border-bottom: 1px solid var(--color-rule);
-    }
-    .pull__day { line-height: 0.95; }
-    .pull__month { margin-top: 0; }
-    .pull__year { margin-top: 0; }
-
-    .spec__quote--headline { font-size: 1.5rem; }
-    .spec__quote--lead     { font-size: 1.2rem; }
   }
 </style>
