@@ -433,7 +433,11 @@ const PLAIN_TAG: Record<string, string> = {
       }
       function applyFilters() {
         logRows.forEach((row, i) => {
-          row.hidden = !eventPassesFilter(events[i]);
+          // Each row is wrapped in <li>; we have to hide the <li> for the
+          // grid to actually collapse, not just the inner button.
+          const pass = eventPassesFilter(events[i]);
+          const li = row.parentElement;
+          if (li) li.hidden = !pass;
         });
       }
 
