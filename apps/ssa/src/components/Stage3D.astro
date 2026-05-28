@@ -328,6 +328,12 @@
       cycleStart: performance.now(),
     };
 
+    // Snap the orbit plane perpendicular to the camera at this instant
+    // — face-on view for the new event. We do NOT keep updating this in
+    // the frame loop, so the user can drag freely from here to view
+    // the orbit in 3D.
+    faceOrbitToCamera();
+
     // Update HUD overlay.
     setHud(e);
   }
@@ -413,9 +419,6 @@
 
     // Earth slowly spins.
     earth.rotation.y += dt * 0.00012;
-
-    // Keep orbits perpendicular to the line of sight.
-    faceOrbitToCamera();
 
     if (current) {
       const e = current.event;
