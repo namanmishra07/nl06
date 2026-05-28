@@ -1,7 +1,6 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
-import OrbitMap   from "~/components/OrbitMap.astro";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -20,6 +19,8 @@ interface FeedEvent {
   snr: number;
   confidence: "HIGH" | "LOW";
   altitude_km: number;
+  a_km_at_event: number | null;
+  inc_deg_at_event: number | null;
   sparkline: { epoch_iso: string[]; a_km: number[]; altitude_km: number[] };
 }
 interface Feed { generated_at: string; window_days: number; event_count: number; events: FeedEvent[]; }
@@ -46,7 +47,6 @@ const summary: Summary = readJson("data/summary.json", {
   events_in_window: 0, by_classification: {}, by_kind: {}, by_confidence: {}, by_constellation: {},
 });
 
-// Filter to physically sensible events.
 const usable = feed.events.filter((e) =>
   e.altitude_km > 100 && e.altitude_km < 50000 && e.dv_mps > 0.005
 );
@@ -58,276 +58,261 @@ function score(e: FeedEvent): number {
   const swarm   = e.constellation ? 0.3 : 1.0;
   return e.dv_mps * conf * routine * swarm;
 }
-const ranked = [...usable].sort((a, b) => score(b) - score(a));
-const hero = ranked.length > 0 ? ranked[0] : null;
-const moreCards = ranked.slice(1, 9);
-
-// ── Plain-language translators ─────────────────────────────────────
-const PLAIN_TYPE: Record<string, string> = {
-  raise:               "orbit raised",
-  lower:               "orbit lowered",
-  deorbit:             "rapid altitude loss",
-  plane_change:        "orbital plane shifted",
-  stationkeeping_ew:   "routine east-west adjustment",
-  stationkeeping_ns:   "routine north-south adjustment",
-};
-
-const TYPE_VERB: Record<string, string> = {
-  raise:               "raised its orbit",
-  lower:               "lowered its orbit",
-  deorbit:             "dropped altitude fast",
-  plane_change:        "shifted its orbital plane",
-  stationkeeping_ew:   "nudged east-or-west",
-  stationkeeping_ns:   "nudged north-or-south",
-};
-
-function plainAltitude(alt: number): string {
-  if (alt < 1000) return `low Earth orbit (${Math.round(alt)} km up)`;
-  if (alt < 8000) return `medium-low orbit (${(alt / 1000).toFixed(1)}k km up)`;
-  if (alt < 25000) return `medium Earth orbit (${(alt / 1000).toFixed(0)}k km up)`;
-  if (alt > 33000 && alt < 38000) return `geostationary orbit (about 36k km up)`;
-  return `high orbit (${(alt / 1000).toFixed(0)}k km up)`;
-}
-
-function plainSize(dv: number): { label: string; tone: "tiny" | "small" | "medium" | "big" | "huge" } {
-  if (dv < 0.05) return { label: "a tiny nudge", tone: "tiny" };
-  if (dv < 0.5)  return { label: "a small move", tone: "small" };
-  if (dv < 5)    return { label: "a noticeable burn", tone: "medium" };
-  if (dv < 50)   return { label: "a significant maneuver", tone: "big" };
-  return { label: "a major maneuver", tone: "huge" };
-}
-
-function plainDistance(km: number | null): string {
-  if (km === null) return "";
-  const abs = Math.abs(km);
-  if (abs < 0.5) return `about ${(abs * 1000).toFixed(0)} metres`;
-  if (abs < 2)   return `about ${abs.toFixed(1)} km`;
-  return `about ${Math.round(abs)} km`;
-}
-
-function plainAngle(deg: number | null): string {
-  if (deg === null) return "";
-  const abs = Math.abs(deg);
-  if (abs < 0.01) return `under a hundredth of a degree`;
-  if (abs < 0.1)  return `${abs.toFixed(3)}°`;
-  return `${abs.toFixed(2)}°`;
-}
-
-function fmtWhenShort(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-function fmtWhenLong(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
-}
-
-function buildSentence(e: FeedEvent): string {
-  const name = e.object_name ?? `Satellite ${e.norad_id}`;
-  const verb = TYPE_VERB[e.classification] ?? "moved";
-  const alt = plainAltitude(e.altitude_km);
-  if (e.kind === "in_plane" && e.delta_a_km !== null) {
-    const dist = plainDistance(e.delta_a_km);
-    const dir = e.delta_a_km >= 0 ? "by" : "by";
-    return `${name} ${verb} ${dir} ${dist}, in ${alt}.`;
-  }
-  if (e.kind === "out_of_plane" && e.delta_inc_deg !== null) {
-    return `${name} ${verb} by ${plainAngle(e.delta_inc_deg)}, in ${alt}.`;
-  }
-  return `${name} ${verb} in ${alt}.`;
-}
-
-const counts = {
-  total:    usable.length,
-  confirmed: usable.filter((e) => e.confidence === "HIGH").length,
-  watched:  summary.payloads_tracked || (new Set(usable.map((e) => e.norad_id)).size),
-};
+const ordered = [...usable].sort((a, b) => score(b) - score(a));
+const totalEvents = ordered.length;
 ---
 <BaseLayout
-  title="SSA — Satellites moving in orbit"
-  description="What just moved up there: a daily readout of satellite maneuvers, in plain English."
+  title="SSA — Watch satellites move"
+  description="A guided tour through every satellite maneuver detected from public orbital data this month."
   pathname="/"
   itemNumber="№ 001"
 >
-  <article class="page">
-    <Container size="wide" class="page__inner">
+  <article class="theatre-page">
+    <Container size="wide" class="theatre-page__inner">
 
-      <!-- ────────────────── HERO HEADLINE ────────────────── -->
-      <header class="hero-head">
-        <p class="hero-head__kicker">What moved up there</p>
-        <h1 class="hero-head__title">
-          <span class="hero-head__num">{counts.total}</span>
-          <span class="hero-head__text">satellites changed orbit in the last 30 days.</span>
+      <header class="theatre-head">
+        <p class="theatre-head__kicker">A guided tour</p>
+        <h1 class="theatre-head__title">
+          <span class="theatre-head__title-pre">Watch satellites</span>
+          <span class="theatre-head__title-main">move.</span>
         </h1>
-        <p class="hero-head__lede">
-          We watch the public tracking data and look for sudden breaks in
-          otherwise smooth orbits. Each break is a thruster firing.
-          <a class="hero-head__how" href="/method">How that works ↗</a>
+        <p class="theatre-head__lede">
+          We watch their published orbits and surface the moments those orbits
+          break &mdash; thruster firings, detected from the ground. Use the arrows
+          to step through the most notable {totalEvents} this month, or hit Play.
+          <a class="theatre-head__how" href="/method">How that works ↗</a>
         </p>
-
-        <ul class="stats">
-          <li class="stats__cell">
-            <span class="stats__num"><span data-counter={counts.total}>0</span></span>
-            <span class="stats__lbl">maneuvers detected</span>
-          </li>
-          <li class="stats__cell">
-            <span class="stats__num"><span data-counter={counts.confirmed}>0</span></span>
-            <span class="stats__lbl">double-confirmed</span>
-          </li>
-          <li class="stats__cell">
-            <span class="stats__num"><span data-counter={counts.watched}>0</span></span>
-            <span class="stats__lbl">satellites watched</span>
-          </li>
-        </ul>
       </header>
 
-      <!-- ────────────────── ORBIT MAP ────────────────── -->
-      {usable.length > 0 && (
-        <section class="map-sec">
-          <header class="map-sec__head">
-            <h2 class="map-sec__title">Every move, on one map</h2>
-            <p class="map-sec__sub">
-              Each dot is a satellite that just maneuvered, placed on its orbital
-              shell. <strong>Hover</strong> for a quick read,
-              <strong>click</strong> for the story.
-            </p>
-          </header>
+      {ordered.length === 0 ? (
+        <p class="theatre-page__empty">
+          No usable maneuvers in the last 30 days. The pipeline may be
+          mid-bootstrap; check back tomorrow.
+        </p>
+      ) : (
+        <section class="theatre" aria-label="Maneuver Theatre">
 
-          <div class="controls">
-            <button class="chip is-on" data-filter-class="raise"             type="button"><span class="chip__sw" style="background:#E07A30"></span>raised</button>
-            <button class="chip is-on" data-filter-class="lower"             type="button"><span class="chip__sw" style="background:#2A5B9C"></span>lowered</button>
-            <button class="chip is-on" data-filter-class="plane_change"      type="button"><span class="chip__sw" style="background:#36906A"></span>plane shift</button>
-            <button class="chip is-on" data-filter-class="stationkeeping_ew" type="button"><span class="chip__sw" style="background:#B8B2A0"></span>routine SK</button>
-            <button class="chip is-on" data-filter-class="stationkeeping_ns" type="button"><span class="chip__sw" style="background:#C9C1A9"></span>routine SK</button>
-            <button class="chip is-on" data-filter-class="deorbit"           type="button"><span class="chip__sw" style="background:#C73E2E"></span>deorbit</button>
-            <span class="controls__sep" aria-hidden="true"></span>
-            <button class="chip chip--toggle" data-filter-conf="HIGH" type="button" aria-pressed="false">Show double-confirmed only</button>
-          </div>
+          <!-- ─── The Stage ─── -->
+          <div class="stage">
+            <button class="stage__nav stage__nav--prev" id="prev-btn" type="button"
+                    aria-label="Previous maneuver (arrow left)">
+              <span aria-hidden="true">←</span>
+            </button>
 
-          <OrbitMap events={usable} />
+            <div class="stage__center">
+              <svg
+                class="stage__svg"
+                viewBox="0 0 800 540"
+                width="800" height="540"
+                role="img"
+                aria-label="Animated diagram of one satellite maneuver"
+              >
+                <defs>
+                  <radialGradient id="t-earth" cx="38%" cy="38%" r="65%">
+                    <stop offset="0%"  stop-color="#6f93b9" />
+                    <stop offset="58%" stop-color="#3a5a7e" />
+                    <stop offset="100%" stop-color="#1f3349" />
+                  </radialGradient>
+                  <clipPath id="t-earth-clip">
+                    <circle cx="400" cy="270" r="30" />
+                  </clipPath>
+                  <marker id="t-arrow" markerWidth="10" markerHeight="10" refX="7" refY="5"
+                          orient="auto">
+                    <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#E07A30" />
+                  </marker>
+                  <marker id="t-arrow-blue" markerWidth="10" markerHeight="10" refX="7" refY="5"
+                          orient="auto">
+                    <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#2A5B9C" />
+                  </marker>
+                  <marker id="t-arrow-green" markerWidth="10" markerHeight="10" refX="7" refY="5"
+                          orient="auto">
+                    <path d="M0,1 L8,5 L0,9 L1.5,5 Z" fill="#36906A" />
+                  </marker>
+                </defs>
 
-          <!-- Focus panel — JS populates from orbit map hover/click -->
-          <aside class="focus" id="focus" aria-live="polite" aria-atomic="true">
-            <div class="focus__placeholder">
-              <span class="focus__placeholder-icon" aria-hidden="true">↑</span>
-              Hover a dot above for a quick read · click to dig in
+                <!-- not-to-scale watermark -->
+                <text x="780" y="525" text-anchor="end"
+                      font-family="var(--font-sans)" font-size="9"
+                      fill="var(--color-ink-faint)"
+                      style="letter-spacing: 0.08em; text-transform: uppercase;">
+                  diagram · changes exaggerated for clarity
+                </text>
+
+                <!-- Background rings — the four orbital regimes, very faint -->
+                {[140, 200, 260, 305].map((r) => (
+                  <circle cx="400" cy="270" r={r}
+                          fill="none" stroke="var(--color-rule)"
+                          stroke-width="0.5"
+                          stroke-dasharray="1 8" />
+                ))}
+
+                <!-- Old + new orbit rings — animated by JS -->
+                <g id="stage-orbits">
+                  <ellipse id="orbit-before" cx="400" cy="270" rx="180" ry="180"
+                           fill="none" stroke="var(--color-ink-muted)"
+                           stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
+                  <ellipse id="orbit-after"  cx="400" cy="270" rx="200" ry="200"
+                           fill="none" stroke="#E07A30" stroke-width="2.5" />
+                </g>
+
+                <!-- Earth -->
+                <g class="t-earth">
+                  <circle cx="400" cy="270" r="30" fill="url(#t-earth)" />
+                  <g clip-path="url(#t-earth-clip)" fill="#1f3349" fill-opacity="0.55">
+                    <path d="M 401,260 C 408,260 411,266 409,272 C 407,277 402,279 399,278 C 396,276 396,271 398,266 C 399,263 400,260 401,260 Z" />
+                    <path d="M 394,257 C 399,254 405,254 412,257 C 408,260 402,261 397,260 C 394,260 392,259 394,257 Z" />
+                    <path d="M 386,262 C 389,259 392,263 391,269 C 390,274 387,278 385,275 C 383,272 384,266 386,262 Z" />
+                    <ellipse cx="411" cy="278" rx="4" ry="2" />
+                  </g>
+                  <circle cx="416" cy="270" r="30" fill="#000" fill-opacity="0.16"
+                          clip-path="url(#t-earth-clip)" />
+                </g>
+
+                <!-- Burn marker — small arrow at the satellite showing direction -->
+                <g id="burn-marker" opacity="0">
+                  <line id="burn-line" x1="0" y1="0" x2="0" y2="0"
+                        stroke="#E07A30" stroke-width="2.5"
+                        marker-end="url(#t-arrow)" />
+                </g>
+
+                <!-- Satellite icon — small triangle on the orbit -->
+                <g id="satellite">
+                  <circle cx="0" cy="0" r="4.5" fill="var(--color-ink)" />
+                  <circle cx="0" cy="0" r="9" fill="none"
+                          stroke="var(--color-ink)" stroke-width="0.8"
+                          stroke-dasharray="2 3" opacity="0.5" />
+                </g>
+
+                <!-- Δv label, positioned by JS -->
+                <text id="stage-delta-label" x="0" y="0"
+                      font-family="var(--font-sans)" font-size="13" font-weight="800"
+                      fill="var(--color-ink)" text-anchor="middle"
+                      style="letter-spacing: 0.02em;">
+                </text>
+              </svg>
             </div>
-            <article class="focus__card" hidden>
-              <header class="focus__head">
-                <h3 class="focus__name" id="focus-name"></h3>
-                <button class="focus__close" type="button" id="focus-close" aria-label="Clear focus">×</button>
-              </header>
-              <p class="focus__sentence" id="focus-sentence"></p>
-              <ul class="focus__facts">
-                <li><span>When</span> <strong id="focus-when"></strong></li>
-                <li><span>Size of move</span> <strong id="focus-size"></strong></li>
-                <li><span>Where</span> <strong id="focus-where"></strong></li>
-                <li><span>How confident</span> <strong id="focus-conf"></strong></li>
-              </ul>
-              <footer class="focus__foot">
-                <a class="focus__open" id="focus-open" href="#">See this satellite's orbit history →</a>
-                <span class="focus__related" id="focus-related"></span>
-              </footer>
-            </article>
-          </aside>
-        </section>
-      )}
 
-      <!-- ────────────────── FEATURED CARD ────────────────── -->
-      {hero && (
-        <section class="featured">
-          <p class="featured__eyebrow">Most notable move this month</p>
-          <div class="featured__card">
-            <a class="featured__link" href={`/sat/${hero.norad_id}`}>
-              <span class={`featured__tag featured__tag--${hero.classification}`}>{PLAIN_TYPE[hero.classification] ?? hero.classification}</span>
-              <h2 class="featured__sentence">{buildSentence(hero)}</h2>
-              <p class="featured__when">on {fmtWhenLong(hero.detected_epoch)}.</p>
-              <span class="featured__cta">See its orbit history →</span>
-            </a>
+            <button class="stage__nav stage__nav--next" id="next-btn" type="button"
+                    aria-label="Next maneuver (arrow right)">
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+
+          <!-- ─── Caption block ─── -->
+          <div class="caption" aria-live="polite">
+            <div class="caption__topline">
+              <span class="caption__tag" id="caption-tag"></span>
+              <span class="caption__when" id="caption-when"></span>
+            </div>
+            <h2 class="caption__sentence" id="caption-sentence"></h2>
+            <p class="caption__sub" id="caption-sub"></p>
+            <div class="caption__controls">
+              <button class="ctrl ctrl--play" id="play-btn" type="button" aria-pressed="false">
+                <span class="ctrl__icon" aria-hidden="true">▶</span>
+                <span class="ctrl__lbl ctrl__lbl--play">Auto-play</span>
+                <span class="ctrl__lbl ctrl__lbl--pause" hidden>Pause</span>
+              </button>
+              <button class="ctrl ctrl--replay" id="replay-btn" type="button">
+                <span class="ctrl__icon" aria-hidden="true">↻</span>
+                Replay
+              </button>
+              <a class="ctrl ctrl--detail" id="detail-link" href="#">
+                See this satellite's orbit history →
+              </a>
+              <span class="ctrl__counter" id="counter">1 / {totalEvents}</span>
+            </div>
+          </div>
+
+          <!-- ─── Mini strip — every event as a small dot. Click to jump. ─── -->
+          <div class="strip-wrap">
+            <p class="strip__label">All {totalEvents} maneuvers, sorted by interest. Click to jump:</p>
+            <div class="strip" id="strip" role="listbox" aria-label="All events">
+              {ordered.map((e, i) => (
+                <button class={`strip__dot strip__dot--${e.classification}`}
+                        type="button"
+                        data-idx={i}
+                        aria-label={`${e.object_name ?? `NORAD ${e.norad_id}`}, ${e.classification.replace(/_/g, " ")}, ${new Date(e.detected_epoch).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+                        title={`${e.object_name ?? `NORAD ${e.norad_id}`} · ${e.classification.replace(/_/g, " ")}`}>
+                </button>
+              ))}
+            </div>
+            <ul class="legend" aria-label="Classification legend">
+              <li><span class="legend__sw" style="background:#E07A30"></span>raise</li>
+              <li><span class="legend__sw" style="background:#2A5B9C"></span>lower</li>
+              <li><span class="legend__sw" style="background:#36906A"></span>plane shift</li>
+              <li><span class="legend__sw" style="background:#B8B2A0"></span>routine SK</li>
+              <li><span class="legend__sw" style="background:#C73E2E"></span>deorbit</li>
+            </ul>
           </div>
         </section>
       )}
 
-      <!-- ────────────────── MORE CARDS ────────────────── -->
-      {moreCards.length > 0 && (
-        <section class="more">
-          <header class="more__head">
-            <h2 class="more__title">More worth noting</h2>
-            <p class="more__sub">Sorted by how big the move was, with routine adjustments demoted.</p>
-          </header>
-          <ul class="card-grid">
-            {moreCards.map((e) => {
-              const size = plainSize(e.dv_mps);
-              const tag = PLAIN_TYPE[e.classification] ?? e.classification.replace(/_/g, " ");
-              return (
-                <li class={`card card--${e.classification} card--${size.tone}`}>
-                  <a class="card__link" href={`/sat/${e.norad_id}`}>
-                    <span class="card__date">{fmtWhenShort(e.detected_epoch)}</span>
-                    <span class="card__tag">{tag}</span>
-                    <h3 class="card__sentence">{buildSentence(e)}</h3>
-                    <p class="card__size">{size.label} · {e.confidence === "HIGH" ? "double-confirmed" : "single signal"}</p>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      <footer class="foot">
-        <p class="foot__nb">
-          Satellite names are still loading — the public catalog usually fills
-          them in within a day, then this page will read "Starlink 12345" and
-          the like instead of bare NORAD numbers.
+      <footer class="theatre-page__foot">
+        <p class="theatre-page__nb">
+          The diagram is schematic &mdash; a 1 km orbit change is invisible at scale,
+          so we exaggerate to read. The numbers on the right are real.
+          Satellite names will fill in once the public catalog re-fetches.
         </p>
       </footer>
-
     </Container>
   </article>
 
-  <script type="application/json" id="events-data" set:html={JSON.stringify(usable)} />
+  <script type="application/json" id="events-data" set:html={JSON.stringify(ordered)} />
 
   <script is:inline>
     (function () {
       const dataNode = document.getElementById("events-data");
       if (!dataNode) return;
       const events = JSON.parse(dataNode.textContent || "[]");
-      const byNorad = new Map();
-      for (const e of events) {
-        const arr = byNorad.get(e.norad_id) || [];
-        arr.push(e); byNorad.set(e.norad_id, arr);
-      }
+      if (events.length === 0) return;
 
-      // ── Counter rollups ──────────────────────────────────────
-      const counters = document.querySelectorAll("[data-counter]");
-      counters.forEach((el) => {
-        const target = +el.dataset.counter;
-        const dur = 1100;
-        const start = performance.now();
-        function tick(now) {
-          const p = Math.min(1, (now - start) / dur);
-          const eased = 1 - Math.pow(1 - p, 3);
-          el.textContent = Math.round(target * eased).toLocaleString();
-          if (p < 1) requestAnimationFrame(tick);
-          else el.textContent = target.toLocaleString();
-        }
-        requestAnimationFrame(tick);
-      });
+      // ── DOM refs ────────────────────────────────────────────
+      const prevBtn  = document.getElementById("prev-btn");
+      const nextBtn  = document.getElementById("next-btn");
+      const replayBtn = document.getElementById("replay-btn");
+      const playBtn  = document.getElementById("play-btn");
+      const detailLink = document.getElementById("detail-link");
+      const counter  = document.getElementById("counter");
+      const strip    = document.getElementById("strip");
+      const stripDots = Array.from(strip.querySelectorAll(".strip__dot"));
 
-      // ── Orbit map hooks ──────────────────────────────────────
-      const dots = Array.from(document.querySelectorAll(".orbit-map__dot"));
-      if (dots.length === 0) return;
+      const orbitBefore = document.getElementById("orbit-before");
+      const orbitAfter  = document.getElementById("orbit-after");
+      const satellite   = document.getElementById("satellite");
+      const burnMarker  = document.getElementById("burn-marker");
+      const burnLine    = document.getElementById("burn-line");
+      const deltaLabel  = document.getElementById("stage-delta-label");
 
-      const focus     = document.getElementById("focus");
-      const focusCard = focus && focus.querySelector(".focus__card");
-      const focusPh   = focus && focus.querySelector(".focus__placeholder");
-      const closeBtn  = document.getElementById("focus-close");
+      const tag = document.getElementById("caption-tag");
+      const when = document.getElementById("caption-when");
+      const sentence = document.getElementById("caption-sentence");
+      const subline = document.getElementById("caption-sub");
 
-      const PLAIN_TYPE = {
-        raise: "orbit raised", lower: "orbit lowered", deorbit: "rapid altitude loss",
-        plane_change: "orbital plane shifted",
-        stationkeeping_ew: "routine east-west adjustment",
-        stationkeeping_ns: "routine north-south adjustment",
+      // ── Layout constants — match SVG viewBox ───────────────
+      const CX = 400, CY = 270;
+
+      // ── Palette ─────────────────────────────────────────────
+      const COLOR = {
+        raise:             "#E07A30",
+        lower:             "#2A5B9C",
+        plane_change:      "#36906A",
+        stationkeeping_ew: "#B8B2A0",
+        stationkeeping_ns: "#C9C1A9",
+        deorbit:           "#C73E2E",
+      };
+      const ARROW_MARKER = {
+        raise:             "url(#t-arrow)",
+        lower:             "url(#t-arrow-blue)",
+        plane_change:      "url(#t-arrow-green)",
+        stationkeeping_ew: "url(#t-arrow)",
+        stationkeeping_ns: "url(#t-arrow)",
+        deorbit:           "url(#t-arrow)",
+      };
+      const PLAIN_TAG = {
+        raise: "Orbit raised", lower: "Orbit lowered",
+        deorbit: "Rapid altitude loss", plane_change: "Plane shifted",
+        stationkeeping_ew: "Routine east-west adjustment",
+        stationkeeping_ns: "Routine north-south adjustment",
       };
       const TYPE_VERB = {
         raise: "raised its orbit", lower: "lowered its orbit",
@@ -336,6 +321,8 @@ const counts = {
         stationkeeping_ew: "nudged east-or-west",
         stationkeeping_ns: "nudged north-or-south",
       };
+
+      // ── Plain-language helpers ─────────────────────────────
       function plainAltitude(a) {
         if (a < 1000) return `low Earth orbit (${Math.round(a)} km up)`;
         if (a < 8000) return `medium-low orbit (${(a / 1000).toFixed(1)}k km up)`;
@@ -351,19 +338,19 @@ const counts = {
       }
       function plainAngle(d) {
         const abs = Math.abs(d);
-        if (abs < 0.01) return `under a hundredth of a degree`;
+        if (abs < 0.01) return `a hundredth of a degree`;
         if (abs < 0.1)  return `${abs.toFixed(3)}°`;
         return `${abs.toFixed(2)}°`;
       }
-      function plainSizeLabel(dv) {
+      function plainSize(dv) {
         if (dv < 0.05) return "a tiny nudge";
         if (dv < 0.5)  return "a small move";
         if (dv < 5)    return "a noticeable burn";
         if (dv < 50)   return "a significant maneuver";
         return "a major maneuver";
       }
-      function sentence(e) {
-        const name = e.object_name || `Satellite ${e.norad_id}`;
+      function buildSentence(e) {
+        const name = e.object_name || `Satellite NORAD ${e.norad_id}`;
         const verb = TYPE_VERB[e.classification] || "moved";
         const alt = plainAltitude(e.altitude_km);
         if (e.kind === "in_plane" && e.delta_a_km != null) {
@@ -374,199 +361,279 @@ const counts = {
         }
         return `${name} ${verb} in ${alt}.`;
       }
-      function whenLong(iso) {
-        const d = new Date(iso);
-        return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-             + " · " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }) + " UTC";
+      function buildSubline(e) {
+        const d = new Date(e.detected_epoch);
+        const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+        const conf = e.confidence === "HIGH" ? "Double-confirmed" : "Single signal";
+        const size = plainSize(e.dv_mps);
+        return `${date}, ${time} UTC · ${size} · ${conf}`;
       }
 
-      // ── Filters ──────────────────────────────────────────────
-      const activeClasses = new Set(dots.map((d) => d.dataset.class));
-      let highOnly = false;
-      function applyFilters() {
-        dots.forEach((d) => {
-          const ok = activeClasses.has(d.dataset.class)
-                  && (!highOnly || d.dataset.conf === "HIGH");
-          d.classList.toggle("orbit-map__dot--dimmed", !ok && d !== pinnedDot);
-        });
-        if (pinnedDot) setRelated(+pinnedDot.dataset.norad);
+      // ── Display geometry ───────────────────────────────────
+      // Map altitude regime → base orbit radius on stage.
+      function baseRadiusFor(altKm) {
+        if (altKm < 2000)  return 140;  // LEO
+        if (altKm < 7000)  return 175;
+        if (altKm < 25000) return 215;
+        return 260;                      // GEO
       }
-      document.querySelectorAll("[data-filter-class]").forEach((chip) => {
-        chip.addEventListener("click", () => {
-          const k = chip.dataset.filterClass;
-          if (activeClasses.has(k)) { activeClasses.delete(k); chip.classList.remove("is-on"); }
-          else { activeClasses.add(k); chip.classList.add("is-on"); }
-          applyFilters();
-        });
-      });
-      const highBtn = document.querySelector('[data-filter-conf="HIGH"]');
-      if (highBtn) {
-        highBtn.addEventListener("click", () => {
-          highOnly = !highOnly;
-          highBtn.classList.toggle("is-on", highOnly);
-          highBtn.setAttribute("aria-pressed", String(highOnly));
-          applyFilters();
-        });
+      // Exaggerated radial gap between BEFORE and AFTER.
+      // Bigger Δa → bigger gap, but log-bounded so they're all readable.
+      function gapForDeltaA(deltaKm) {
+        const abs = Math.abs(deltaKm || 0);
+        return Math.max(10, Math.min(60, 8 + Math.log10(abs + 1) * 26));
+      }
+      // For plane change, tilt the AFTER ring (squish y-radius).
+      function tiltForDeltaInc(deltaDeg) {
+        const abs = Math.abs(deltaDeg || 0);
+        return Math.max(0.04, Math.min(0.35, abs * 6));
+      }
+      // Pseudo-stable orbital angle for the satellite glyph.
+      function angleFor(noradId) {
+        let x = noradId | 0;
+        x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+        return (((x >>> 0) % 100000) / 100000) * Math.PI * 2;
       }
 
-      // ── Focus state ──────────────────────────────────────────
-      let pinnedDot = null;
-      function setRelated(noradId) {
-        dots.forEach((d) => {
-          const sameSat = +d.dataset.norad === noradId;
-          d.classList.toggle("orbit-map__dot--related", sameSat && d !== pinnedDot);
-        });
-      }
-      function clearRelated() {
-        dots.forEach((d) => d.classList.remove("orbit-map__dot--related", "orbit-map__dot--selected"));
-      }
-      function clearFocus() {
-        if (focusCard) focusCard.hidden = true;
-        if (focusPh) focusPh.hidden = false;
-        clearRelated();
-        clearChange();
+      // ── State + render ─────────────────────────────────────
+      let currentIdx = 0;
+      let animationId = null;
+      let autoTimer = null;
+
+      function setSatellitePos(x, y) {
+        satellite.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
       }
 
-      // Draw a small radial / tangential arrow into the orbit map
-      // showing the direction of the maneuver.
-      const changeLayer = document.querySelector(".orbit-map__change");
-      function clearChange() {
-        if (changeLayer) changeLayer.innerHTML = "";
-      }
-      function drawChange(dot, e) {
-        if (!changeLayer) return;
-        clearChange();
-        const cxV = 390, cyV = 390; // matches OrbitMap viewBox centre at size=780
-        const px = +dot.getAttribute("cx");
-        const py = +dot.getAttribute("cy");
-        const theta = +dot.dataset.theta; // angle from centre
-        const ns = "http://www.w3.org/2000/svg";
-        const arrow = document.createElementNS(ns, "g");
-        const tip = document.createElementNS(ns, "line");
-        const lbl = document.createElementNS(ns, "text");
-        let labelText = "";
+      function placeBurnArrow(e, sx, sy, theta) {
+        // Direction matches classification.
         if (e.kind === "in_plane" && e.delta_a_km != null) {
-          // Radial: outward for raise (+Δa), inward for lower (-Δa).
           const dir = e.delta_a_km >= 0 ? 1 : -1;
-          const len = Math.min(46, 18 + Math.log10(Math.abs(e.delta_a_km) + 1) * 14);
-          const x2 = px + dir * len * Math.cos(theta);
-          const y2 = py + dir * len * Math.sin(theta);
-          tip.setAttribute("x1", px); tip.setAttribute("y1", py);
-          tip.setAttribute("x2", x2); tip.setAttribute("y2", y2);
-          tip.setAttribute("marker-end", "url(#change-arrow)");
-          labelText = (e.delta_a_km >= 0 ? "+" : "") + e.delta_a_km.toFixed(1) + " km";
-          lbl.setAttribute("x", x2 + dir * 6 * Math.cos(theta));
-          lbl.setAttribute("y", y2 + dir * 6 * Math.sin(theta) - 4);
-          lbl.setAttribute("text-anchor", dir > 0 ? "start" : "end");
+          const len = 22 + Math.log10(Math.abs(e.delta_a_km) + 1) * 14;
+          const tx = sx + dir * len * Math.cos(theta);
+          const ty = sy + dir * len * Math.sin(theta);
+          burnLine.setAttribute("x1", sx); burnLine.setAttribute("y1", sy);
+          burnLine.setAttribute("x2", tx); burnLine.setAttribute("y2", ty);
+          burnLine.setAttribute("stroke", COLOR[e.classification]);
+          burnLine.setAttribute("marker-end", ARROW_MARKER[e.classification]);
         } else if (e.kind === "out_of_plane" && e.delta_inc_deg != null) {
-          // Tangential along the shell.
           const dir = e.delta_inc_deg >= 0 ? 1 : -1;
-          const len = Math.min(50, 24 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 22);
-          const tx = px - dir * len * Math.sin(theta);
-          const ty = py + dir * len * Math.cos(theta);
-          tip.setAttribute("x1", px); tip.setAttribute("y1", py);
-          tip.setAttribute("x2", tx); tip.setAttribute("y2", ty);
-          tip.setAttribute("marker-end", "url(#change-arrow)");
-          labelText = (e.delta_inc_deg >= 0 ? "+" : "") + Math.abs(e.delta_inc_deg).toFixed(3) + "°";
-          lbl.setAttribute("x", tx - dir * 4 * Math.sin(theta));
-          lbl.setAttribute("y", ty + dir * 4 * Math.cos(theta) - 4);
-          lbl.setAttribute("text-anchor", "middle");
-        }
-        if (labelText) {
-          lbl.textContent = labelText;
-          arrow.appendChild(tip);
-          arrow.appendChild(lbl);
-          changeLayer.appendChild(arrow);
+          const len = 26 + Math.log10(Math.abs(e.delta_inc_deg) + 1) * 30;
+          const tx = sx - dir * len * Math.sin(theta);
+          const ty = sy + dir * len * Math.cos(theta);
+          burnLine.setAttribute("x1", sx); burnLine.setAttribute("y1", sy);
+          burnLine.setAttribute("x2", tx); burnLine.setAttribute("y2", ty);
+          burnLine.setAttribute("stroke", COLOR[e.classification]);
+          burnLine.setAttribute("marker-end", ARROW_MARKER[e.classification]);
+        } else {
+          burnLine.setAttribute("x1", 0); burnLine.setAttribute("x2", 0);
+          burnLine.setAttribute("y1", 0); burnLine.setAttribute("y2", 0);
         }
       }
 
-      function updateFocus(dot, pinned) {
-        if (!focusCard) return;
-        const norad = +dot.dataset.norad;
-        const e = (byNorad.get(norad) || []).find(
-          (x) => Math.abs(new Date(x.detected_epoch).getTime() - +dot.dataset.epochMs) < 1000
-        ) || (byNorad.get(norad) || [])[0];
+      function placeDeltaLabel(e, sx, sy, theta) {
+        let txt = "";
+        if (e.kind === "in_plane" && e.delta_a_km != null) {
+          txt = (e.delta_a_km >= 0 ? "+" : "") + e.delta_a_km.toFixed(2) + " km";
+        } else if (e.delta_inc_deg != null) {
+          txt = (e.delta_inc_deg >= 0 ? "+" : "") + Math.abs(e.delta_inc_deg).toFixed(3) + "°";
+        }
+        deltaLabel.textContent = txt;
+        const lx = sx + 36 * Math.cos(theta);
+        const ly = sy + 36 * Math.sin(theta) + 5;
+        deltaLabel.setAttribute("x", lx.toFixed(1));
+        deltaLabel.setAttribute("y", ly.toFixed(1));
+        deltaLabel.setAttribute("fill", COLOR[e.classification] || "var(--color-ink)");
+      }
+
+      function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      function renderAndAnimate(idx) {
+        if (animationId) cancelAnimationFrame(animationId);
+        currentIdx = idx;
+        const e = events[idx];
         if (!e) return;
+        const baseR = baseRadiusFor(e.altitude_km);
+        const isPlane = e.kind === "out_of_plane";
+        const dir = (e.delta_a_km ?? 0) >= 0 ? 1 : -1;
+        const gap = isPlane ? 0 : gapForDeltaA(e.delta_a_km);
+        const tilt = isPlane ? tiltForDeltaInc(e.delta_inc_deg) : 0;
+        const beforeR = isPlane ? baseR : baseR - dir * gap * 0.5;
+        const afterR  = isPlane ? baseR : baseR + dir * gap * 0.5;
 
-        focusPh.hidden = true;
-        focusCard.hidden = false;
+        const accent = COLOR[e.classification] || "#1B3A5C";
+        const theta = angleFor(e.norad_id);
 
-        const name = e.object_name || `Satellite NORAD ${e.norad_id}`;
-        document.getElementById("focus-name").textContent = name;
-        document.getElementById("focus-sentence").textContent = sentence(e);
-        document.getElementById("focus-when").textContent = whenLong(e.detected_epoch);
-        document.getElementById("focus-size").textContent =
-          plainSizeLabel(e.dv_mps) + " (Δv ≈ " + e.dv_mps.toFixed(2) + " m/s)";
-        document.getElementById("focus-where").textContent = plainAltitude(e.altitude_km);
-        document.getElementById("focus-conf").textContent =
-          e.confidence === "HIGH" ? "Double-confirmed (two tests agreed)" : "Single signal";
-        document.getElementById("focus-open").href = `/sat/${e.norad_id}`;
+        // Reset to BEFORE state instantly.
+        orbitBefore.setAttribute("rx", beforeR);
+        orbitBefore.setAttribute("ry", beforeR);
+        orbitBefore.setAttribute("stroke", "var(--color-ink-muted)");
+        orbitAfter.setAttribute("rx", beforeR);
+        orbitAfter.setAttribute("ry", beforeR);
+        orbitAfter.setAttribute("stroke", accent);
+        orbitAfter.setAttribute("opacity", "0");
+        burnMarker.setAttribute("opacity", "0");
+        deltaLabel.textContent = "";
 
-        const related = (byNorad.get(norad) || []).length;
-        document.getElementById("focus-related").textContent = related > 1
-          ? `This satellite moved ${related}× in the last 30 days`
-          : "Only move from this satellite this month";
+        const sx0 = CX + beforeR * Math.cos(theta);
+        const sy0 = CY + beforeR * Math.sin(theta);
+        setSatellitePos(sx0, sy0);
+        satellite.querySelector("circle:nth-child(1)").setAttribute("fill", accent);
+        satellite.querySelector("circle:nth-child(2)").setAttribute("stroke", accent);
 
-        if (pinned) {
-          pinnedDot = dot;
-          dots.forEach((d) => d.classList.toggle("orbit-map__dot--selected", d === dot));
-          setRelated(norad);
-          drawChange(dot, e);
+        // Update caption.
+        tag.textContent = PLAIN_TAG[e.classification] || e.classification;
+        tag.style.color = accent;
+        tag.style.borderColor = accent;
+        when.textContent = new Date(e.detected_epoch).toLocaleDateString(
+          "en-GB", { day: "numeric", month: "long" }
+        );
+        sentence.textContent = buildSentence(e);
+        subline.textContent = buildSubline(e);
+        counter.textContent = `${idx + 1} / ${events.length}`;
+        detailLink.href = `/sat/${e.norad_id}`;
+
+        // Update strip selection.
+        stripDots.forEach((d, di) => {
+          d.classList.toggle("is-current", di === idx);
+        });
+        const cur = stripDots[idx];
+        if (cur) cur.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+
+        // Schedule the animation: a brief delay, then morph BEFORE→AFTER.
+        const PRE_DELAY = 280;
+        const DURATION  = 1500;
+        const BURN_FLASH = 220;
+        const start = performance.now() + PRE_DELAY;
+
+        function tick(now) {
+          const t = Math.max(0, Math.min(1, (now - start) / DURATION));
+          const k = easeInOutCubic(t);
+
+          // BEFORE ring fades during transition.
+          orbitBefore.setAttribute("opacity", String(0.6 - 0.45 * k));
+          // AFTER ring grows / tilts.
+          if (isPlane) {
+            const ry = beforeR * (1 - tilt * k);
+            orbitAfter.setAttribute("rx", beforeR);
+            orbitAfter.setAttribute("ry", ry);
+            orbitAfter.setAttribute("transform", `rotate(${k * (e.delta_inc_deg >= 0 ? 18 : -18)} ${CX} ${CY})`);
+          } else {
+            const curR = beforeR + (afterR - beforeR) * k;
+            orbitAfter.setAttribute("rx", curR);
+            orbitAfter.setAttribute("ry", curR);
+            orbitAfter.removeAttribute("transform");
+          }
+          orbitAfter.setAttribute("opacity", String(Math.min(1, k * 1.6)));
+
+          // Satellite follows along the radial transition.
+          if (isPlane) {
+            // For plane change, satellite shifts along the ring slightly.
+            const newTheta = theta + (e.delta_inc_deg >= 0 ? 1 : -1) * 0.05 * k;
+            const sx = CX + beforeR * Math.cos(newTheta);
+            const sy = CY + beforeR * (1 - tilt * k) * Math.sin(newTheta);
+            setSatellitePos(sx, sy);
+            if (k > 0.5 && burnMarker.getAttribute("opacity") === "0") {
+              placeBurnArrow(e, CX + beforeR * Math.cos(theta), CY + beforeR * Math.sin(theta), theta);
+              burnMarker.setAttribute("opacity", "1");
+              setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH * 1.4);
+              placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
+            }
+          } else {
+            const curR = beforeR + (afterR - beforeR) * k;
+            const sx = CX + curR * Math.cos(theta);
+            const sy = CY + curR * Math.sin(theta);
+            setSatellitePos(sx, sy);
+            // Flash burn arrow around mid-transition.
+            if (k > 0.35 && k < 0.6 && burnMarker.getAttribute("opacity") === "0") {
+              placeBurnArrow(e, sx, sy, theta);
+              burnMarker.setAttribute("opacity", "1");
+              setTimeout(() => burnMarker.setAttribute("opacity", "0"), BURN_FLASH);
+            }
+            if (k > 0.55 && !deltaLabel.textContent) {
+              placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
+            }
+          }
+
+          if (t < 1) {
+            animationId = requestAnimationFrame(tick);
+          } else {
+            animationId = null;
+            // Final placement of label.
+            placeDeltaLabel(e, CX + afterR * Math.cos(theta), CY + afterR * Math.sin(theta), theta);
+          }
         }
+
+        animationId = requestAnimationFrame(function pre(now) {
+          if (now >= start) tick(now);
+          else animationId = requestAnimationFrame(pre);
+        });
       }
 
-      dots.forEach((d) => {
-        d.addEventListener("mouseenter", () => { if (!pinnedDot) updateFocus(d, false); });
+      // ── Navigation ─────────────────────────────────────────
+      function next() { renderAndAnimate((currentIdx + 1) % events.length); }
+      function prev() { renderAndAnimate((currentIdx - 1 + events.length) % events.length); }
+      function replay() { renderAndAnimate(currentIdx); }
+
+      prevBtn.addEventListener("click", () => { stopAuto(); prev(); });
+      nextBtn.addEventListener("click", () => { stopAuto(); next(); });
+      replayBtn.addEventListener("click", () => { stopAuto(); replay(); });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.target instanceof HTMLInputElement) return;
+        if (e.key === "ArrowLeft")  { stopAuto(); prev(); }
+        if (e.key === "ArrowRight") { stopAuto(); next(); }
+        if (e.key === " ") { stopAuto(); replay(); e.preventDefault(); }
       });
-      const mapEl = document.querySelector(".orbit-map__svg");
-      if (mapEl) {
-        mapEl.addEventListener("mouseleave", () => { if (!pinnedDot) clearFocus(); });
-      }
-      document.querySelectorAll(".orbit-map__dot-link").forEach((a) => {
-        a.addEventListener("click", (e) => {
-          const dot = a.querySelector(".orbit-map__dot");
-          if (!dot) return;
-          e.preventDefault();
-          if (pinnedDot === dot) { pinnedDot = null; clearFocus(); }
-          else { updateFocus(dot, true); }
+
+      stripDots.forEach((d) => {
+        d.addEventListener("click", () => {
+          stopAuto();
+          renderAndAnimate(+d.dataset.idx);
         });
       });
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && pinnedDot) { pinnedDot = null; clearFocus(); }
-      });
-      if (closeBtn) {
-        closeBtn.addEventListener("click", () => { pinnedDot = null; clearFocus(); });
+
+      // ── Auto-play ──────────────────────────────────────────
+      function startAuto() {
+        playBtn.setAttribute("aria-pressed", "true");
+        playBtn.querySelector(".ctrl__lbl--play").hidden = true;
+        playBtn.querySelector(".ctrl__lbl--pause").hidden = false;
+        playBtn.querySelector(".ctrl__icon").textContent = "❚❚";
+        autoTimer = setInterval(next, 5000);
       }
+      function stopAuto() {
+        if (!autoTimer) return;
+        clearInterval(autoTimer);
+        autoTimer = null;
+        playBtn.setAttribute("aria-pressed", "false");
+        playBtn.querySelector(".ctrl__lbl--play").hidden = false;
+        playBtn.querySelector(".ctrl__lbl--pause").hidden = true;
+        playBtn.querySelector(".ctrl__icon").textContent = "▶";
+      }
+      playBtn.addEventListener("click", () => {
+        if (autoTimer) stopAuto(); else startAuto();
+      });
+
+      // ── First render ───────────────────────────────────────
+      renderAndAnimate(0);
     })();
   </script>
 </BaseLayout>
 
 <style>
-  /* ─────────────────── tokens local to this page ─────────────────── */
-  :root {
-    --ssa-raise:   #E07A30;
-    --ssa-lower:   #2A5B9C;
-    --ssa-plane:   #36906A;
-    --ssa-sk:      #B8B2A0;
-    --ssa-deorbit: #C73E2E;
-  }
-
-  /* ─────────────────── shell ─────────────────── */
-  .page {
-    padding-top: var(--space-10);
-    padding-bottom: var(--space-20);
-  }
-  .page__inner {
+  /* ─── page shell ─── */
+  .theatre-page { padding-top: var(--space-10); padding-bottom: var(--space-16); }
+  .theatre-page__inner {
     padding-left: var(--space-page);
     padding-right: var(--space-page);
   }
 
-  /* ─────────────────── hero head ─────────────────── */
-  .hero-head {
-    margin-bottom: var(--space-12);
-  }
-  .hero-head__kicker {
-    margin: 0 0 var(--space-3) 0;
+  /* ─── head ─── */
+  .theatre-head { margin-bottom: var(--space-7); max-width: 60rem; }
+  .theatre-head__kicker {
+    margin: 0 0 var(--space-2) 0;
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-wide);
@@ -574,438 +641,288 @@ const counts = {
     color: var(--color-ink-muted);
     font-weight: 700;
   }
-  /* Headline back to editorial Source Serif italic for consistency with
-     the rest of nl06; sans stays for chrome and numbers. */
-  .hero-head__title {
-    margin: 0 0 var(--space-5) 0;
+  .theatre-head__title {
+    margin: 0 0 var(--space-4) 0;
     font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 700;
-    font-size: clamp(2.4rem, 6.5vw, 5rem);
-    line-height: 1;
     color: var(--color-ink);
+    line-height: 1;
     letter-spacing: var(--tracking-display);
     font-feature-settings: var(--features-display);
   }
-  .hero-head__num {
-    display: inline-block;
-    color: var(--color-accent);
-    font-family: var(--font-serif);
+  .theatre-head__title-pre {
+    display: inline;
     font-style: italic;
-    font-feature-settings: var(--features-oldstyle);
-    margin-right: 0.15em;
-  }
-  .hero-head__text {
-    color: var(--color-ink);
-  }
-  .hero-head__lede {
-    margin: 0 0 var(--space-7) 0;
-    font-family: var(--font-sans);
-    font-size: clamp(1.1rem, 1.6vw, 1.4rem);
-    line-height: 1.5;
-    color: var(--color-ink-soft);
-    max-width: 50rem;
     font-weight: 400;
-  }
-  .hero-head__how {
-    color: var(--color-accent);
-    text-decoration: none;
-    font-weight: 600;
-    border-bottom: 1px solid currentColor;
-  }
-
-  /* Big-number stats strip */
-  .stats {
-    list-style: none;
-    margin: 0;
-    padding: var(--space-6) 0 0 0;
-    border-top: 1px solid var(--color-rule);
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-    gap: var(--space-5);
-  }
-  .stats__cell {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2em;
-  }
-  .stats__num {
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(2.5rem, 5vw, 3.6rem);
-    color: var(--color-ink);
-    letter-spacing: -0.02em;
-    line-height: 1;
-    font-feature-settings: "tnum" 1, "lnum" 1;
-  }
-  .stats__lbl {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
+    font-size: clamp(2rem, 5vw, 3.5rem);
     color: var(--color-ink-muted);
-    font-weight: 600;
   }
-
-  /* ─────────────────── map section ─────────────────── */
-  .map-sec {
-    margin-bottom: var(--space-16);
-  }
-  .map-sec__head { margin-bottom: var(--space-5); }
-  .map-sec__title {
-    margin: 0 0 var(--space-2) 0;
-    font-family: var(--font-serif);
+  .theatre-head__title-main {
+    display: inline;
     font-style: italic;
     font-weight: 700;
-    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
-    color: var(--color-ink);
-    letter-spacing: var(--tracking-tight);
-  }
-  .map-sec__sub {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-body);
-    color: var(--color-ink-soft);
-    max-width: 50rem;
-    line-height: 1.5;
-  }
-  .map-sec__sub strong { color: var(--color-ink); font-weight: 700; }
-
-  /* Controls (filter chips) */
-  .controls {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5em;
-    margin: var(--space-5) 0;
-    padding: var(--space-3) 0;
-    border-top: 1px solid var(--color-rule);
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .controls__sep {
-    width: 1px;
-    height: 1.2em;
-    background: var(--color-rule-strong);
-    margin: 0 0.4em;
-  }
-  .chip {
-    appearance: none;
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule-strong);
-    color: var(--color-ink-muted);
-    padding: 0.4em 0.85em;
-    border-radius: 999px;
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    font-weight: 700;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4em;
-    transition: color 140ms, border-color 140ms, background 140ms, opacity 140ms;
-  }
-  .chip__sw {
-    display: inline-block;
-    width: 0.7em; height: 0.7em;
-    border-radius: 50%;
-  }
-  .chip:hover { color: var(--color-ink); border-color: var(--color-ink); }
-  .chip.is-on { color: var(--color-ink); border-color: var(--color-ink); }
-  .chip:not(.is-on) {
-    color: var(--color-ink-faint);
-    opacity: 0.6;
-    border-style: dashed;
-  }
-  .chip--toggle.is-on {
-    color: var(--color-paper);
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  /* Focus panel below the map */
-  .focus {
-    margin-top: var(--space-5);
-    padding: var(--space-4) var(--space-5);
-    border: 1px solid var(--color-rule);
-    background: var(--color-paper);
-  }
-  .focus__placeholder {
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    color: var(--color-ink-muted);
-    font-weight: 500;
-    text-align: center;
-    padding: var(--space-3) 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5em;
-    justify-content: center;
-    width: 100%;
-  }
-  .focus__placeholder-icon {
+    font-size: clamp(2.5rem, 7vw, 5rem);
     color: var(--color-accent);
-    font-size: 1.4em;
-    transform: translateY(-0.1em);
+    margin-left: 0.18em;
   }
-  .focus__card {
-    animation: focus-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  }
-  @keyframes focus-in {
-    from { opacity: 0; transform: translateY(0.3rem); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .focus__head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-  .focus__name {
+  .theatre-head__lede {
     margin: 0;
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(1.2rem, 2.4vw, 1.7rem);
-    color: var(--color-ink);
-    letter-spacing: -0.015em;
-  }
-  .focus__close {
-    appearance: none;
-    background: transparent;
-    border: 1px solid var(--color-rule-strong);
-    border-radius: 999px;
-    width: 1.8em; height: 1.8em;
-    font-size: 1rem;
-    color: var(--color-ink-muted);
-    cursor: pointer;
-    line-height: 1;
-    padding: 0;
-  }
-  .focus__close:hover { color: var(--color-accent); border-color: var(--color-accent); }
-  .focus__sentence {
-    margin: var(--space-3) 0;
     font-family: var(--font-sans);
     font-size: clamp(1rem, 1.4vw, 1.2rem);
     line-height: 1.5;
     color: var(--color-ink-soft);
-    font-weight: 500;
   }
-  .focus__facts {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  .theatre-head__how {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-weight: 600;
+    border-bottom: 1px solid currentColor;
+  }
+
+  /* ─── stage ─── */
+  .theatre { margin-bottom: var(--space-12); }
+  .stage {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
     gap: var(--space-3);
   }
-  .focus__facts li {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15em;
-    padding: var(--space-2) 0;
-    border-top: 1px solid var(--color-rule);
-    font-family: var(--font-sans);
+  .stage__center {
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    padding: var(--space-3);
+    position: relative;
+    overflow: hidden;
   }
-  .focus__facts span {
+  .stage__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .stage__nav {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--color-rule-strong);
+    color: var(--color-ink-soft);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.5rem;
+    width: 3rem; height: 3rem;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color 140ms, border-color 140ms, transform 140ms;
+  }
+  .stage__nav:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    transform: scale(1.06);
+  }
+
+  .t-earth {
+    transform-origin: 400px 270px;
+    transform-box: view-box;
+    animation: t-earth-spin 80s linear infinite;
+  }
+  @keyframes t-earth-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .t-earth { animation: none; }
+  }
+
+  /* ─── caption ─── */
+  .caption {
+    margin-top: var(--space-5);
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--color-rule);
+    max-width: 56rem;
+  }
+  .caption__topline {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-3);
+  }
+  .caption__tag {
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 800;
+    color: var(--color-accent);
+  }
+  .caption__when {
+    font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
-    font-weight: 700;
-  }
-  .focus__facts strong {
-    color: var(--color-ink);
     font-weight: 600;
-    font-size: var(--type-body);
   }
-  .focus__foot {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-top: var(--space-3);
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--color-rule);
+  .caption__sentence {
+    margin: 0 0 var(--space-2) 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(1.5rem, 3.4vw, 2.6rem);
+    line-height: 1.18;
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .caption__sub {
+    margin: 0 0 var(--space-4) 0;
     font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    color: var(--color-ink-muted);
+    font-size: var(--type-body);
+    color: var(--color-ink-soft);
     font-weight: 500;
   }
-  .focus__open {
-    color: var(--color-accent);
-    text-decoration: none;
-    font-weight: 700;
-    border-bottom: 1px solid currentColor;
+  .caption__controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-5);
   }
-  .focus__related { font-size: var(--type-small); color: var(--color-ink-muted); }
-
-  /* ─────────────────── featured ─────────────────── */
-  .featured {
-    margin-bottom: var(--space-16);
-  }
-  .featured__eyebrow {
-    margin: 0 0 var(--space-3) 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-wide);
-    text-transform: uppercase;
-    color: var(--color-accent);
-    font-weight: 800;
-  }
-  .featured__card {
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-left: 6px solid var(--color-accent);
-    padding: var(--space-7) var(--space-7);
-    transition: border-color 200ms, transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  }
-  .featured__card:hover {
-    border-color: var(--color-accent);
-    transform: translateY(-2px);
-  }
-  .featured__link {
-    display: block;
-    text-decoration: none;
-    color: inherit;
-  }
-  .featured__tag {
-    display: inline-block;
-    padding: 0.2em 0.7em;
+  .ctrl {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--color-rule-strong);
+    padding: 0.5em 1em;
     border-radius: 999px;
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
-    font-weight: 800;
-    color: var(--color-paper);
-    background: var(--ssa-raise);
-    margin-bottom: var(--space-3);
-  }
-  .featured__tag--lower             { background: var(--ssa-lower); }
-  .featured__tag--plane_change      { background: var(--ssa-plane); }
-  .featured__tag--stationkeeping_ew,
-  .featured__tag--stationkeeping_ns { background: var(--ssa-sk); color: var(--color-ink); }
-  .featured__tag--deorbit           { background: var(--ssa-deorbit); }
-  .featured__sentence {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 600;
-    font-size: clamp(1.5rem, 3.4vw, 2.5rem);
-    line-height: 1.18;
     color: var(--color-ink);
-    letter-spacing: var(--tracking-tight);
-  }
-  .featured__when {
-    margin: var(--space-3) 0 var(--space-4) 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-body);
-    color: var(--color-ink-muted);
-    font-weight: 500;
-  }
-  .featured__cta {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-accent);
-    font-weight: 800;
-  }
-
-  /* ─────────────────── more cards grid ─────────────────── */
-  .more { margin-bottom: var(--space-12); }
-  .more__head { margin-bottom: var(--space-5); }
-  .more__title {
-    margin: 0 0 var(--space-2) 0;
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(1.5rem, 2.6vw, 2rem);
-    color: var(--color-ink);
-    letter-spacing: -0.015em;
-  }
-  .more__sub {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-small);
-    color: var(--color-ink-muted);
-    font-weight: 500;
-  }
-
-  .card-grid {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-    gap: var(--space-4);
-  }
-  .card {
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-left: 4px solid var(--color-rule-strong);
-    transition: border-color 200ms, transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  }
-  .card--raise        { border-left-color: var(--ssa-raise); }
-  .card--lower        { border-left-color: var(--ssa-lower); }
-  .card--plane_change { border-left-color: var(--ssa-plane); }
-  .card--stationkeeping_ew,
-  .card--stationkeeping_ns { border-left-color: var(--ssa-sk); }
-  .card--deorbit      { border-left-color: var(--ssa-deorbit); }
-  .card:hover { transform: translateY(-2px); border-color: var(--color-ink); }
-  .card__link {
-    display: block;
-    padding: var(--space-5);
-    text-decoration: none;
-    color: inherit;
-  }
-  .card__date {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
     font-weight: 700;
-    margin-right: 0.6em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    text-decoration: none;
+    transition: color 140ms, border-color 140ms, background 140ms;
   }
-  .card__tag {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-accent);
-    font-weight: 800;
-  }
-  .card__sentence {
-    margin: var(--space-3) 0 var(--space-3) 0;
+  .ctrl:hover { color: var(--color-accent); border-color: var(--color-accent); }
+  .ctrl__icon { font-size: 0.9em; line-height: 1; }
+  .ctrl__counter {
     font-family: var(--font-serif);
     font-style: italic;
-    font-weight: 600;
-    font-size: var(--type-h3);
-    line-height: 1.25;
-    color: var(--color-ink);
-    letter-spacing: var(--tracking-tight);
+    font-feature-settings: var(--features-oldstyle);
+    color: var(--color-ink-muted);
+    margin-left: auto;
+    font-size: var(--type-body);
   }
-  .card__size {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-small);
-    color: var(--color-ink-soft);
-    font-weight: 500;
+  .ctrl--play[aria-pressed="true"] {
+    color: var(--color-paper);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
   }
+  .ctrl--detail { color: var(--color-accent); }
 
-  /* ─────────────────── foot ─────────────────── */
-  .foot {
-    margin-top: var(--space-12);
-    padding-top: var(--space-6);
+  /* ─── strip ─── */
+  .strip-wrap {
+    margin-top: var(--space-7);
+    padding-top: var(--space-5);
     border-top: 1px solid var(--color-rule);
   }
-  .foot__nb {
+  .strip__label {
+    margin: 0 0 var(--space-3) 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 600;
+  }
+  .strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 7rem;
+    overflow-y: auto;
+    padding-bottom: 4px;
+  }
+  .strip__dot {
+    appearance: none;
+    border: 0;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--color-ink-faint);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: transform 120ms, opacity 120ms, outline 120ms;
+  }
+  .strip__dot--raise        { background: #E07A30; }
+  .strip__dot--lower        { background: #2A5B9C; }
+  .strip__dot--plane_change { background: #36906A; }
+  .strip__dot--stationkeeping_ew,
+  .strip__dot--stationkeeping_ns { background: #B8B2A0; opacity: 0.5; }
+  .strip__dot--deorbit      { background: #C73E2E; }
+  .strip__dot:hover { transform: scale(1.45); opacity: 1; }
+  .strip__dot.is-current {
+    transform: scale(1.7);
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    opacity: 1;
+  }
+
+  .legend {
+    list-style: none;
+    margin: var(--space-3) 0 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+  .legend li {
+    display: inline-flex; align-items: center; gap: 0.4em;
+  }
+  .legend__sw {
+    width: 0.7em; height: 0.7em; border-radius: 50%; display: inline-block;
+  }
+
+  /* ─── empty + foot ─── */
+  .theatre-page__empty {
+    margin: var(--space-12) 0;
+    padding: var(--space-8);
+    border: 1px dashed var(--color-rule);
+    text-align: center;
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+  }
+  .theatre-page__foot {
+    margin-top: var(--space-10);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-rule);
+  }
+  .theatre-page__nb {
     margin: 0;
-    max-width: 50rem;
+    max-width: 60rem;
     font-family: var(--font-sans);
     font-size: var(--type-small);
     color: var(--color-ink-muted);
     line-height: 1.5;
+  }
+
+  /* ─── responsive ─── */
+  @media (max-width: 760px) {
+    .stage { grid-template-columns: auto 1fr auto; gap: var(--space-2); }
+    .stage__nav { width: 2.4rem; height: 2.4rem; font-size: 1.2rem; }
+    .caption__controls { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+    .ctrl__counter { margin-left: 0; }
+    .strip__dot { width: 10px; height: 10px; }
   }
 </style>
