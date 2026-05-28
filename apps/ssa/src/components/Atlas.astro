@@ -1,11 +1,17 @@
 ---
 /**
- * Atlas.astro — a scatter "map of the sky lately." X is detected date,
- * Y is altitude (log), each dot is a maneuver. Color = classification,
- * size = Δv magnitude, opacity = confidence. Inline SVG, zero JS.
+ * Atlas.astro — interactive scatter of every maneuver.
  *
- * Dots link to /sat/<norad>, so the chart doubles as the navigator —
- * the whole feed is on one page without anyone scrolling a list.
+ * Each dot has data-* attributes consumed by inline JS in index.astro:
+ *   data-norad     – satellite id (used to group same-satellite dots)
+ *   data-class     – classification (filter target)
+ *   data-conf      – HIGH|LOW (filter target)
+ *   data-epoch-ms  – ms-since-epoch (replay ordering)
+ *   data-name      – display name for tooltip
+ *
+ * The SVG also exposes an overlay <g> where JS draws crosshair lines
+ * and the floating readout. Coordinate math (px → date, py → altitude)
+ * is exposed via data-* on the SVG root so JS doesn't need to repeat it.
  */
 
 interface Event {
@@ -27,30 +33,24 @@ interface Props {
 
 const { events, width = 920, height = 460, windowDays = 30 } = Astro.props;
 
-// Per-classification accents. Routine SK is grey on purpose — it
-// shouldn't compete visually with real maneuvers.
 const COLOR: Record<string, string> = {
-  raise:             "#C8602C", // warm rust
-  lower:             "#1B3A5C", // ink blue (= site accent)
-  plane_change:      "#2E7E5D", // muted green
-  stationkeeping_ew: "#B8B2A0", // ink-faint grey
-  stationkeeping_ns: "#C9C1A9", // a shade lighter
-  deorbit:           "#B33A2A", // red — alarming
+  raise:             "#C8602C",
+  lower:             "#1B3A5C",
+  plane_change:      "#2E7E5D",
+  stationkeeping_ew: "#B8B2A0",
+  stationkeeping_ns: "#C9C1A9",
+  deorbit:           "#B33A2A",
 };
 
 const M = { l: 64, r: 96, t: 26, b: 44 };
 const innerW = width - M.l - M.r;
 const innerH = height - M.t - M.b;
 
-// Time axis: last N days, ending now.
 const tEnd = Date.now();
 const tStart = tEnd - windowDays * 86400 * 1000;
 const tSpan = tEnd - tStart;
 const px = (ms: number) => M.l + ((ms - tStart) / tSpan) * innerW;
 
-// Altitude axis: log scale, 150 km → 50,000 km (covers LEO through GEO).
-// High-eccentric orbits sometimes report enormous a; we clamp them rather
-// than blow up the scale.
 const aMin = 150;
 const aMax = 50000;
 const yLog = Math.log(aMin);
@@ -60,13 +60,11 @@ const py = (alt: number) => {
   return M.t + innerH - ((Math.log(clipped) - yLog) / ySpan) * innerH;
 };
 
-// Dot radius from Δv (m/s) — small but visibly different at log-Δv ranges.
 const rad = (dv: number) => {
   if (!isFinite(dv) || dv <= 0) return 2;
   return Math.max(1.8, Math.min(8.5, 1.6 + Math.log10(dv + 1) * 5));
 };
 
-// Filter to the chart's range so dots don't pile on the clamp edges.
 const inRange = events.filter((e) => {
   const ms = new Date(e.detected_epoch).getTime();
   return (
@@ -77,7 +75,6 @@ const inRange = events.filter((e) => {
   );
 });
 
-// Reference altitudes drawn as faint horizontal rules with right-margin labels.
 const refs: { y: number; label: string }[] = [
   { y: 400,    label: "LEO" },
   { y: 1200,   label: "Polar" },
@@ -85,7 +82,6 @@ const refs: { y: number; label: string }[] = [
   { y: 35786,  label: "GEO" },
 ];
 
-// Day-axis ticks: 5 evenly spaced.
 const dayTicks: { x: number; label: string }[] = [];
 for (let i = 0; i <= 5; i++) {
   const ms = tStart + (i / 5) * tSpan;
@@ -96,129 +92,186 @@ for (let i = 0; i <= 5; i++) {
   });
 }
 
-// Sort smallest-Δv first so big maneuvers sit on top.
 const sorted = [...inRange].sort((a, b) => a.dv_mps - b.dv_mps);
 ---
 
-<figure class="atlas">
-  <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height}
-       role="img" aria-label="Detected maneuvers in the last 30 days, by altitude and date">
+<div class="atlas-wrap">
+  <figure class="atlas">
+    <svg
+      class="atlas__svg"
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      role="img"
+      aria-label="Detected maneuvers in the last 30 days, by altitude and date"
+      data-margin-l={M.l}
+      data-margin-r={M.r}
+      data-margin-t={M.t}
+      data-margin-b={M.b}
+      data-inner-w={innerW}
+      data-inner-h={innerH}
+      data-t-start={tStart}
+      data-t-end={tEnd}
+      data-a-min={aMin}
+      data-a-max={aMax}
+    >
+      <line x1={M.l} x2={M.l} y1={M.t} y2={M.t + innerH}
+            stroke="var(--color-ink)" stroke-width="1" />
+      <line x1={M.l} x2={M.l + innerW} y1={M.t + innerH} y2={M.t + innerH}
+            stroke="var(--color-ink)" stroke-width="1" />
 
-    <!-- Plot frame -->
-    <line x1={M.l} x2={M.l} y1={M.t} y2={M.t + innerH}
-          stroke="var(--color-ink)" stroke-width="1" />
-    <line x1={M.l} x2={M.l + innerW} y1={M.t + innerH} y2={M.t + innerH}
-          stroke="var(--color-ink)" stroke-width="1" />
+      {refs.map((r) => {
+        const y = py(r.y);
+        if (y < M.t || y > M.t + innerH) return null;
+        return (
+          <>
+            <line x1={M.l} x2={M.l + innerW} y1={y} y2={y}
+                  stroke="var(--color-rule)" stroke-width="0.5"
+                  stroke-dasharray="3 3" />
+            <text x={M.l + innerW + 6} y={y + 4}
+                  font-family="var(--font-sans)" font-size="10"
+                  fill="var(--color-ink-muted)">
+              {r.label} <tspan fill="var(--color-ink-faint)">{r.y >= 1000 ? `${(r.y / 1000).toFixed(0)}k` : r.y} km</tspan>
+            </text>
+          </>
+        );
+      })}
 
-    <!-- Reference altitudes -->
-    {refs.map((r) => {
-      const y = py(r.y);
-      if (y < M.t || y > M.t + innerH) return null;
-      return (
-        <>
-          <line x1={M.l} x2={M.l + innerW} y1={y} y2={y}
-                stroke="var(--color-rule)" stroke-width="0.5"
-                stroke-dasharray="3 3" />
-          <text x={M.l + innerW + 6} y={y + 4}
-                font-family="var(--font-sans)" font-size="10"
-                fill="var(--color-ink-muted)">
-            {r.label} <tspan fill="var(--color-ink-faint)">{r.y >= 1000 ? `${(r.y / 1000).toFixed(0)}k` : r.y} km</tspan>
-          </text>
-        </>
-      );
-    })}
+      {dayTicks.map((t) => (
+        <text x={t.x} y={M.t + innerH + 18} text-anchor="middle"
+              font-family="var(--font-sans)" font-size="10"
+              fill="var(--color-ink-muted)"
+              style="letter-spacing: 0.04em; text-transform: uppercase;">
+          {t.label}
+        </text>
+      ))}
 
-    <!-- Day-axis tick labels -->
-    {dayTicks.map((t) => (
-      <text x={t.x} y={M.t + innerH + 18} text-anchor="middle"
+      <text x={16} y={M.t + innerH / 2}
+            transform={`rotate(-90, 16, ${M.t + innerH / 2})`}
+            text-anchor="middle"
             font-family="var(--font-sans)" font-size="10"
             fill="var(--color-ink-muted)"
-            style="letter-spacing: 0.04em; text-transform: uppercase;">
-        {t.label}
+            style="letter-spacing: 0.06em; text-transform: uppercase;">
+        altitude · log scale
       </text>
-    ))}
 
-    <!-- Y label -->
-    <text x={16} y={M.t + innerH / 2}
-          transform={`rotate(-90, 16, ${M.t + innerH / 2})`}
-          text-anchor="middle"
-          font-family="var(--font-sans)" font-size="10"
-          fill="var(--color-ink-muted)"
-          style="letter-spacing: 0.06em; text-transform: uppercase;">
-      altitude · log scale
-    </text>
+      <!-- Crosshair overlay group, populated by JS on mousemove -->
+      <g class="atlas__overlay" pointer-events="none" />
 
-    <!-- Dots — links to /sat/<norad> -->
-    {sorted.map((e) => {
-      const cx = px(new Date(e.detected_epoch).getTime());
-      const cy = py(e.altitude_km);
-      const r = rad(e.dv_mps);
-      const color = COLOR[e.classification] ?? "var(--color-ink)";
-      const opacity = e.confidence === "HIGH" ? 0.85 : 0.45;
-      const title = `${e.object_name ?? `NORAD ${e.norad_id}`}: ${e.classification.replace(/_/g, " ")}, Δv ≈ ${e.dv_mps.toFixed(2)} m/s, alt ${Math.round(e.altitude_km).toLocaleString()} km, ${e.confidence}`;
-      return (
-        <a href={`/sat/${e.norad_id}`} class="atlas__dot-link">
-          <circle cx={cx} cy={cy} r={r}
-                  fill={color} opacity={opacity}
-                  stroke={e.confidence === "HIGH" ? color : "none"}
-                  stroke-width="1">
-            <title>{title}</title>
-          </circle>
-        </a>
-      );
-    })}
-  </svg>
+      <!-- Dots — keep <a> wrappers so right-click / cmd-click still navigates,
+           but JS preventDefault()s plain clicks to open the inline detail. -->
+      {sorted.map((e) => {
+        const cx = px(new Date(e.detected_epoch).getTime());
+        const cy = py(e.altitude_km);
+        const r = rad(e.dv_mps);
+        const color = COLOR[e.classification] ?? "var(--color-ink)";
+        return (
+          <a href={`/sat/${e.norad_id}`} class="atlas__dot-link">
+            <circle
+              class="atlas__dot"
+              cx={cx} cy={cy} r={r}
+              fill={color}
+              data-norad={e.norad_id}
+              data-class={e.classification}
+              data-conf={e.confidence}
+              data-epoch-ms={new Date(e.detected_epoch).getTime()}
+              data-name={e.object_name ?? `NORAD ${e.norad_id}`}
+              data-dv={e.dv_mps}
+              data-alt={e.altitude_km}
+              data-base-r={r}
+              data-color={color}
+            />
+          </a>
+        );
+      })}
+
+      <!-- Floating readout — populated by JS on hover. Hidden by default. -->
+      <g class="atlas__readout" visibility="hidden" pointer-events="none">
+        <rect class="atlas__readout-box" x="0" y="0" width="220" height="38"
+              fill="var(--color-paper)" stroke="var(--color-ink)" stroke-width="0.8" />
+        <text class="atlas__readout-name" x="10" y="14"
+              font-family="var(--font-serif)" font-style="italic" font-size="12"
+              fill="var(--color-ink)" />
+        <text class="atlas__readout-meta" x="10" y="28"
+              font-family="var(--font-sans)" font-size="9"
+              fill="var(--color-ink-muted)" />
+      </g>
+    </svg>
+  </figure>
 
   <ul class="legend" aria-label="Classification legend">
-    <li class="legend__entry">
-      <span class="legend__dot" style={`background:${COLOR.raise}`} aria-hidden="true"></span>
-      <span class="legend__label">orbit raise</span>
-    </li>
-    <li class="legend__entry">
-      <span class="legend__dot" style={`background:${COLOR.lower}`} aria-hidden="true"></span>
-      <span class="legend__label">orbit lower</span>
-    </li>
-    <li class="legend__entry">
-      <span class="legend__dot" style={`background:${COLOR.plane_change}`} aria-hidden="true"></span>
-      <span class="legend__label">plane change</span>
-    </li>
-    <li class="legend__entry">
-      <span class="legend__dot" style={`background:${COLOR.stationkeeping_ew}`} aria-hidden="true"></span>
-      <span class="legend__label">station-keeping</span>
-    </li>
-    <li class="legend__entry">
-      <span class="legend__dot" style={`background:${COLOR.deorbit}`} aria-hidden="true"></span>
-      <span class="legend__label">deorbit</span>
-    </li>
-    <li class="legend__entry legend__entry--note">
-      <span class="legend__rule" aria-hidden="true"></span>
-      <span class="legend__label">dot size = Δv magnitude · ring = high confidence</span>
-    </li>
+    <li class="legend__entry"><span class="legend__dot" style={`background:${COLOR.raise}`} aria-hidden="true"></span><span class="legend__label">orbit raise</span></li>
+    <li class="legend__entry"><span class="legend__dot" style={`background:${COLOR.lower}`} aria-hidden="true"></span><span class="legend__label">orbit lower</span></li>
+    <li class="legend__entry"><span class="legend__dot" style={`background:${COLOR.plane_change}`} aria-hidden="true"></span><span class="legend__label">plane change</span></li>
+    <li class="legend__entry"><span class="legend__dot" style={`background:${COLOR.stationkeeping_ew}`} aria-hidden="true"></span><span class="legend__label">station-keeping</span></li>
+    <li class="legend__entry"><span class="legend__dot" style={`background:${COLOR.deorbit}`} aria-hidden="true"></span><span class="legend__label">deorbit</span></li>
+    <li class="legend__entry legend__entry--note"><span class="legend__rule" aria-hidden="true"></span><span class="legend__label">dot size = Δv · click for detail</span></li>
   </ul>
-</figure>
+</div>
 
 <style>
+  .atlas-wrap { display: contents; }
   .atlas {
     margin: 0;
     padding: var(--space-5) var(--space-4) var(--space-3);
     background: var(--color-paper);
     border: 1px solid var(--color-rule);
+    position: relative;
   }
-  .atlas svg {
+  .atlas__svg {
     display: block;
     width: 100%;
     height: auto;
+    cursor: crosshair;
   }
-  .atlas__dot-link circle {
-    transition: opacity 140ms ease;
+
+  .atlas__dot-link { pointer-events: bounding-box; }
+  .atlas__dot {
+    transition: opacity 220ms ease, transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transform-origin: center;
+    transform-box: fill-box;
+    opacity: 0.85;
     cursor: pointer;
   }
-  .atlas__dot-link:hover circle {
+  .atlas__dot[data-conf="LOW"] { opacity: 0.45; }
+  .atlas__dot[data-conf="HIGH"] { stroke: currentColor; stroke-width: 1; }
+
+  .atlas__dot:hover {
     opacity: 1 !important;
+    transform: scale(1.45);
+  }
+  /* JS-applied states */
+  .atlas__dot--dimmed   { opacity: 0.08 !important; }
+  .atlas__dot--related  { opacity: 1 !important; }
+  .atlas__dot--selected {
+    opacity: 1 !important;
+    transform: scale(1.7);
     stroke: var(--color-ink);
     stroke-width: 1.4;
   }
+  /* Replay state: hide all, then JS reveals chronologically */
+  .atlas--replaying .atlas__dot { opacity: 0 !important; transform: scale(0.3); }
 
+  /* Crosshair lines, drawn into atlas__overlay */
+  .atlas__crosshair {
+    stroke: var(--color-ink-muted);
+    stroke-width: 0.6;
+    stroke-dasharray: 2 3;
+    opacity: 0.7;
+  }
+  .atlas__crosshair-label {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    fill: var(--color-ink);
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* Floating readout */
+  .atlas__readout-box {
+    rx: 2;
+  }
+
+  /* Legend */
   .legend {
     list-style: none;
     margin: var(--space-4) 0 0 0;
@@ -236,26 +289,23 @@ const sorted = [...inRange].sort((a, b) => a.dv_mps - b.dv_mps);
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
-  .legend__entry {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45em;
-  }
-  .legend__entry--note {
-    margin-left: auto;
-    color: var(--color-ink-faint);
-  }
+  .legend__entry { display: inline-flex; align-items: center; gap: 0.45em; }
+  .legend__entry--note { margin-left: auto; color: var(--color-ink-faint); }
   .legend__dot {
-    width: 0.7em;
-    height: 0.7em;
-    border-radius: 50%;
-    display: inline-block;
+    width: 0.7em; height: 0.7em; border-radius: 50%; display: inline-block;
   }
   .legend__rule {
     display: inline-block;
-    width: 1.5em;
-    height: 1px;
+    width: 1.5em; height: 1px;
     background: var(--color-rule-strong);
     margin-right: 0.3em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atlas__dot,
+    .atlas--replaying .atlas__dot {
+      transition: none !important;
+      animation: none !important;
+    }
   }
 </style>

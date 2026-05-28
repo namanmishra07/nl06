@@ -226,11 +226,85 @@ const counts = {
               <span class="atlas-section__inline">
                 {counts.highConf} high-confidence &mdash; both tests agreed.
               </span>
-              Tap any dot to see the orbit of that satellite over 90 days.
+              Hover for detail, click to focus.
             </p>
           </header>
 
+          <!-- Filter chips + replay -->
+          <div class="controls" role="toolbar" aria-label="Atlas filters">
+            <div class="controls__row controls__row--filters">
+              <span class="controls__label">show</span>
+              <button class="chip is-on" data-filter-class="raise"             type="button">orbit raise</button>
+              <button class="chip is-on" data-filter-class="lower"             type="button">orbit lower</button>
+              <button class="chip is-on" data-filter-class="plane_change"      type="button">plane change</button>
+              <button class="chip is-on" data-filter-class="stationkeeping_ew" type="button">SK E-W</button>
+              <button class="chip is-on" data-filter-class="stationkeeping_ns" type="button">SK N-S</button>
+              <button class="chip is-on" data-filter-class="deorbit"           type="button">deorbit</button>
+              <span class="controls__sep" aria-hidden="true">·</span>
+              <button class="chip chip--toggle" data-filter-conf="HIGH"        type="button" aria-pressed="false">HIGH only</button>
+            </div>
+            <button class="replay" id="replay" type="button">
+              <span class="replay__arrow" aria-hidden="true">↻</span>
+              Replay the month
+            </button>
+          </div>
+
           <Atlas events={usable} />
+
+          <!-- Focus panel — JS populates from atlas hover/click -->
+          <aside class="focus" id="focus" aria-live="polite" aria-atomic="true">
+            <div class="focus__placeholder">
+              Hover any dot above for detail · click to pin
+            </div>
+            <article class="focus__card" hidden>
+              <header class="focus__head">
+                <div class="focus__title-block">
+                  <h3 class="focus__name" id="focus-name"></h3>
+                  <p class="focus__meta">
+                    <span id="focus-meta-norad"></span>
+                    <span id="focus-meta-when"></span>
+                    <span id="focus-meta-other"></span>
+                  </p>
+                </div>
+                <button class="focus__close" type="button" id="focus-close" aria-label="Clear focus">×</button>
+              </header>
+              <div class="focus__grid">
+                <dl class="focus__numbers">
+                  <div class="focus__num">
+                    <dt>Type</dt>
+                    <dd id="focus-class"></dd>
+                  </div>
+                  <div class="focus__num">
+                    <dt id="focus-delta-label">Δa</dt>
+                    <dd id="focus-delta-value"></dd>
+                  </div>
+                  <div class="focus__num">
+                    <dt>Δv</dt>
+                    <dd id="focus-dv"></dd>
+                  </div>
+                  <div class="focus__num">
+                    <dt>Altitude</dt>
+                    <dd id="focus-alt"></dd>
+                  </div>
+                  <div class="focus__num">
+                    <dt>Confidence</dt>
+                    <dd id="focus-conf"></dd>
+                  </div>
+                  <div class="focus__num">
+                    <dt>SNR</dt>
+                    <dd id="focus-snr"></dd>
+                  </div>
+                </dl>
+                <div class="focus__chart" id="focus-chart-wrap">
+                  <!-- inline SVG sparkline, populated by JS -->
+                </div>
+              </div>
+              <footer class="focus__foot">
+                <a class="focus__open" id="focus-open" href="#">Open detail page →</a>
+                <span class="focus__related" id="focus-related"></span>
+              </footer>
+            </article>
+          </aside>
         </section>
       )}
 
@@ -274,6 +348,382 @@ const counts = {
 
     </Container>
   </article>
+
+  <script type="application/json" id="events-data" set:html={JSON.stringify(usable)} />
+
+  <script is:inline>
+    (function () {
+      const dataNode = document.getElementById("events-data");
+      if (!dataNode) return;
+      const events = JSON.parse(dataNode.textContent || "[]");
+      const byNorad = new Map();
+      for (const e of events) {
+        const arr = byNorad.get(e.norad_id) || [];
+        arr.push(e);
+        byNorad.set(e.norad_id, arr);
+      }
+
+      const svg = document.querySelector(".atlas__svg");
+      if (!svg) return;
+      const atlasEl = svg.closest(".atlas");
+      const overlay = svg.querySelector(".atlas__overlay");
+      const readout = svg.querySelector(".atlas__readout");
+      const readoutBox  = readout && readout.querySelector(".atlas__readout-box");
+      const readoutName = readout && readout.querySelector(".atlas__readout-name");
+      const readoutMeta = readout && readout.querySelector(".atlas__readout-meta");
+      const focus = document.getElementById("focus");
+      const focusCard = focus && focus.querySelector(".focus__card");
+      const focusPh   = focus && focus.querySelector(".focus__placeholder");
+      const closeBtn  = document.getElementById("focus-close");
+      const replayBtn = document.getElementById("replay");
+
+      const ML = +svg.dataset.marginL, MR = +svg.dataset.marginR;
+      const MT = +svg.dataset.marginT, MB = +svg.dataset.marginB;
+      const innerW = +svg.dataset.innerW, innerH = +svg.dataset.innerH;
+      const tStart = +svg.dataset.tStart, tEnd = +svg.dataset.tEnd, tSpan = tEnd - tStart;
+      const aMin = +svg.dataset.aMin, aMax = +svg.dataset.aMax;
+      const yLog = Math.log(aMin), ySpan = Math.log(aMax) - Math.log(aMin);
+
+      const dots = Array.from(svg.querySelectorAll(".atlas__dot"));
+      const eventByNorad = new Map();
+      events.forEach((e) => {
+        const arr = eventByNorad.get(e.norad_id) || [];
+        arr.push(e);
+        eventByNorad.set(e.norad_id, arr);
+      });
+
+      // ── Filter state ────────────────────────────────────────
+      const activeClasses = new Set(dots.map((d) => d.dataset.class));
+      let highOnly = false;
+
+      function applyFilters() {
+        dots.forEach((d) => {
+          const ok = activeClasses.has(d.dataset.class)
+                  && (!highOnly || d.dataset.conf === "HIGH");
+          d.classList.toggle("atlas__dot--dimmed", !ok && d !== pinnedDot);
+        });
+        if (pinnedDot) reapplyRelated();
+      }
+
+      document.querySelectorAll("[data-filter-class]").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const k = chip.dataset.filterClass;
+          if (activeClasses.has(k)) { activeClasses.delete(k); chip.classList.remove("is-on"); }
+          else { activeClasses.add(k); chip.classList.add("is-on"); }
+          applyFilters();
+        });
+      });
+      const highBtn = document.querySelector('[data-filter-conf="HIGH"]');
+      if (highBtn) {
+        highBtn.addEventListener("click", () => {
+          highOnly = !highOnly;
+          highBtn.classList.toggle("is-on", highOnly);
+          highBtn.setAttribute("aria-pressed", String(highOnly));
+          applyFilters();
+        });
+      }
+
+      // ── Hover + crosshair ───────────────────────────────────
+      function dateLabel(ms) {
+        return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      }
+      function altFromY(yPx) {
+        const norm = (MT + innerH - yPx) / innerH;
+        return Math.exp(yLog + norm * ySpan);
+      }
+      function fmtAlt(km) {
+        if (km >= 1000) return (km / 1000).toFixed(1) + "k km";
+        return Math.round(km) + " km";
+      }
+
+      function ensureCrosshair() {
+        if (overlay.children.length > 0) return;
+        const ns = "http://www.w3.org/2000/svg";
+        ["v", "h"].forEach((k) => {
+          const l = document.createElementNS(ns, "line");
+          l.setAttribute("class", "atlas__crosshair");
+          l.setAttribute("id", `xhair-${k}`);
+          overlay.appendChild(l);
+        });
+        const ldate = document.createElementNS(ns, "text");
+        ldate.setAttribute("class", "atlas__crosshair-label");
+        ldate.setAttribute("id", "xhair-date");
+        ldate.setAttribute("text-anchor", "middle");
+        overlay.appendChild(ldate);
+        const lalt = document.createElementNS(ns, "text");
+        lalt.setAttribute("class", "atlas__crosshair-label");
+        lalt.setAttribute("id", "xhair-alt");
+        lalt.setAttribute("text-anchor", "end");
+        overlay.appendChild(lalt);
+      }
+      ensureCrosshair();
+      const xV = overlay.querySelector("#xhair-v");
+      const xH = overlay.querySelector("#xhair-h");
+      const xD = overlay.querySelector("#xhair-date");
+      const xA = overlay.querySelector("#xhair-alt");
+
+      function hideCrosshair() {
+        [xV, xH, xD, xA].forEach((el) => el && el.setAttribute("visibility", "hidden"));
+      }
+      hideCrosshair();
+
+      function viewboxXY(evt) {
+        const rect = svg.getBoundingClientRect();
+        const vbW = svg.viewBox.baseVal.width;
+        const vbH = svg.viewBox.baseVal.height;
+        const x = ((evt.clientX - rect.left) / rect.width) * vbW;
+        const y = ((evt.clientY - rect.top) / rect.height) * vbH;
+        return [x, y];
+      }
+
+      svg.addEventListener("mousemove", (e) => {
+        const [x, y] = viewboxXY(e);
+        if (x < ML || x > ML + innerW || y < MT || y > MT + innerH) {
+          hideCrosshair();
+          return;
+        }
+        const ms = tStart + ((x - ML) / innerW) * tSpan;
+        const alt = altFromY(y);
+        xV.setAttribute("x1", x); xV.setAttribute("x2", x);
+        xV.setAttribute("y1", MT); xV.setAttribute("y2", MT + innerH);
+        xH.setAttribute("x1", ML); xH.setAttribute("x2", ML + innerW);
+        xH.setAttribute("y1", y); xH.setAttribute("y2", y);
+        xD.setAttribute("x", x); xD.setAttribute("y", MT + innerH + 30);
+        xD.textContent = dateLabel(ms);
+        xA.setAttribute("x", ML + innerW + 80); xA.setAttribute("y", y + 4);
+        xA.textContent = fmtAlt(alt);
+        [xV, xH, xD, xA].forEach((el) => el.setAttribute("visibility", "visible"));
+
+        // Find nearest dot within ~22 viewBox px
+        let best = null, bestD = 22 * 22;
+        for (const d of dots) {
+          if (d.classList.contains("atlas__dot--dimmed")) continue;
+          const cx = +d.getAttribute("cx"), cy = +d.getAttribute("cy");
+          const dist2 = (cx - x) ** 2 + (cy - y) ** 2;
+          if (dist2 < bestD) { best = d; bestD = dist2; }
+        }
+        if (best && !pinnedDot) {
+          updateFocus(best, /*pinned*/ false);
+          showReadoutFor(best);
+        } else if (!best && !pinnedDot) {
+          if (readout) readout.setAttribute("visibility", "hidden");
+        }
+      });
+      svg.addEventListener("mouseleave", () => {
+        hideCrosshair();
+        if (readout) readout.setAttribute("visibility", "hidden");
+        if (!pinnedDot) clearFocus();
+      });
+
+      function showReadoutFor(dot) {
+        if (!readout) return;
+        const cx = +dot.getAttribute("cx"), cy = +dot.getAttribute("cy");
+        const name = dot.dataset.name;
+        const cls = (dot.dataset.class || "").replace(/_/g, " ");
+        const dv = (+dot.dataset.dv).toFixed(2);
+        readoutName.textContent = name;
+        readoutMeta.textContent = `${cls} · Δv ≈ ${dv} m/s · ${dot.dataset.conf}`;
+        const bb = readoutName.getBBox();
+        const bb2 = readoutMeta.getBBox();
+        const w = Math.max(bb.width, bb2.width) + 20;
+        readoutBox.setAttribute("width", w);
+        let x = cx + 14, y = cy - 46;
+        if (x + w > ML + innerW) x = cx - w - 14;
+        if (y < MT) y = cy + 14;
+        readout.setAttribute("transform", `translate(${x.toFixed(1)}, ${y.toFixed(1)})`);
+        readoutName.setAttribute("x", 10); readoutName.setAttribute("y", 16);
+        readoutMeta.setAttribute("x", 10); readoutMeta.setAttribute("y", 30);
+        readout.setAttribute("visibility", "visible");
+      }
+
+      // ── Focus panel ──────────────────────────────────────────
+      let pinnedDot = null;
+
+      function setRelated(noradId) {
+        dots.forEach((d) => {
+          const sameSat = +d.dataset.norad === +noradId;
+          d.classList.toggle("atlas__dot--related", sameSat && d !== pinnedDot);
+        });
+      }
+      function reapplyRelated() {
+        if (pinnedDot) setRelated(pinnedDot.dataset.norad);
+      }
+      function clearRelated() {
+        dots.forEach((d) => d.classList.remove("atlas__dot--related", "atlas__dot--selected"));
+      }
+      function clearFocus() {
+        if (focusCard) focusCard.hidden = true;
+        if (focusPh) focusPh.hidden = false;
+        clearRelated();
+      }
+
+      const classLabel = {
+        raise: "orbit raise",
+        lower: "orbit lower",
+        deorbit: "deorbit",
+        plane_change: "plane change",
+        stationkeeping_ew: "station-keeping (E-W)",
+        stationkeeping_ns: "station-keeping (N-S)",
+      };
+
+      function updateFocus(dot, pinned) {
+        if (!focusCard) return;
+        const norad = +dot.dataset.norad;
+        const e = (eventByNorad.get(norad) || []).find(
+          (x) => Math.abs(new Date(x.detected_epoch).getTime() - +dot.dataset.epochMs) < 1000
+        ) || (eventByNorad.get(norad) || [])[0];
+        if (!e) return;
+
+        focusPh.hidden = true;
+        focusCard.hidden = false;
+        focusCard.classList.toggle("focus__card--pinned", pinned);
+
+        const name = e.object_name || `NORAD ${e.norad_id}`;
+        document.getElementById("focus-name").textContent = name;
+        document.getElementById("focus-meta-norad").textContent = `NORAD ${e.norad_id}`;
+        const d = new Date(e.detected_epoch);
+        const when = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                   + " · " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }) + " UTC";
+        document.getElementById("focus-meta-when").textContent = when;
+        document.getElementById("focus-meta-other").textContent =
+          [e.country, e.constellation].filter(Boolean).join(" · ");
+
+        document.getElementById("focus-class").textContent =
+          classLabel[e.classification] || e.classification.replace(/_/g, " ");
+
+        const deltaLab = document.getElementById("focus-delta-label");
+        const deltaVal = document.getElementById("focus-delta-value");
+        if (e.kind === "in_plane" && e.delta_a_km != null) {
+          deltaLab.textContent = "Δa";
+          deltaVal.textContent = (e.delta_a_km >= 0 ? "+" : "") + e.delta_a_km.toFixed(2) + " km";
+        } else if (e.delta_inc_deg != null) {
+          deltaLab.textContent = "Δi";
+          deltaVal.textContent = (e.delta_inc_deg >= 0 ? "+" : "") + e.delta_inc_deg.toFixed(4) + "°";
+        } else {
+          deltaLab.textContent = "Δ";
+          deltaVal.textContent = "—";
+        }
+        document.getElementById("focus-dv").textContent =
+          (e.dv_mps < 0.1 ? e.dv_mps.toFixed(3) : e.dv_mps.toFixed(2)) + " m/s";
+        document.getElementById("focus-alt").textContent =
+          Math.round(e.altitude_km).toLocaleString() + " km";
+        const confEl = document.getElementById("focus-conf");
+        confEl.textContent = e.confidence;
+        confEl.className = "focus__conf focus__conf--" + e.confidence.toLowerCase();
+        document.getElementById("focus-snr").textContent = e.snr.toFixed(1);
+        document.getElementById("focus-open").href = `/sat/${e.norad_id}`;
+
+        const related = byNorad.get(norad) || [];
+        const relatedNote = document.getElementById("focus-related");
+        relatedNote.textContent = related.length > 1
+          ? `${related.length} maneuvers from this satellite in the window`
+          : "Only event from this satellite in the window";
+
+        const chartWrap = document.getElementById("focus-chart-wrap");
+        chartWrap.innerHTML = renderSparkline(e);
+
+        if (pinned) {
+          pinnedDot = dot;
+          dots.forEach((d) => d.classList.toggle("atlas__dot--selected", d === dot));
+          setRelated(norad);
+        }
+      }
+
+      function renderSparkline(e) {
+        const sp = e.sparkline || {};
+        const ep = sp.epoch_iso || [];
+        const a = sp.a_km || [];
+        if (ep.length < 2) return '<span class="focus__chart-empty">No 90-day series.</span>';
+        const W = 420, H = 110, m = { l: 8, r: 8, t: 12, b: 22 };
+        const iw = W - m.l - m.r, ih = H - m.t - m.b;
+        const ts = ep.map((s) => new Date(s).getTime());
+        const tMin = ts[0], tMax = ts[ts.length - 1], tSp = Math.max(1, tMax - tMin);
+        const aMin2 = Math.min.apply(null, a), aMax2 = Math.max.apply(null, a);
+        const pad = Math.max(0.001, (aMax2 - aMin2) * 0.15);
+        const yLo = aMin2 - pad, yHi = aMax2 + pad;
+        const X = (t) => m.l + ((t - tMin) / tSp) * iw;
+        const Y = (v) => m.t + ih - ((v - yLo) / (yHi - yLo)) * ih;
+        let d = "";
+        for (let i = 0; i < ts.length; i++) {
+          d += (i === 0 ? "M" : "L") + X(ts[i]).toFixed(1) + "," + Y(a[i]).toFixed(1);
+        }
+        const evMs = new Date(e.detected_epoch).getTime();
+        const evX = (evMs >= tMin && evMs <= tMax) ? X(evMs) : null;
+        const accent = e.confidence === "HIGH" ? "var(--color-accent)" : "var(--color-ink-muted)";
+        return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="focus__svg" role="img" aria-label="a(t) sparkline for the satellite">
+          <line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="var(--color-rule)" stroke-width="0.6"/>
+          ${evX !== null ? `<line x1="${evX}" x2="${evX}" y1="${m.t}" y2="${m.t + ih}" stroke="${accent}" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.85"/>` : ""}
+          <path d="${d}" fill="none" stroke="var(--color-ink)" stroke-width="1.1"/>
+          <text x="${m.l}" y="${H - 6}" font-family="var(--font-sans)" font-size="9" fill="var(--color-ink-muted)" style="letter-spacing:0.06em;text-transform:uppercase">a(t) · 90d · the kink is the evidence</text>
+        </svg>`;
+      }
+
+      svg.addEventListener("click", (e) => {
+        const a = e.target.closest("a.atlas__dot-link");
+        if (!a) return;
+        const dot = a.querySelector(".atlas__dot");
+        if (!dot) return;
+        e.preventDefault();
+        if (pinnedDot === dot) {
+          pinnedDot = null;
+          clearFocus();
+        } else {
+          updateFocus(dot, /*pinned*/ true);
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && pinnedDot) {
+          pinnedDot = null;
+          clearFocus();
+        }
+      });
+      if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+          pinnedDot = null;
+          clearFocus();
+        });
+      }
+
+      // ── Replay animation ─────────────────────────────────────
+      let replayTimer = null;
+      function replay() {
+        if (!atlasEl) return;
+        if (replayTimer) { cancelAnimationFrame(replayTimer); replayTimer = null; }
+        const visible = dots.filter((d) => !d.classList.contains("atlas__dot--dimmed"));
+        if (visible.length === 0) return;
+        visible.forEach((d) => { d.style.opacity = "0"; d.style.transform = "scale(0.3)"; });
+        const sorted = [...visible].sort((a, b) => +a.dataset.epochMs - +b.dataset.epochMs);
+        const tFirst = +sorted[0].dataset.epochMs;
+        const tLast = +sorted[sorted.length - 1].dataset.epochMs;
+        const tWin = Math.max(1, tLast - tFirst);
+        const DUR = 2500;
+        const start = performance.now();
+        let i = 0;
+        function tick(now) {
+          const prog = (now - start) / DUR;
+          const cutoff = tFirst + prog * tWin;
+          while (i < sorted.length && +sorted[i].dataset.epochMs <= cutoff) {
+            sorted[i].style.opacity = "";
+            sorted[i].style.transform = "";
+            i++;
+          }
+          if (prog < 1) {
+            replayTimer = requestAnimationFrame(tick);
+          } else {
+            sorted.forEach((d) => { d.style.opacity = ""; d.style.transform = ""; });
+            replayTimer = null;
+          }
+        }
+        replayTimer = requestAnimationFrame(tick);
+      }
+      if (replayBtn) replayBtn.addEventListener("click", replay);
+
+      // ── First-load entrance ──────────────────────────────────
+      // Subtle staggered fade-in on first paint — gives the atlas a sense
+      // of coming together rather than slamming in.
+      requestAnimationFrame(() => requestAnimationFrame(() => replay()));
+    })();
+  </script>
 </BaseLayout>
 
 <style>
@@ -458,6 +908,256 @@ const counts = {
     margin-right: 0.1em;
   }
   .atlas-section__inline { color: var(--color-ink-muted); }
+
+  /* ─────────────────── controls (chips + replay) ─────────────────── */
+  .controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: var(--space-5) 0 var(--space-4) 0;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-rule);
+  }
+  .controls__row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4em 0.6em;
+    flex: 1;
+  }
+  .controls__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 600;
+    margin-right: 0.2em;
+  }
+  .controls__sep { color: var(--color-ink-faint); }
+
+  .chip {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--color-rule-strong);
+    color: var(--color-ink-muted);
+    padding: 0.3em 0.7em;
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 140ms, border-color 140ms, background 140ms;
+  }
+  .chip:hover { color: var(--color-ink); border-color: var(--color-ink); }
+  .chip.is-on {
+    color: var(--color-ink);
+    border-color: var(--color-ink);
+  }
+  .chip:not(.is-on) {
+    color: var(--color-ink-faint);
+    border-style: dashed;
+  }
+  .chip--toggle.is-on {
+    color: var(--color-paper);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  .replay {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--color-ink-soft);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.3em 0.2em;
+    transition: color 140ms;
+  }
+  .replay:hover { color: var(--color-accent); }
+  .replay__arrow {
+    display: inline-block;
+    color: var(--color-accent);
+    transition: transform 350ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+  .replay:hover .replay__arrow {
+    transform: rotate(-360deg);
+  }
+
+  /* ─────────────────── focus panel ─────────────────── */
+  .focus {
+    margin-top: var(--space-5);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper-margin);
+  }
+  .focus__placeholder {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    text-align: center;
+    padding: var(--space-3) 0;
+  }
+
+  .focus__card {
+    animation: focus-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @keyframes focus-in {
+    from { opacity: 0; transform: translateY(0.3rem); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .focus__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+  .focus__name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+    line-height: 1.15;
+  }
+  .focus__meta {
+    margin: 0.3em 0 0 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .focus__meta > * + *::before {
+    content: "·";
+    color: var(--color-ink-faint);
+    margin: 0 0.5em;
+  }
+  .focus__close {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--color-rule-strong);
+    border-radius: 999px;
+    width: 1.8em; height: 1.8em;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 140ms, border-color 140ms;
+  }
+  .focus__close:hover { color: var(--color-accent); border-color: var(--color-accent); }
+
+  .focus__grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: var(--space-5);
+    align-items: start;
+  }
+  .focus__numbers {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2) var(--space-4);
+  }
+  .focus__num { display: flex; flex-direction: column; gap: 0.1em; }
+  .focus__num dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 600;
+  }
+  .focus__num dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-feature-settings: var(--features-oldstyle);
+    color: var(--color-ink);
+    font-size: var(--type-body);
+    font-weight: 500;
+  }
+  .focus__conf {
+    display: inline-block;
+    padding: 0.05em 0.45em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    font-family: var(--font-sans);
+    font-style: normal;
+  }
+  .focus__conf--high { color: var(--color-accent); }
+  .focus__conf--low  { color: var(--color-ink-muted); }
+
+  .focus__chart {
+    padding: var(--space-2);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+  }
+  .focus__chart-empty {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    padding: var(--space-3);
+    display: block;
+  }
+  .focus__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+  .focus__open {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+    font-weight: 700;
+  }
+  .focus__open:hover { border-bottom-color: var(--color-accent); }
+  .focus__related {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+  }
+
+  @media (max-width: 760px) {
+    .focus__grid { grid-template-columns: 1fr; }
+    .focus__numbers { grid-template-columns: 1fr 1fr; }
+  }
 
   /* ─────────────────── notable list ─────────────────── */
   .notable {
