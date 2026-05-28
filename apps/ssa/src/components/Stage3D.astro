@@ -124,16 +124,13 @@
 
   // ── Faint regime guide rings (LEO/MEO-low/MEO/GEO) ────────
   function guideRing(r: number) {
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i <= 256; i++) {
-      const t = (i / 256) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(t) * r, 0, Math.sin(t) * r));
-    }
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({
-      color: 0xC9C1A9, transparent: true, opacity: 0.18,
+    const geo = new THREE.TorusGeometry(r, 0.45, 6, 96);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xC9C1A9, transparent: true, opacity: 0.22, depthWrite: false,
     });
-    return new THREE.Line(geo, mat);
+    const m = new THREE.Mesh(geo, mat);
+    m.rotation.x = Math.PI / 2;
+    return m;
   }
   [120, 175, 230, 290].forEach((r) => orbitGroup.add(guideRing(r)));
 
@@ -210,41 +207,39 @@
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
-  // Build an orbit Line (thin tube would need extra geometry — Line is
-  // cheap and reads fine on cream paper). Drawn in the local XZ plane;
-  // the parent group's rotation takes it from "equatorial" to camera-facing.
-  function makeOrbitLine(r: number, color: number, opacity: number): THREE.Line {
-    const pts: THREE.Vector3[] = [];
-    const N = 256;
-    for (let i = 0; i <= N; i++) {
-      const t = (i / N) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(t) * r, 0, Math.sin(t) * r));
-    }
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({
-      color, transparent: true, opacity,
+  // Orbit rendered as a thin 3-D torus so it has actual thickness — Line
+  // primitives in WebGL ignore linewidth > 1 on every desktop browser
+  // and render sub-pixel thin from camera distance.
+  const ORBIT_TUBE_RADIUS = 0.9;
+  const ORBIT_RADIAL_SEGMENTS = 8;
+  const ORBIT_TUBULAR_SEGMENTS = 128;
+
+  function makeOrbitTorus(r: number, color: number, opacity: number): THREE.Mesh {
+    const geo = new THREE.TorusGeometry(
+      r, ORBIT_TUBE_RADIUS, ORBIT_RADIAL_SEGMENTS, ORBIT_TUBULAR_SEGMENTS,
+    );
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity, depthWrite: false,
     });
-    return new THREE.Line(geo, mat);
+    const torus = new THREE.Mesh(geo, mat);
+    // TorusGeometry is in XY plane by default — rotate to XZ so it sits
+    // in our standard orbital plane.
+    torus.rotation.x = Math.PI / 2;
+    return torus;
   }
 
-  function setOrbitRadius(line: THREE.Line, r: number) {
-    const N = 256;
-    const positions = (line.geometry as THREE.BufferGeometry).attributes.position
-      .array as Float32Array;
-    for (let i = 0; i <= N; i++) {
-      const t = (i / N) * Math.PI * 2;
-      positions[i * 3]     = Math.cos(t) * r;
-      positions[i * 3 + 1] = 0;
-      positions[i * 3 + 2] = Math.sin(t) * r;
-    }
-    (line.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true;
+  function setOrbitRadius(torus: THREE.Mesh, r: number) {
+    (torus.geometry as THREE.TorusGeometry).dispose();
+    torus.geometry = new THREE.TorusGeometry(
+      r, ORBIT_TUBE_RADIUS, ORBIT_RADIAL_SEGMENTS, ORBIT_TUBULAR_SEGMENTS,
+    );
   }
 
   // ── Per-event state ───────────────────────────────────────
   type EventVisual = {
     event: ManeuverEvent;
-    beforeOrbit: THREE.Line;
-    afterOrbit: THREE.Line;
+    beforeOrbit: THREE.Mesh;
+    afterOrbit: THREE.Mesh;
     satellite: THREE.Mesh;
     arrow: THREE.ArrowHelper | null;
     satTheta: number;          // continuously advancing orbital angle
@@ -260,6 +255,19 @@
   const RESET_MS = 700;
   const CYCLE_MS = MORPH_MS + HOLD_MS + RESET_MS;
 
+  // Bulletproof arrow cleanup. Declared before disposeCurrent because that
+  // function calls it. Cheap — tiltGroup never has many children.
+  function clearAllArrows() {
+    const arrows = tiltGroup.children.filter(
+      (c): c is THREE.ArrowHelper => c instanceof THREE.ArrowHelper,
+    );
+    for (const a of arrows) {
+      tiltGroup.remove(a);
+      a.dispose();
+    }
+    if (current) current.arrow = null;
+  }
+
   function disposeCurrent() {
     if (!current) return;
     [current.beforeOrbit, current.afterOrbit, current.satellite].forEach((o) => {
@@ -269,10 +277,7 @@
       if (Array.isArray(m)) m.forEach((mm) => mm.dispose());
       else m?.dispose();
     });
-    if (current.arrow) {
-      current.arrow.parent?.remove(current.arrow);
-      current.arrow.dispose();
-    }
+    clearAllArrows();
     current = null;
   }
 
@@ -300,13 +305,13 @@
       ? THREE.MathUtils.degToRad(Math.max(-45, Math.min(45, e.delta_inc_deg * 14)))
       : 0;
 
-    const beforeOrbit = makeOrbitLine(beforeR, 0x767A82, 0.55);
+    const beforeOrbit = makeOrbitTorus(beforeR, 0x767A82, 0.55);
     eventGroup.add(beforeOrbit);
 
-    const afterOrbit  = makeOrbitLine(beforeR, color, 0);
+    const afterOrbit = makeOrbitTorus(beforeR, color, 0);
     tiltGroup.add(afterOrbit);
 
-    const satGeo = new THREE.SphereGeometry(3.6, 16, 16);
+    const satGeo = new THREE.SphereGeometry(4.5, 20, 20);
     const satMat = new THREE.MeshBasicMaterial({ color });
     const satellite = new THREE.Mesh(satGeo, satMat);
     tiltGroup.add(satellite);
@@ -329,9 +334,8 @@
 
   function drawBurnArrow(e: ManeuverEvent) {
     if (!current) return;
+    clearAllArrows();
     const theta = current.satTheta;
-    // Direction in local frame (XZ plane): radial outward / inward for
-    // in_plane events, tangential along the orbit for plane changes.
     const radialLocal     = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));
     const tangentialLocal = new THREE.Vector3(-Math.sin(theta), 0, Math.cos(theta));
     let dirLocal: THREE.Vector3, length: number;
@@ -347,19 +351,12 @@
       return;
     }
     dirLocal.normalize();
-    // Position arrow at the satellite's CURRENT local position, parented to
-    // the same tiltGroup so it inherits the camera-facing + plane-tilt
-    // orientation automatically.
     const arrow = new THREE.ArrowHelper(
       dirLocal, current.satellite.position.clone(), length,
       COLOR[e.classification] ?? 0x14181F,
       length * 0.28, length * 0.18,
     );
     tiltGroup.add(arrow);
-    if (current.arrow) {
-      current.arrow.parent?.remove(current.arrow);
-      current.arrow.dispose();
-    }
     current.arrow = arrow;
   }
 
@@ -430,9 +427,9 @@
       setOrbitRadius(current.afterOrbit, curR);
 
       // Opacities.
-      (current.beforeOrbit.material as THREE.LineBasicMaterial).opacity =
+      (current.beforeOrbit.material as THREE.MeshBasicMaterial).opacity =
         0.55 * (1 - k);
-      (current.afterOrbit.material as THREE.LineBasicMaterial).opacity =
+      (current.afterOrbit.material as THREE.MeshBasicMaterial).opacity =
         Math.min(1, k * 1.4);
 
       // Plane-change tilt — applied to tiltGroup so AFTER orbit + satellite
@@ -452,9 +449,7 @@
         drawBurnArrow(e);
       }
       if (phase === "reset" && current.arrow) {
-        current.arrow.parent?.remove(current.arrow);
-        current.arrow.dispose();
-        current.arrow = null;
+        clearAllArrows();
       }
     }
 
@@ -470,11 +465,7 @@
       if (current) {
         // Start the next loop from the beginning of the morph phase.
         current.cycleStart = performance.now();
-        if (current.arrow) {
-          eventGroup.remove(current.arrow);
-          current.arrow.dispose();
-          current.arrow = null;
-        }
+        clearAllArrows();
       }
     },
   };
