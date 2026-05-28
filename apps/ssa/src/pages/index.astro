@@ -1,0 +1,388 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import EventCard  from "~/components/EventCard.astro";
+import fs from "node:fs";
+import path from "node:path";
+
+// Feed + summary JSON are produced by the ssa-pipeline and synced into
+// public/data/ before each build. If they're missing (first build before
+// the pipeline has run), render the empty state gracefully.
+interface FeedEvent {
+  norad_id: number;
+  object_name: string;
+  country: string | null;
+  constellation: string | null;
+  object_type: string | null;
+  detected_epoch: string;
+  kind: "in_plane" | "out_of_plane";
+  classification: string;
+  delta_a_km: number | null;
+  delta_inc_deg: number | null;
+  dv_mps: number;
+  snr: number;
+  confidence: "HIGH" | "LOW";
+  altitude_km: number;
+  sparkline: { epoch_iso: string[]; a_km: number[]; altitude_km: number[] };
+}
+
+interface Feed {
+  generated_at: string;
+  window_days: number;
+  event_count: number;
+  events: FeedEvent[];
+}
+
+interface Summary {
+  generated_at: string;
+  window_days: number;
+  payloads_tracked: number;
+  events_in_window: number;
+  by_classification: Record<string, number>;
+  by_kind: Record<string, number>;
+  by_confidence: Record<string, number>;
+  by_constellation: Record<string, number>;
+}
+
+function readJson<T>(rel: string, fallback: T): T {
+  try {
+    const p = path.resolve("./public", rel);
+    if (!fs.existsSync(p)) return fallback;
+    return JSON.parse(fs.readFileSync(p, "utf-8")) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+const feed: Feed = readJson("data/feed.json", {
+  generated_at: new Date().toISOString(),
+  window_days: 30,
+  event_count: 0,
+  events: [],
+});
+
+const summary: Summary = readJson("data/summary.json", {
+  generated_at: new Date().toISOString(),
+  window_days: 30,
+  payloads_tracked: 0,
+  events_in_window: 0,
+  by_classification: {},
+  by_kind: {},
+  by_confidence: {},
+  by_constellation: {},
+});
+
+// Partition out constellation events — collapsed by default per spec.
+const isConstellation = (e: FeedEvent) => Boolean(e.constellation);
+const mainEvents = feed.events.filter((e) => !isConstellation(e));
+const constellationEvents = feed.events.filter(isConstellation);
+
+const generatedDate = new Date(feed.generated_at).toLocaleString("en-GB", {
+  day: "numeric", month: "long", year: "numeric",
+  hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
+});
+
+// Group constellation events by tag for the toggle summary.
+const byConst: Record<string, FeedEvent[]> = {};
+for (const e of constellationEvents) {
+  if (e.constellation) {
+    (byConst[e.constellation] ||= []).push(e);
+  }
+}
+const constGroups = Object.entries(byConst).sort((a, b) => b[1].length - a[1].length);
+---
+<BaseLayout
+  title="SSA — Satellites that maneuvered"
+  description="Maneuver events detected from public orbital data, by orbital-mechanics inference. Updated daily."
+  pathname="/"
+  itemNumber="№ 001"
+>
+  <article class="feed">
+    <Container size="wide" class="feed__inner">
+
+      <!-- ─────────────────────────── MASTHEAD ─────────────────────── -->
+      <header class="masthead">
+        <div class="masthead__rail">
+          <span class="rail__label">The Feed</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">Updated {generatedDate} UTC</span>
+        </div>
+
+        <h1 class="masthead__title">
+          <span class="masthead__title-pre">Satellites that</span>
+          <span class="masthead__title-main">maneuvered.</span>
+        </h1>
+
+        <p class="masthead__lede">
+          Detected from public orbital data by orbital-mechanics inference &mdash;
+          a sudden break in an otherwise smooth curve.
+          <a href="/method">How this works.</a>
+        </p>
+
+        <ul class="strip" aria-label="At a glance">
+          <li class="strip__cell">
+            <span class="strip__num">{summary.payloads_tracked.toLocaleString()}</span>
+            <span class="strip__label">payloads tracked</span>
+          </li>
+          <li class="strip__cell">
+            <span class="strip__num">{summary.events_in_window.toLocaleString()}</span>
+            <span class="strip__label">maneuvers in last {summary.window_days} days</span>
+          </li>
+          <li class="strip__cell strip__cell--by-conf">
+            <span class="strip__num">{summary.by_confidence?.HIGH ?? 0}</span>
+            <span class="strip__label">HIGH confidence</span>
+          </li>
+        </ul>
+      </header>
+
+      <!-- ────────────────────── FEED EVENTS ─────────────────────────── -->
+      {mainEvents.length === 0 ? (
+        <p class="feed__empty">
+          No non-constellation maneuvers detected in the last {summary.window_days} days,
+          or the pipeline has not yet produced its first snapshot.
+        </p>
+      ) : (
+        <section class="events" aria-label="Maneuver events">
+          {mainEvents.map((ev) => <EventCard event={ev} />)}
+        </section>
+      )}
+
+      <!-- ────────────────────── CONSTELLATION DRAWER ───────────────── -->
+      {constellationEvents.length > 0 && (
+        <details class="drawer">
+          <summary class="drawer__summary">
+            <span class="drawer__label">Constellation maneuvers</span>
+            <span class="drawer__count">{constellationEvents.length} events</span>
+            <span class="drawer__hint">
+              {constGroups.map(([tag, evs], i) => (
+                <>
+                  {i > 0 && <span class="drawer__sep" aria-hidden="true">·</span>}
+                  <span class="drawer__tag">{tag}<span class="drawer__tag-n"> {evs.length}</span></span>
+                </>
+              ))}
+            </span>
+            <span class="drawer__chevron" aria-hidden="true">+</span>
+          </summary>
+          <div class="drawer__body">
+            <p class="drawer__note">
+              Constellation members maneuver near-continuously to maintain their
+              shells. They&rsquo;re kept for completeness but tucked away so they
+              don&rsquo;t crowd out single events of interest.
+            </p>
+            <div class="events">
+              {constellationEvents.map((ev) => <EventCard event={ev} />)}
+            </div>
+          </div>
+        </details>
+      )}
+
+      <footer class="feed__foot" aria-hidden="true">
+        <span class="asterism">⁂</span>
+      </footer>
+
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  .feed {
+    padding-top: var(--space-12);
+    padding-bottom: var(--space-20);
+  }
+  .feed__inner {
+    padding-left: var(--space-page);
+    padding-right: var(--space-page);
+  }
+
+  /* ─────────────────── MASTHEAD ──────────────────────── */
+  .masthead__rail {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .rail__label   { color: var(--color-ink); font-weight: 600; }
+  .rail__rule    { flex: 1; height: 1px; background: var(--color-rule); }
+
+  .masthead__title {
+    margin: var(--space-7) 0 var(--space-4) 0;
+    font-family: var(--font-serif);
+    color: var(--color-ink);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    font-feature-settings: var(--features-display);
+  }
+  .masthead__title-pre {
+    display: block;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.4rem;
+    color: var(--color-ink-muted);
+    letter-spacing: var(--tracking-tight);
+    margin-bottom: var(--space-1);
+  }
+  .masthead__title-main {
+    display: block;
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(3rem, 8.5vw, 5.5rem);
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-jumbo);
+    line-height: 0.95;
+  }
+  .masthead__lede {
+    margin: 0 0 var(--space-7) 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-h3);
+    line-height: 1.45;
+    color: var(--color-ink-soft);
+    max-width: 42rem;
+    font-weight: 400;
+  }
+  .masthead__lede a {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  }
+  .masthead__lede a:hover {
+    border-bottom-color: var(--color-accent);
+  }
+
+  /* "At a glance" census strip */
+  .strip {
+    list-style: none;
+    margin: 0 0 var(--space-12) 0;
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 3px double var(--color-rule-strong);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-10);
+  }
+  .strip__cell {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5em;
+  }
+  .strip__num {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: 2.25rem;
+    color: var(--color-ink);
+    font-feature-settings: var(--features-oldstyle);
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .strip__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+
+  /* ─────────────────── FEED ──────────────────────── */
+  .events {}
+  .feed__empty {
+    margin-top: var(--space-8);
+    padding: var(--space-8);
+    border: 1px dashed var(--color-rule);
+    text-align: center;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    color: var(--color-ink-muted);
+  }
+
+  /* ─────────────────── CONSTELLATION DRAWER ────────── */
+  .drawer {
+    margin-top: var(--space-10);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-rule);
+  }
+  .drawer__summary {
+    cursor: pointer;
+    list-style: none;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .drawer__summary::-webkit-details-marker { display: none; }
+  .drawer__label { color: var(--color-ink); font-weight: 700; }
+  .drawer__count {
+    font-family: var(--font-serif);
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .drawer__hint {
+    color: var(--color-ink-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .drawer__sep   { color: var(--color-ink-faint); margin: 0 0.4em; }
+  .drawer__tag   { color: var(--color-ink-soft); }
+  .drawer__tag-n { color: var(--color-ink-faint); }
+  .drawer__chevron {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    color: var(--color-accent);
+    width: 1em;
+    text-align: center;
+    transition: transform 200ms ease;
+  }
+  details[open] .drawer__chevron { transform: rotate(45deg); }
+  .drawer__body {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-rule);
+  }
+  .drawer__note {
+    margin: 0 0 var(--space-5) 0;
+    max-width: 38rem;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    line-height: 1.55;
+  }
+
+  .feed__foot {
+    margin-top: var(--space-16);
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+    text-align: center;
+  }
+  .asterism {
+    font-size: 1.5rem;
+    color: var(--color-ink-faint);
+    letter-spacing: 0.5em;
+  }
+
+  @media (max-width: 760px) {
+    .masthead__title-main { font-size: 2.75rem; }
+    .strip { gap: var(--space-3); padding: var(--space-4) 0; }
+    .strip__num { font-size: 1.75rem; }
+  }
+</style>

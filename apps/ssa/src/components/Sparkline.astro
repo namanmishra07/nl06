@@ -1,0 +1,117 @@
+---
+/**
+ * Sparkline.astro — inline SVG of a(t) for one object, with the
+ * detected-maneuver epoch marked as a vertical accent stroke. Zero JS;
+ * everything renders server-side at build time.
+ *
+ * Caller passes pre-downsampled samples (epoch_iso + a_km) from the
+ * pipeline's per-event sparkline payload. The kink at the event is the
+ * evidence — we draw it, we don't just assert it.
+ */
+
+interface Props {
+  /** ISO epoch strings, monotonically increasing. */
+  epochs: string[];
+  /** Semi-major axis values in km, parallel to epochs. */
+  a_km: number[];
+  /** Event epoch ISO — drawn as a vertical accent stroke. */
+  eventEpoch: string;
+  /** "raise" → up arrow, "lower"/"deorbit" → down arrow, otherwise none. */
+  classification?: string;
+  /** LLM-style scope: width × height. Defaults tuned for a feed row. */
+  width?: number;
+  height?: number;
+  /** Per-LLM-style accent (use confidence to choose). */
+  accentColor?: string;
+}
+
+const {
+  epochs,
+  a_km,
+  eventEpoch,
+  classification = "",
+  width = 180,
+  height = 44,
+  accentColor = "var(--color-accent)",
+} = Astro.props;
+
+// Bail-safe defaults if pipeline shipped empty samples.
+const hasData = Array.isArray(a_km) && a_km.length >= 2 && epochs.length === a_km.length;
+
+let pathD = "";
+let eventX: number | null = null;
+let minY = 0;
+let maxY = 1;
+let firstA = 0;
+let lastA = 0;
+let direction: "up" | "down" | "flat" = "flat";
+
+if (hasData) {
+  const ts = epochs.map((e) => new Date(e).getTime());
+  const tMin = ts[0];
+  const tMax = ts[ts.length - 1];
+  const tSpan = Math.max(1, tMax - tMin);
+
+  const yMin = Math.min(...a_km);
+  const yMax = Math.max(...a_km);
+  // Pad y-range so the line doesn't kiss the box.
+  const yPad = Math.max(0.001, (yMax - yMin) * 0.18);
+  const yLo = yMin - yPad;
+  const yHi = yMax + yPad;
+  minY = yLo; maxY = yHi;
+
+  const px = (t: number) => ((t - tMin) / tSpan) * width;
+  const py = (y: number) => height - ((y - yLo) / (yHi - yLo)) * height;
+
+  pathD = ts
+    .map((t, i) => `${i === 0 ? "M" : "L"}${px(t).toFixed(2)},${py(a_km[i]).toFixed(2)}`)
+    .join(" ");
+
+  const evMs = new Date(eventEpoch).getTime();
+  if (evMs >= tMin && evMs <= tMax) {
+    eventX = px(evMs);
+  }
+
+  firstA = a_km[0];
+  lastA = a_km[a_km.length - 1];
+  if (lastA - firstA > 0.05) direction = "up";
+  else if (firstA - lastA > 0.05) direction = "down";
+}
+
+const ariaLabel = hasData
+  ? `Semi-major axis history, ${a_km.length} samples, range ${minY.toFixed(1)}–${maxY.toFixed(1)} km, event ${classification}.`
+  : "Sparkline unavailable.";
+---
+{hasData ? (
+  <svg
+    class="sparkline"
+    viewBox={`0 0 ${width} ${height}`}
+    width={width}
+    height={height}
+    role="img"
+    aria-label={ariaLabel}
+  >
+    <path d={pathD} fill="none" stroke="var(--color-ink)" stroke-width="1" />
+    {eventX !== null && (
+      <line
+        x1={eventX} y1="0" x2={eventX} y2={height}
+        stroke={accentColor} stroke-width="1.25"
+        stroke-dasharray="2 2" opacity="0.85"
+      />
+    )}
+  </svg>
+) : (
+  <span class="sparkline sparkline--empty" aria-hidden="true">—</span>
+)}
+
+<style>
+  .sparkline {
+    display: block;
+    color: var(--color-ink);
+  }
+  .sparkline--empty {
+    display: inline-block;
+    color: var(--color-ink-faint);
+    font-family: var(--font-serif);
+  }
+</style>

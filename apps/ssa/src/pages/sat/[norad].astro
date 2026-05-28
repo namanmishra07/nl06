@@ -1,0 +1,440 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import Chart      from "~/components/Chart.astro";
+import fs from "node:fs";
+import path from "node:path";
+
+interface SatEvent {
+  detected_epoch: string;
+  kind: "in_plane" | "out_of_plane";
+  classification: string;
+  delta_a_km: number | null;
+  delta_inc_deg: number | null;
+  dv_mps: number;
+  snr: number;
+  confidence: "HIGH" | "LOW";
+  altitude_km: number | null;
+}
+interface SatPayload {
+  norad_id: number;
+  object_name: string;
+  country: string | null;
+  object_type: string | null;
+  constellation: string | null;
+  ops_status_code: string | null;
+  rcs_size: string | null;
+  launch_date: string | null;
+  history: {
+    epoch_iso: string[];
+    a_km: number[];
+    inc_deg: number[];
+    altitude_km: number[];
+  };
+  events: SatEvent[];
+}
+
+const SAT_DIR = path.resolve("./public/data/sat");
+
+export async function getStaticPaths() {
+  const dir = path.resolve("./public/data/sat");
+  if (!fs.existsSync(dir)) return [];
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+  return files.map((f) => ({
+    params: { norad: f.replace(/\.json$/, "") },
+  }));
+}
+
+const { norad } = Astro.params;
+const filePath = path.join(SAT_DIR, `${norad}.json`);
+if (!fs.existsSync(filePath)) {
+  return Astro.redirect("/404");
+}
+const sat: SatPayload = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+const eventMarkers = sat.events.map((e) => ({
+  epoch: e.detected_epoch,
+  confidence: e.confidence,
+  label: e.classification,
+}));
+
+const classificationLabel: Record<string, string> = {
+  raise:               "orbit raise",
+  lower:               "orbit lower",
+  deorbit:             "deorbit",
+  plane_change:        "plane change",
+  stationkeeping_ew:   "station-keeping (E-W)",
+  stationkeeping_ns:   "station-keeping (N-S)",
+};
+
+const opsStatusLabel: Record<string, string> = {
+  "+": "operational",
+  "-": "non-operational",
+  "P": "partial",
+  "B": "backup",
+  "S": "spare",
+  "X": "extended mission",
+  "D": "decayed",
+};
+
+// Compute mean a and inc for quick orientation.
+const lastA = sat.history.a_km[sat.history.a_km.length - 1] ?? 0;
+const lastInc = sat.history.inc_deg[sat.history.inc_deg.length - 1] ?? 0;
+const lastAlt = sat.history.altitude_km[sat.history.altitude_km.length - 1] ?? 0;
+---
+<BaseLayout
+  title={`${sat.object_name} (NORAD ${sat.norad_id}) — SSA`}
+  description={`Orbit history and detected maneuvers for ${sat.object_name}.`}
+  pathname={`/sat/${sat.norad_id}`}
+  itemNumber={`№ ${String(sat.norad_id).padStart(4, "0")}`}
+>
+  <article class="sat">
+    <Container size="wide" class="sat__inner">
+
+      <!-- ─────────────────────── HEADER ─────────────────────── -->
+      <header class="sat__head">
+        <p class="sat__back">
+          <a href="/">← back to the feed</a>
+        </p>
+        <h1 class="sat__name">{sat.object_name}</h1>
+        <dl class="sat__meta">
+          <div class="sat__meta-row">
+            <dt>NORAD</dt><dd>{sat.norad_id}</dd>
+          </div>
+          {sat.country && (
+            <div class="sat__meta-row">
+              <dt>Operator</dt><dd>{sat.country}</dd>
+            </div>
+          )}
+          {sat.object_type && (
+            <div class="sat__meta-row">
+              <dt>Type</dt><dd>{sat.object_type.toLowerCase()}</dd>
+            </div>
+          )}
+          {sat.ops_status_code && (
+            <div class="sat__meta-row">
+              <dt>Status</dt>
+              <dd>{opsStatusLabel[sat.ops_status_code] ?? sat.ops_status_code}</dd>
+            </div>
+          )}
+          {sat.rcs_size && (
+            <div class="sat__meta-row">
+              <dt>RCS</dt><dd>{sat.rcs_size.toLowerCase()}</dd>
+            </div>
+          )}
+          {sat.launch_date && (
+            <div class="sat__meta-row">
+              <dt>Launched</dt>
+              <dd>{new Date(sat.launch_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</dd>
+            </div>
+          )}
+          {sat.constellation && (
+            <div class="sat__meta-row">
+              <dt>Constellation</dt><dd>{sat.constellation}</dd>
+            </div>
+          )}
+          <div class="sat__meta-row">
+            <dt>Current a</dt><dd>{lastA.toFixed(2)} km · alt {lastAlt.toFixed(0)} km</dd>
+          </div>
+          <div class="sat__meta-row">
+            <dt>Current i</dt><dd>{lastInc.toFixed(4)}°</dd>
+          </div>
+        </dl>
+      </header>
+
+      <!-- ─────────────────────── CHARTS ─────────────────────── -->
+      <section class="sat__chart">
+        <header class="sat__chart-head">
+          <h2 class="sat__chart-title">Semi-major axis</h2>
+          <p class="sat__chart-cap">Vertical strokes mark detected maneuvers.</p>
+        </header>
+        <Chart
+          epochs={sat.history.epoch_iso}
+          values={sat.history.a_km}
+          ylabel="a"
+          yunits="km"
+          yDecimals={2}
+          markers={eventMarkers}
+        />
+      </section>
+
+      <section class="sat__chart">
+        <header class="sat__chart-head">
+          <h2 class="sat__chart-title">Inclination</h2>
+          <p class="sat__chart-cap">Out-of-plane events appear as steps here.</p>
+        </header>
+        <Chart
+          epochs={sat.history.epoch_iso}
+          values={sat.history.inc_deg}
+          ylabel="i"
+          yunits="deg"
+          yDecimals={4}
+          markers={eventMarkers}
+        />
+      </section>
+
+      <!-- ─────────────────────── EVENT LOG ──────────────────── -->
+      <section class="sat__events">
+        <header class="sat__events-head">
+          <h2 class="sat__events-title">Events</h2>
+          <p class="sat__events-cap">
+            {sat.events.length} detected in the published-orbit window.
+          </p>
+        </header>
+        {sat.events.length === 0 ? (
+          <p class="sat__events-empty">No maneuvers detected in this window.</p>
+        ) : (
+          <ol class="evlog">
+            {sat.events.map((e) => {
+              const dt = new Date(e.detected_epoch);
+              const dateLong = dt.toLocaleDateString("en-GB", {
+                day: "numeric", month: "long", year: "numeric",
+              });
+              const timeShort = dt.toLocaleTimeString("en-GB", {
+                hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
+              });
+              const delta = e.kind === "in_plane" && e.delta_a_km !== null
+                ? `Δa = ${e.delta_a_km >= 0 ? "+" : ""}${e.delta_a_km.toFixed(2)} km`
+                : e.kind === "out_of_plane" && e.delta_inc_deg !== null
+                ? `Δi = ${e.delta_inc_deg >= 0 ? "+" : ""}${e.delta_inc_deg.toFixed(4)}°`
+                : "";
+              return (
+                <li class:list={["evlog__row", `evlog__row--${e.confidence.toLowerCase()}`]}>
+                  <span class="evlog__when">{dateLong} · {timeShort} UTC</span>
+                  <span class="evlog__class">{classificationLabel[e.classification] ?? e.classification}</span>
+                  <span class="evlog__delta">{delta}</span>
+                  <span class="evlog__dv">Δv ≈ {e.dv_mps.toFixed(2)} m/s</span>
+                  <span class:list={["evlog__conf", `evlog__conf--${e.confidence.toLowerCase()}`]}>
+                    {e.confidence}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+
+      <footer class="sat__foot" aria-hidden="true">
+        <span class="asterism">⁂</span>
+      </footer>
+
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  .sat { padding-top: var(--space-12); padding-bottom: var(--space-20); }
+  .sat__inner {
+    padding-left: var(--space-page);
+    padding-right: var(--space-page);
+  }
+
+  .sat__back {
+    margin: 0 0 var(--space-4) 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+  .sat__back a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  }
+  .sat__back a:hover { color: var(--color-accent); border-bottom-color: var(--color-accent); }
+
+  .sat__name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-display);
+    line-height: 1.05;
+  }
+
+  .sat__meta {
+    margin: var(--space-5) 0 var(--space-10) 0;
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 3px double var(--color-rule-strong);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-2) var(--space-8);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .sat__meta-row { display: flex; align-items: baseline; gap: 0.5em; }
+  .sat__meta dt {
+    color: var(--color-ink);
+    font-weight: 600;
+    margin: 0;
+  }
+  .sat__meta dd {
+    margin: 0;
+    color: var(--color-ink-soft);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-feature-settings: var(--features-oldstyle);
+  }
+
+  .sat__chart {
+    margin-bottom: var(--space-10);
+  }
+  .sat__chart-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-5);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .sat__chart-title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: var(--type-h3);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .sat__chart-cap {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+
+  .sat__events {
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: 3px double var(--color-rule-strong);
+  }
+  .sat__events-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-5);
+    margin-bottom: var(--space-4);
+  }
+  .sat__events-title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: var(--type-h2);
+    color: var(--color-ink);
+  }
+  .sat__events-cap {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+  .sat__events-empty {
+    margin-top: var(--space-4);
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    padding: var(--space-6);
+    border: 1px dashed var(--color-rule);
+    text-align: center;
+  }
+
+  .evlog { list-style: none; margin: 0; padding: 0; }
+  .evlog__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr) auto;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-rule);
+    align-items: baseline;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .evlog__row:last-child { border-bottom: 0; }
+  .evlog__row--low { opacity: 0.78; }
+  .evlog__when {
+    color: var(--color-ink);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .evlog__class { color: var(--color-accent); font-weight: 700; }
+  .evlog__delta {
+    color: var(--color-ink);
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .evlog__dv {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .evlog__conf {
+    padding: 0.15em 0.5em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+  }
+  .evlog__conf--high { color: var(--color-accent); }
+  .evlog__conf--low  { color: var(--color-ink-muted); }
+
+  .sat__foot {
+    margin-top: var(--space-16);
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+    text-align: center;
+  }
+  .asterism {
+    font-size: 1.5rem;
+    color: var(--color-ink-faint);
+    letter-spacing: 0.5em;
+  }
+
+  @media (max-width: 760px) {
+    .evlog__row {
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "when conf"
+        "class class"
+        "delta delta"
+        "dv dv";
+      gap: var(--space-1);
+    }
+    .evlog__when  { grid-area: when; }
+    .evlog__class { grid-area: class; }
+    .evlog__delta { grid-area: delta; }
+    .evlog__dv    { grid-area: dv; }
+    .evlog__conf  { grid-area: conf; }
+  }
+</style>

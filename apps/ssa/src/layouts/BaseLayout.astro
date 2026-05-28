@@ -1,0 +1,50 @@
+---
+import "@nl06/design-system/global.css";
+import SiteHeader from "@nl06/design-system/components/SiteHeader.astro";
+import SiteFooter from "@nl06/design-system/components/SiteFooter.astro";
+import Meta       from "@nl06/design-system/components/Meta.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  pathname?: string;
+  itemNumber?: string;
+}
+
+const {
+  title,
+  description,
+  pathname = Astro.url.pathname,
+  itemNumber,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+
+const nav = [
+  { label: "Feed",     href: "/"        },
+  { label: "Method",   href: "/method"  },
+  { label: "← NL06",   href: "https://nl06.com" },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <Meta title={title} description={description} canonical={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <SiteHeader
+      pathname={pathname}
+      title="SSA."
+      caption="— Satellites that maneuvered"
+      homeHref="/"
+      edition='Composed by Naman // <a href="https://www.anthropic.com" rel="noopener">Claude</a>'
+      dateline="Public orbital data  ·  Active payloads"
+      nav={nav}
+    />
+    <main>
+      <slot />
+    </main>
+    <SiteFooter itemNumber={itemNumber} />
+  </body>
+</html>

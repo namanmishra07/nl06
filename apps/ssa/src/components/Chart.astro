@@ -1,0 +1,154 @@
+---
+/**
+ * Chart.astro — server-rendered SVG line plot. Inline SVG, no client JS.
+ * Used for /sat/[norad] full 90-day series.
+ *
+ * Pass parallel arrays of times (epoch ISO) and values; optional marker
+ * epochs are drawn as vertical accent strokes (one per detected event).
+ */
+
+interface Props {
+  epochs: string[];
+  values: number[];
+  ylabel: string;
+  yunits?: string;
+  markers?: { epoch: string; label?: string; confidence?: "HIGH" | "LOW" }[];
+  width?: number;
+  height?: number;
+  /** Pretty-print y values with this many decimals. */
+  yDecimals?: number;
+}
+
+const {
+  epochs,
+  values,
+  ylabel,
+  yunits = "",
+  markers = [],
+  width = 880,
+  height = 280,
+  yDecimals = 2,
+} = Astro.props;
+
+const M = { l: 56, r: 12, t: 18, b: 36 };
+const innerW = width - M.l - M.r;
+const innerH = height - M.t - M.b;
+
+const hasData = Array.isArray(values) && values.length >= 2 && epochs.length === values.length;
+let pathD = "";
+let yTicks: { y: number; v: number }[] = [];
+let xTicks: { x: number; label: string }[] = [];
+let markerLines: { x: number; color: string; epoch: string }[] = [];
+
+if (hasData) {
+  const ts = epochs.map((e) => new Date(e).getTime());
+  const tMin = ts[0];
+  const tMax = ts[ts.length - 1];
+  const tSpan = Math.max(1, tMax - tMin);
+
+  const yMin = Math.min(...values);
+  const yMax = Math.max(...values);
+  const yPad = Math.max(1e-6, (yMax - yMin) * 0.12);
+  const yLo = yMin - yPad;
+  const yHi = yMax + yPad;
+
+  const px = (t: number) => M.l + ((t - tMin) / tSpan) * innerW;
+  const py = (v: number) => M.t + innerH - ((v - yLo) / (yHi - yLo)) * innerH;
+
+  pathD = ts
+    .map((t, i) => `${i === 0 ? "M" : "L"}${px(t).toFixed(1)},${py(values[i]).toFixed(1)}`)
+    .join(" ");
+
+  // 4 y-ticks (rounded), 5 x-ticks (date labels).
+  const yStep = (yHi - yLo) / 4;
+  for (let i = 0; i <= 4; i++) {
+    const v = yLo + i * yStep;
+    yTicks.push({ y: py(v), v });
+  }
+  for (let i = 0; i <= 5; i++) {
+    const t = tMin + (i / 5) * tSpan;
+    const d = new Date(t);
+    const label = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+    xTicks.push({ x: px(t), label });
+  }
+
+  for (const m of markers) {
+    const ms = new Date(m.epoch).getTime();
+    if (ms < tMin || ms > tMax) continue;
+    markerLines.push({
+      x: px(ms),
+      color: m.confidence === "LOW" ? "var(--color-ink-muted)" : "var(--color-accent)",
+      epoch: m.epoch,
+    });
+  }
+}
+---
+{hasData ? (
+  <figure class="chart">
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img"
+         aria-label={`${ylabel} over time, ${values.length} samples`}>
+      <!-- Axes -->
+      <line x1={M.l} x2={M.l} y1={M.t} y2={M.t + innerH}
+            stroke="var(--color-ink)" stroke-width="1" />
+      <line x1={M.l} x2={M.l + innerW} y1={M.t + innerH} y2={M.t + innerH}
+            stroke="var(--color-ink)" stroke-width="1" />
+
+      <!-- Y gridlines + labels -->
+      {yTicks.map((t) => (
+        <>
+          <line x1={M.l} x2={M.l + innerW} y1={t.y} y2={t.y}
+                stroke="var(--color-rule)" stroke-width="0.5" />
+          <text x={M.l - 8} y={t.y + 4} text-anchor="end"
+                font-family="var(--font-sans)" font-size="10"
+                fill="var(--color-ink-muted)">
+            {t.v.toFixed(yDecimals)}
+          </text>
+        </>
+      ))}
+
+      <!-- X tick labels -->
+      {xTicks.map((t) => (
+        <text x={t.x} y={M.t + innerH + 18} text-anchor="middle"
+              font-family="var(--font-sans)" font-size="10"
+              fill="var(--color-ink-muted)">
+          {t.label}
+        </text>
+      ))}
+
+      <!-- Event markers (drawn first so the line sits on top) -->
+      {markerLines.map((m) => (
+        <line x1={m.x} x2={m.x} y1={M.t} y2={M.t + innerH}
+              stroke={m.color} stroke-width="1.25" opacity="0.7"
+              stroke-dasharray="3 3" />
+      ))}
+
+      <!-- The data path -->
+      <path d={pathD} fill="none" stroke="var(--color-ink)" stroke-width="1.1" />
+
+      <!-- Y label -->
+      <text x={12} y={M.t + innerH / 2} transform={`rotate(-90, 12, ${M.t + innerH / 2})`}
+            text-anchor="middle" font-family="var(--font-sans)" font-size="10"
+            fill="var(--color-ink-muted)"
+            style="text-transform: uppercase; letter-spacing: 0.06em;">
+        {ylabel}{yunits ? ` (${yunits})` : ""}
+      </text>
+    </svg>
+  </figure>
+) : (
+  <p class="chart-empty">No data.</p>
+)}
+
+<style>
+  .chart {
+    margin: 0;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    padding: var(--space-3) var(--space-2);
+  }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .chart-empty {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+  }
+</style>

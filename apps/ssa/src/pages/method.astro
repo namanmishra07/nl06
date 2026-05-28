@@ -1,0 +1,213 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import katex from "katex";
+import "katex/dist/katex.min.css";
+
+// Server-side KaTeX rendering — zero client JS.
+function tex(src: string, displayMode = true): string {
+  return katex.renderToString(src, {
+    displayMode,
+    throwOnError: false,
+    output: "htmlAndMathml",
+    strict: "ignore",
+  });
+}
+
+const eq_a = tex(`a = \\left(\\mu / n^2\\right)^{1/3}`);
+const eq_dv_tangential = tex(`\\Delta v \\approx \\tfrac{1}{2}\\, n\\, \\Delta a`);
+const eq_dv_plane = tex(`\\Delta v \\approx 2\\,v\\,\\sin\\!\\left(\\Delta i / 2\\right)`);
+const inl_mu = tex(`\\mu = 398600.4418\\ \\text{km}^3/\\text{s}^2`, false);
+const inl_n = tex(`n`, false);
+const inl_dv = tex(`\\Delta v`, false);
+const inl_di = tex(`\\Delta i`, false);
+const inl_v = tex(`v`, false);
+---
+<BaseLayout
+  title="How this works — SSA"
+  description="The math behind the maneuver detector: SGP4 element history, MAD-based jump detection, and Δv estimation."
+  pathname="/method"
+  itemNumber="№ 002"
+>
+  <article class="method">
+    <Container size="prose" class="method__inner">
+
+      <header class="method__head">
+        <p class="method__back">
+          <a href="/">← back to the feed</a>
+        </p>
+        <h1 class="method__title">How this works</h1>
+      </header>
+
+      <section class="prose">
+        <p>
+          Every active satellite is tracked from the ground, and the resulting
+          orbits are published as element sets. Left alone, an orbit changes
+          only in ways physics dictates: atmospheric drag slowly lowers it,
+          the Earth&rsquo;s equatorial bulge rotates its plane, the Sun and
+          Moon tug on it. All of that is smooth. A maneuver &mdash; a thruster
+          firing &mdash; is none of those things. It appears as a sudden break
+          in an otherwise smooth curve. This page watches the published orbits
+          of active payloads and surfaces those breaks.
+        </p>
+
+        <h2>The measurement</h2>
+        <p>
+          For each satellite we turn its published mean motion into a
+          semi-major axis &mdash; the size of the orbit &mdash; and read its
+          inclination &mdash; the tilt of its plane:
+        </p>
+        <div class="eq" set:html={eq_a} />
+        <p>
+          where <span set:html={inl_mu} /> and <span set:html={inl_n} /> is the
+          mean motion in radians per second. We track both over a rolling
+          90-day window. A burn along the direction of travel changes the
+          orbit&rsquo;s size and energy; a burn out of plane changes its tilt.
+        </p>
+
+        <h2>Finding the break</h2>
+        <p>
+          We remove the smooth decay each orbit is already following; what
+          remains is noise, plus the occasional step. We measure each
+          satellite&rsquo;s own noise level &mdash; robustly, so a real
+          maneuver can&rsquo;t inflate it &mdash; and flag a step only when it
+          clears that noise by a set margin (three standard deviations by
+          default). Independently, we propagate each published orbit forward
+          to the moment of the next one and measure how far the prediction
+          misses: between two honest, maneuver-free orbits the miss is small;
+          a burn in between throws it off. When both tests agree, the
+          detection is marked high-confidence.
+        </p>
+
+        <h2>Estimating the push</h2>
+        <p>
+          From the change in the orbit we estimate the velocity change &mdash;
+          the <span set:html={inl_dv} /> &mdash; behind each maneuver. For a
+          burn along track,
+        </p>
+        <div class="eq" set:html={eq_dv_tangential} />
+        <p>
+          and for a change of orbital plane by angle <span set:html={inl_di} />
+          at orbital speed <span set:html={inl_v} />,
+        </p>
+        <div class="eq" set:html={eq_dv_plane} />
+        <p>
+          A geostationary satellite nudging back into its slot spends fractions
+          of a metre per second; one changing orbits entirely spends tens or
+          hundreds. The number you see is an estimate, not telemetry.
+        </p>
+
+        <h2>What this is not</h2>
+        <p>
+          This is inference from public tracking data, and it has honest
+          limits. The published orbit takes time to settle after a burn, so
+          the detected moment lags the real one, sometimes by days. A
+          geomagnetic storm thickens the upper atmosphere and drags many
+          satellites down at once, which can mimic a small maneuver &mdash;
+          because it hits a whole population rather than one object, we treat
+          shared dips as weather and keep only object-specific breaks. And the
+          catalog itself carries noise. So read each entry as &ldquo;this
+          orbit changed in a way that looks deliberate,&rdquo; not as a claim
+          about intent, payload, or operator. The satellites that maneuver in
+          the most interesting ways are often the ones that states would
+          rather you not watch closely. This is one small, public way of
+          watching anyway.
+        </p>
+      </section>
+
+      <footer class="method__foot" aria-hidden="true">
+        <span class="asterism">⁂</span>
+      </footer>
+
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  .method { padding-top: var(--space-12); padding-bottom: var(--space-20); }
+  .method__inner {
+    padding-left: var(--space-page);
+    padding-right: var(--space-page);
+  }
+
+  .method__back {
+    margin: 0 0 var(--space-4) 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+  .method__back a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  }
+  .method__back a:hover { color: var(--color-accent); border-bottom-color: var(--color-accent); }
+
+  .method__title {
+    margin: 0 0 var(--space-8) 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-display);
+    line-height: 1.05;
+  }
+
+  .prose {
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .prose h2 {
+    margin: var(--space-10) 0 var(--space-3) 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: var(--type-h3);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+  }
+  .prose p {
+    margin: 0 0 var(--space-5) 0;
+  }
+  .prose p:first-of-type::first-letter {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: 3.6em;
+    line-height: 0.85;
+    float: left;
+    color: var(--color-accent);
+    margin: 0.05em 0.08em -0.1em 0;
+    font-feature-settings: var(--features-display);
+  }
+
+  /* KaTeX block equations — paper-cream box, accent color for the math. */
+  .eq {
+    margin: var(--space-5) 0;
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-paper-dim);
+    border-left: 2px solid var(--color-accent);
+    overflow-x: auto;
+    font-size: 1.05em;
+  }
+  .eq :global(.katex) { color: var(--color-ink); }
+  .eq :global(.katex-display) { margin: 0; }
+
+  .method__foot {
+    margin-top: var(--space-16);
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+    text-align: center;
+  }
+  .asterism {
+    font-size: 1.5rem;
+    color: var(--color-ink-faint);
+    letter-spacing: 0.5em;
+  }
+</style>

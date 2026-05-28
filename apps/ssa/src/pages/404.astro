@@ -1,0 +1,38 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+---
+<BaseLayout title="Not found — SSA" pathname="/404">
+  <article class="nf">
+    <Container size="prose">
+      <h1 class="nf__h">Not in this catalog.</h1>
+      <p class="nf__p">
+        That object isn&rsquo;t in the maneuver feed &mdash; either it hasn&rsquo;t
+        maneuvered in the last 30 days, or it&rsquo;s out of scope (debris, rocket
+        body, decayed). <a href="/">Back to the feed.</a>
+      </p>
+    </Container>
+  </article>
+  <style>
+    .nf { padding: var(--space-20) 0; text-align: center; }
+    .nf__h {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 700;
+      font-size: clamp(2rem, 5vw, 3rem);
+      color: var(--color-accent);
+    }
+    .nf__p {
+      font-family: var(--font-serif);
+      font-size: var(--type-body);
+      color: var(--color-ink-soft);
+      max-width: 28rem;
+      margin: var(--space-4) auto;
+    }
+    .nf__p a {
+      color: var(--color-accent);
+      text-decoration: none;
+      border-bottom: 1px solid currentColor;
+    }
+  </style>
+</BaseLayout>

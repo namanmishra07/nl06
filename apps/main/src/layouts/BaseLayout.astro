@@ -28,9 +28,12 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
  * don't pass this prop. */
 const stations = [
   { numeral: "I",   label: "gs.",           href: "https://gs.nl06.com" },
-  { numeral: "II",  label: "chains.",       href: "https://chains.nl06.com" },
-  { numeral: "III", label: "reading.",      href: "https://reading.nl06.com" },
-  { numeral: "IV",  label: "auctionhouse.", href: "https://auctionhouse.nl06.com" },
+  { numeral: "II",  label: "ssa.",          href: "https://ssa.nl06.com" },
+  { numeral: "III", label: "auctionhouse.", href: "https://auctionhouse.nl06.com" },
+  // Temporarily off the published list (2026-05-28); code retained. To
+  // restore: re-add these two lines and rebuild apps/main.
+  // { numeral: "—", label: "chains.",       href: "https://chains.nl06.com" },
+  // { numeral: "—", label: "reading.",      href: "https://reading.nl06.com" },
 ];
 ---
 <!doctype html>

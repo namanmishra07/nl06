@@ -1,0 +1,273 @@
+---
+import Sparkline from "./Sparkline.astro";
+
+interface FeedEvent {
+  norad_id: number;
+  object_name: string;
+  country: string | null;
+  constellation: string | null;
+  object_type: string | null;
+  detected_epoch: string;
+  kind: "in_plane" | "out_of_plane";
+  classification: string;
+  delta_a_km: number | null;
+  delta_inc_deg: number | null;
+  dv_mps: number;
+  snr: number;
+  confidence: "HIGH" | "LOW";
+  altitude_km: number;
+  sparkline: { epoch_iso: string[]; a_km: number[]; altitude_km: number[] };
+}
+
+interface Props { event: FeedEvent; }
+const { event: e } = Astro.props;
+
+const detectedDate = new Date(e.detected_epoch);
+const dateLong = detectedDate.toLocaleDateString("en-GB", {
+  day: "numeric", month: "long", year: "numeric",
+});
+const timeShort = detectedDate.toLocaleTimeString("en-GB", {
+  hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
+});
+
+const classificationLabel: Record<string, string> = {
+  raise:               "orbit raise",
+  lower:               "orbit lower",
+  deorbit:             "deorbit",
+  plane_change:        "plane change",
+  stationkeeping_ew:   "station-keeping (E-W)",
+  stationkeeping_ns:   "station-keeping (N-S)",
+};
+const classLabel = classificationLabel[e.classification] ?? e.classification.replace(/_/g, " ");
+
+const dvFormatted = e.dv_mps < 0.1
+  ? e.dv_mps.toFixed(3)
+  : e.dv_mps.toFixed(2);
+
+// Δ value (in-plane or out-of-plane).
+const delta = e.kind === "in_plane" && e.delta_a_km !== null
+  ? { label: "Δa", value: `${e.delta_a_km >= 0 ? "+" : ""}${e.delta_a_km.toFixed(2)} km` }
+  : e.kind === "out_of_plane" && e.delta_inc_deg !== null
+  ? { label: "Δi", value: `${e.delta_inc_deg >= 0 ? "+" : ""}${e.delta_inc_deg.toFixed(4)}°` }
+  : null;
+---
+<article class:list={["event", `event--${e.confidence.toLowerCase()}`]}>
+  <header class="event__head">
+    <div class="event__heading">
+      <h3 class="event__name">
+        <a href={`/sat/${e.norad_id}`}>{e.object_name}</a>
+      </h3>
+      <p class="event__meta">
+        <span class="event__norad">NORAD {e.norad_id}</span>
+        {e.country && <span class="event__sep" aria-hidden="true">·</span>}
+        {e.country && <span class="event__country">{e.country}</span>}
+        {e.constellation && (
+          <>
+            <span class="event__sep" aria-hidden="true">·</span>
+            <span class="event__constellation">{e.constellation}</span>
+          </>
+        )}
+      </p>
+    </div>
+    <div class="event__when">
+      <span class="event__date">{dateLong}</span>
+      <span class="event__time">{timeShort} UTC</span>
+    </div>
+  </header>
+
+  <div class="event__row">
+    <div class="event__numbers">
+      <span class="event__classification">{classLabel}</span>
+      {delta && (
+        <span class="event__delta">
+          <span class="event__delta-label">{delta.label}</span>
+          <span class="event__delta-value">{delta.value}</span>
+        </span>
+      )}
+      <span class="event__dv">
+        <span class="event__dv-label">Δv</span>
+        <span class="event__dv-value">≈ {dvFormatted} m/s</span>
+      </span>
+      <span class="event__alt">
+        <span class="event__alt-label">alt.</span>
+        <span class="event__alt-value">{Math.round(e.altitude_km).toLocaleString()} km</span>
+      </span>
+      <span class:list={["event__conf", `event__conf--${e.confidence.toLowerCase()}`]}>
+        {e.confidence}
+      </span>
+    </div>
+    <div class="event__chart">
+      <Sparkline
+        epochs={e.sparkline.epoch_iso}
+        a_km={e.sparkline.a_km}
+        eventEpoch={e.detected_epoch}
+        classification={e.classification}
+        accentColor={e.confidence === "HIGH" ? "var(--color-accent)" : "var(--color-ink-muted)"}
+      />
+      <span class="event__chart-label">a(t), 90d</span>
+    </div>
+  </div>
+</article>
+
+<style>
+  .event {
+    padding: var(--space-6) 0;
+    border-bottom: 1px solid var(--color-rule);
+    position: relative;
+  }
+  .event:last-child { border-bottom: 0; }
+  .event--low { opacity: 0.78; }
+
+  .event__head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+  .event__name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: var(--type-h3);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-ink);
+    line-height: 1.2;
+  }
+  .event__name a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 120ms ease;
+  }
+  .event__name a:hover {
+    border-bottom-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+  .event__meta {
+    margin: 0.2em 0 0 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .event__norad { color: var(--color-ink); font-weight: 600; }
+  .event__sep { color: var(--color-ink-faint); margin: 0 0.4em; }
+
+  .event__when {
+    text-align: right;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .event__date {
+    display: block;
+    color: var(--color-ink);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .event__time { display: block; }
+
+  .event__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-6);
+    align-items: center;
+  }
+
+  .event__numbers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-5);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .event__classification {
+    color: var(--color-accent);
+    font-weight: 700;
+  }
+  .event__delta,
+  .event__dv,
+  .event__alt {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3em;
+  }
+  .event__delta-label,
+  .event__dv-label,
+  .event__alt-label {
+    color: var(--color-ink-muted);
+  }
+  .event__delta-value,
+  .event__dv-value,
+  .event__alt-value {
+    color: var(--color-ink);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .event__conf {
+    margin-left: auto;
+    padding: 0.15em 0.5em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+  }
+  .event__conf--high { color: var(--color-accent); }
+  .event__conf--low  { color: var(--color-ink-muted); }
+
+  .event__chart {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-1);
+  }
+  .event__chart-label {
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+    font-feature-settings: var(--features-tabular);
+  }
+
+  @media (max-width: 760px) {
+    .event__head {
+      grid-template-columns: 1fr;
+    }
+    .event__when {
+      text-align: left;
+    }
+    .event__row {
+      grid-template-columns: 1fr;
+      gap: var(--space-3);
+    }
+    .event__chart {
+      align-items: flex-start;
+    }
+  }
+</style>

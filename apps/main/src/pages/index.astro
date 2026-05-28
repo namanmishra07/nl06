@@ -16,35 +16,44 @@ const subdomains: Sub[] = [
     label:   "gs.",
     href:    "https://gs.nl06.com",
     kicker:  "The instrument",
-    blurb:   "A one-metre offset dish on a Lucknow rooftop, pointed at GK-2A. Decodes a full-disk Earth every hour. Logs go straight into the index.",
+    blurb:   "A hand-built 60 cm parabolic trough on a Mumbai balcony, pointed at GK-2A. Decodes a full-disk Earth every ten minutes. Logs go straight into the index.",
   },
   {
     numeral: "II",
-    label:   "chains.",
-    href:    "https://chains.nl06.com",
-    kicker:  "The reasoning",
-    blurb:   "Macro shifts traced four levels down. Live, killed, and the few I'm still resolving. The killed ones are the more useful read.",
+    label:   "ssa.",
+    href:    "https://ssa.nl06.com",
+    kicker:  "The watch",
+    blurb:   "Satellites that maneuvered, detected from public orbital data.",
   },
   {
     numeral: "III",
-    label:   "reading.",
-    href:    "https://reading.nl06.com",
-    kicker:  "The intake",
-    blurb:   "A note every time something I read shifts how I think. One per source. RSS, no archive of half-thoughts.",
-  },
-  {
-    numeral: "IV",
     label:   "auctionhouse.",
     href:    "https://auctionhouse.nl06.com",
     kicker:  "The register",
     blurb:   "What the Government of India is selling on MSTC, normalised into a single daily register. Backend in development.",
   },
+  // Temporarily off the published list (2026-05-28); code retained. To
+  // restore: un-comment these two blocks and renumber.
+  // {
+  //   numeral: "—",
+  //   label:   "chains.",
+  //   href:    "https://chains.nl06.com",
+  //   kicker:  "The reasoning",
+  //   blurb:   "Macro shifts traced four levels down. Live, killed, and the few I'm still resolving. The killed ones are the more useful read.",
+  // },
+  // {
+  //   numeral: "—",
+  //   label:   "reading.",
+  //   href:    "https://reading.nl06.com",
+  //   kicker:  "The intake",
+  //   blurb:   "A note every time something I read shifts how I think. One per source. RSS, no archive of half-thoughts.",
+  // },
 ];
 
 const plate = {
   number: "I",
   title:  "GK-2A · IR 105 channel",
-  body:   "Full-disk Earth, captured from Lucknow at 13:20 UTC on 18 May 2026.",
+  body:   "Full-disk Earth, recovered through a 60 cm parabolic trough on a Mumbai balcony at 19:20 UTC on 24 May 2026 — closing frame of a fourteen-chunk timelapse.",
 };
 ---
 <BaseLayout
@@ -79,10 +88,10 @@ const plate = {
           aria-label="See the ground station at gs.nl06.com"
         >
           <picture>
-            <source srcset="/hero/gk2a-20260518-1320-sanchez.webp" type="image/webp" />
+            <source srcset="/hero/gk2a-20260524-1920-sanchez.webp" type="image/webp" />
             <img
-              src="/hero/gk2a-20260518-1320-sanchez.png"
-              alt="GK-2A full-disk Earth, IR105 channel, captured from Lucknow at 13:20 UTC on 18 May 2026."
+              src="/hero/gk2a-20260524-1920-sanchez.png"
+              alt="GK-2A full-disk Earth, IR105 channel, captured from Mumbai at 19:20 UTC on 24 May 2026."
               loading="eager"
               fetchpriority="high"
             />
