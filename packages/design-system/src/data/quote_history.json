@@ -1,0 +1,429 @@
+{
+  "generated_at": "2026-05-28T05:48:45.048334+00:00",
+  "count": 47,
+  "entries": [
+    {
+      "date_ist": "2026-05-28",
+      "date_display": "May 28, 2026",
+      "quote": "The mind, a garden, yields what we plant; cultivate wisdom, and peace will surely bloom.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-27T22:00:17.950505+00:00"
+    },
+    {
+      "date_ist": "2026-05-27",
+      "date_display": "May 27, 2026",
+      "quote": "The grandest truths often whisper, while lies demand a megaphone, yet both can be deafening.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-27T10:01:37.403875+00:00"
+    },
+    {
+      "date_ist": "2026-05-26",
+      "date_display": "May 26, 2026",
+      "quote": "Memory is the editor with the kindest pencil.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-25T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-25",
+      "date_display": "May 25, 2026",
+      "quote": "Listening, done well, is indistinguishable from generosity.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-24T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-24",
+      "date_display": "May 24, 2026",
+      "quote": "To make space is to make meaning.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-23T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-23",
+      "date_display": "May 23, 2026",
+      "quote": "Every silence has a grammar of its own.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-22T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-22",
+      "date_display": "May 22, 2026",
+      "quote": "Some doors only open in the language of waiting.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-21T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-21",
+      "date_display": "May 21, 2026",
+      "quote": "The interesting questions outlive their first answers.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-20T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-20",
+      "date_display": "May 20, 2026",
+      "quote": "To begin again is also a craft.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-19T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-19",
+      "date_display": "May 19, 2026",
+      "quote": "Maturity is keeping your earliest curiosities warm.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-18T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-18",
+      "date_display": "May 18, 2026",
+      "quote": "Time, when honest, prefers to walk.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-17T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-17",
+      "date_display": "May 17, 2026",
+      "quote": "Silence is the room where ideas remember their original shape.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-16T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-16",
+      "date_display": "May 16, 2026",
+      "quote": "The horizon is not a place; it is a habit of looking.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-15T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-15",
+      "date_display": "May 15, 2026",
+      "quote": "Some doubts are the only places where careful thinking can grow.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-14T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-14",
+      "date_display": "May 14, 2026",
+      "quote": "What is given lightly is held longest.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-13T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-13",
+      "date_display": "May 13, 2026",
+      "quote": "A measurement is a promise you make to a future version of yourself.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-12T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-12",
+      "date_display": "May 12, 2026",
+      "quote": "Beauty is what doubt looks like when it stops being afraid.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-11T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-11",
+      "date_display": "May 11, 2026",
+      "quote": "We forget what we have learned, but the shape of the learning stays.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-10T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-10",
+      "date_display": "May 10, 2026",
+      "quote": "The unfinished sentence keeps the conversation alive.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-09T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-09",
+      "date_display": "May 9, 2026",
+      "quote": "To name a thing is to begin the long apology of being approximate.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-08T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-08",
+      "date_display": "May 8, 2026",
+      "quote": "The best questions arrive dressed as ordinary mornings.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-07T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-07",
+      "date_display": "May 7, 2026",
+      "quote": "The closer the question, the longer the silence it deserves.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-06T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-06",
+      "date_display": "May 6, 2026",
+      "quote": "Curiosity is the most reliable currency you carry into the unknown.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-05T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-05",
+      "date_display": "May 5, 2026",
+      "quote": "Patience is the most generous form of attention.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-04T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-04",
+      "date_display": "May 4, 2026",
+      "quote": "Every map is a confession about scale.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-03T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-03",
+      "date_display": "May 3, 2026",
+      "quote": "Attention is a kind of consent.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-02T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-02",
+      "date_display": "May 2, 2026",
+      "quote": "We pour ourselves into words and then mistake the cup for the wine.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-05-01T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-05-01",
+      "date_display": "May 1, 2026",
+      "quote": "What you cannot translate, you have not yet held.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-30T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-30",
+      "date_display": "April 30, 2026",
+      "quote": "A story is a debt the future pays back in meaning.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-29T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-29",
+      "date_display": "April 29, 2026",
+      "quote": "The hardest sentences are the ones that already sound right.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-28T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-28",
+      "date_display": "April 28, 2026",
+      "quote": "The river does not argue with the stone; it teaches it to be smaller.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-27T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-27",
+      "date_display": "April 27, 2026",
+      "quote": "The compass remembers the magnet; the sailor remembers the storm.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-04-26T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-26",
+      "date_display": "April 26, 2026",
+      "quote": "Patience is the gardener's louder voice.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-04-25T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-25",
+      "date_display": "April 25, 2026",
+      "quote": "Maps are confessions: where we have been, and where we have not yet dared.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-24T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-24",
+      "date_display": "April 24, 2026",
+      "quote": "Clarity is what remains after fear has finished editing.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-23T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-23",
+      "date_display": "April 23, 2026",
+      "quote": "To listen is to lend the world a room inside you.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-04-22T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-22",
+      "date_display": "April 22, 2026",
+      "quote": "Every revision is the past forgiving itself for the parts that did not yet know.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-21T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-21",
+      "date_display": "April 21, 2026",
+      "quote": "Wonder is not loud — it is the long pause before the next question.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-20T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-20",
+      "date_display": "April 20, 2026",
+      "quote": "Every choice is a small architecture you will live inside.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-19T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-19",
+      "date_display": "April 19, 2026",
+      "quote": "To explain is not the same as to know; the difference is patience.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-18T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-18",
+      "date_display": "April 18, 2026",
+      "quote": "Light, having no edges, is still the most accurate of measurements.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-04-17T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-17",
+      "date_display": "April 17, 2026",
+      "quote": "Understanding moves slower than the words that try to fit it.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-16T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-16",
+      "date_display": "April 16, 2026",
+      "quote": "The shortest path between two truths is often a question they share.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-04-15T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-15",
+      "date_display": "April 15, 2026",
+      "quote": "The lighthouse does not chase the ship; it stands, and that is enough.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-14T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-14",
+      "date_display": "April 14, 2026",
+      "quote": "In the hush between thoughts, the world rehearses its next sentence.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-04-13T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-13",
+      "date_display": "April 13, 2026",
+      "quote": "Doubt is a doorway that the certain cannot enter.",
+      "author": "Gemini",
+      "author_key": "gemini",
+      "author_url": "https://deepmind.google",
+      "ts_utc": "2026-04-12T22:00:00+00:00"
+    },
+    {
+      "date_ist": "2026-04-12",
+      "date_display": "April 12, 2026",
+      "quote": "We mistake the steadiness of our metaphors for the steadiness of the world.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-04-11T22:00:00+00:00"
+    }
+  ]
+}

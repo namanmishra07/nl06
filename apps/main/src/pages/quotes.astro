@@ -1,0 +1,499 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+import history    from "@nl06/design-system/data/quote_history.json";
+
+interface HistoryEntry {
+  date_ist: string;
+  date_display: string;
+  quote: string;
+  author: string;
+  author_key: string;
+  author_url: string;
+  ts_utc: string;
+}
+
+const entries = (history.entries ?? []) as HistoryEntry[];
+
+const monthLabels = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const monthNumerals = [
+  "I", "II", "III", "IV", "V", "VI",
+  "VII", "VIII", "IX", "X", "XI", "XII",
+];
+
+function toRoman(year: number): string {
+  const map: [number, string][] = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"],
+    [100, "C"], [90, "XC"], [50, "L"], [40, "XL"],
+    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let n = year;
+  let out = "";
+  for (const [v, sym] of map) {
+    while (n >= v) { out += sym; n -= v; }
+  }
+  return out;
+}
+
+interface MonthBucket {
+  key: string;
+  label: string;
+  year: number;
+  yearRoman: string;
+  numeral: string;
+  items: (HistoryEntry & { day: number })[];
+}
+
+const months: MonthBucket[] = [];
+for (const e of entries) {
+  const [y, m, d] = e.date_ist.split("-").map(Number);
+  const key = `${y}-${String(m).padStart(2, "0")}`;
+  let bucket = months.find((x) => x.key === key);
+  if (!bucket) {
+    bucket = {
+      key,
+      label: monthLabels[m - 1],
+      year: y,
+      yearRoman: toRoman(y),
+      numeral: monthNumerals[m - 1],
+      items: [],
+    };
+    months.push(bucket);
+  }
+  bucket.items.push({ ...e, day: d });
+}
+
+const total = entries.length;
+const contributorLabels = Array.from(
+  new Map(entries.map((e) => [e.author_key, e.author])).values()
+);
+const latestYear = entries.length > 0
+  ? Number(entries[0].date_ist.slice(0, 4))
+  : new Date().getFullYear();
+const volRoman = toRoman(latestYear);
+---
+<BaseLayout
+  title="Marginalia — NL06"
+  description="A running archive of one-line aphorisms composed daily for the nl06.com footer by Claude, ChatGPT, and Gemini."
+  pathname="/quotes"
+  itemNumber="№ 006"
+>
+  <article class="marg">
+    <Container size="wide" class="marg__inner">
+
+      <!-- ISSUE HEAD ────────────────────────────────────────── -->
+      <header class="marg__head">
+        <div class="marg__rail">
+          <span class="rail__label">Marginalia</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">Vol. I · {volRoman}</span>
+        </div>
+
+        <h1 class="marg__title">
+          <span class="marg__title-line">Notes pinned</span>
+          <span class="marg__title-emphasis">in the margin.</span>
+        </h1>
+
+        <p class="marg__epigraph">
+          One short line a day &mdash; composed in turn by Claude, ChatGPT,
+          and Gemini, pinned to the footer of <em>nl06.com</em> until
+          tomorrow&rsquo;s quote takes its place. This page is where they
+          come to be remembered.
+        </p>
+
+        <dl class="marg__meta">
+          <div class="marg__meta-row">
+            <dt>Entries</dt>
+            <dd><span class="marg__meta-num">{total}</span></dd>
+          </div>
+          <div class="marg__meta-row">
+            <dt>Hands</dt>
+            <dd>{contributorLabels.length === 0 ? "—" : contributorLabels.join(" · ")}</dd>
+          </div>
+          <div class="marg__meta-row">
+            <dt>Pressed</dt>
+            <dd>Daily, 03:30 IST</dd>
+          </div>
+        </dl>
+      </header>
+
+      <!-- MONTH SECTIONS ────────────────────────────────────── -->
+      {months.map((mo) => (
+        <section class="month">
+          <header class="month__head">
+            <span class="month__numeral" aria-hidden="true">{mo.numeral}</span>
+            <h2 class="month__title">
+              <span class="month__title-name">{mo.label}</span>
+              <span class="month__title-sep" aria-hidden="true">·</span>
+              <span class="month__title-year">{mo.yearRoman}</span>
+            </h2>
+            <span class="month__rule" aria-hidden="true"></span>
+            <span class="month__count">
+              {mo.items.length} {mo.items.length === 1 ? "entry" : "entries"}
+            </span>
+          </header>
+
+          <ol class="entries">
+            {mo.items.map((e) => (
+              <li class={`entry entry--${e.author_key}`}>
+                <span class="entry__day" aria-hidden="true">{e.day}</span>
+                <div class="entry__col">
+                  <blockquote class="entry__body">
+                    <p class="entry__quote">
+                      <span class="entry__mark" aria-hidden="true">&ldquo;</span>{e.quote}
+                    </p>
+                  </blockquote>
+                  <p class="entry__cite">
+                    <span class={`entry__dot entry__dot--${e.author_key}`} aria-hidden="true"></span>
+                    <a class="entry__author" href={e.author_url} rel="noopener">{e.author}</a>
+                    <span class="entry__cite-sep" aria-hidden="true">·</span>
+                    <span class="entry__date">{e.date_display}</span>
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+
+      {entries.length === 0 && (
+        <p class="marg__empty">
+          The margin is empty. Tomorrow&rsquo;s quote will be the first entry.
+        </p>
+      )}
+
+      <footer class="marg__foot" aria-hidden="true">
+        <span class="marg__ornament">❡   ·   §   ·   ❡</span>
+      </footer>
+
+    </Container>
+  </article>
+</BaseLayout>
+
+<style>
+  /* ── per-author accents — restrained, three quiet hues that sit on
+       cream paper without competing with the ink-blue site accent ── */
+  .entry--claude  { --entry-color: #A8512A; }   /* warm rust */
+  .entry--openai  { --entry-color: #2E7E5D; }   /* muted green */
+  .entry--gemini  { --entry-color: #1B3A5C; }   /* ink blue — site accent */
+
+  .entry__dot--claude  { background: #A8512A; }
+  .entry__dot--openai  { background: #2E7E5D; }
+  .entry__dot--gemini  { background: #1B3A5C; }
+
+  /* ── page frame ────────────────────────────────────────────── */
+  .marg {
+    padding-top: var(--space-12);
+    padding-bottom: var(--space-20);
+  }
+  .marg__inner {
+    padding-left: var(--space-page);
+    padding-right: var(--space-page);
+  }
+
+  /* ── ISSUE HEAD ────────────────────────────────────────────── */
+  .marg__rail {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .rail__label  { color: var(--color-ink); font-weight: 600; }
+  .rail__rule   { flex: 1; height: 1px; background: var(--color-rule); }
+  .rail__date   { font-feature-settings: var(--features-tabular); }
+
+  .marg__title {
+    margin: var(--space-7) 0 var(--space-5) 0;
+    font-family: var(--font-serif);
+    font-weight: 700;
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+    font-size: var(--type-h1);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .marg__title-line {
+    display: block;
+    color: var(--color-ink-soft);
+    font-weight: 500;
+    font-style: italic;
+    font-size: 0.7em;
+    letter-spacing: var(--tracking-tight);
+  }
+  .marg__title-emphasis {
+    display: block;
+    color: var(--color-ink);
+    font-size: var(--type-display);
+    line-height: 1;
+    margin-top: var(--space-1);
+  }
+
+  .marg__epigraph {
+    max-width: var(--width-prose);
+    margin: 0 0 var(--space-8) 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .marg__epigraph em {
+    font-style: italic;
+    color: var(--color-ink);
+  }
+
+  .marg__meta {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: var(--space-2) var(--space-6);
+    margin: 0 0 var(--space-12) 0;
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-rule);
+    max-width: var(--width-container);
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-soft);
+  }
+  .marg__meta-row { display: contents; }
+  .marg__meta dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    padding-top: 0.2em;
+  }
+  .marg__meta dd { margin: 0; }
+  .marg__meta-num {
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  /* ── MONTH SECTION ─────────────────────────────────────────── */
+  .month {
+    margin-bottom: var(--space-16);
+  }
+  .month__head {
+    display: grid;
+    grid-template-columns: 4rem auto 1fr auto;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--color-ink);
+  }
+  .month__numeral {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h2);
+    color: var(--color-accent);
+    letter-spacing: var(--tracking-tight);
+    text-align: right;
+    font-feature-settings: var(--features-display);
+  }
+  .month__title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: var(--type-h2);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+    display: flex;
+    align-items: baseline;
+    gap: 0.45em;
+  }
+  .month__title-sep {
+    color: var(--color-ink-faint);
+    font-weight: 400;
+  }
+  .month__title-year {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    font-size: var(--type-h3);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .month__rule {
+    height: 1px;
+    background: var(--color-rule);
+    align-self: center;
+  }
+  .month__count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+
+  /* ── ENTRY ─────────────────────────────────────────────────── */
+  .entries {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .entry {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    column-gap: var(--space-8);
+    padding: var(--space-7) 0;
+    border-bottom: 1px solid var(--color-rule);
+    position: relative;
+  }
+  .entry:last-child { border-bottom: 0; }
+
+  /* Day numeral, oldstyle, hung in the rail. */
+  .entry__day {
+    font-family: var(--font-serif);
+    font-feature-settings: var(--features-oldstyle);
+    font-weight: 500;
+    font-size: 3rem;
+    line-height: 1;
+    color: var(--color-ink-faint);
+    text-align: right;
+    padding-top: 0.05em;
+    letter-spacing: var(--tracking-tight);
+    transition: color 160ms ease;
+  }
+  .entry:hover .entry__day {
+    color: var(--entry-color, var(--color-accent));
+  }
+
+  .entry__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .entry__body { margin: 0; padding: 0; border: 0; }
+  .entry__quote {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: var(--type-h3);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+    text-indent: -0.4em;
+  }
+  .entry__mark {
+    color: var(--entry-color, var(--color-accent));
+    font-weight: 800;
+    font-size: 1.4em;
+    line-height: 0;
+    vertical-align: -0.1em;
+    margin-right: 0.05em;
+  }
+
+  /* Author + date strip beneath each quote. */
+  .entry__cite {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .entry__dot {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 0.05em;
+  }
+  .entry__author {
+    color: var(--entry-color, var(--color-ink));
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 120ms ease;
+    font-weight: 600;
+    letter-spacing: var(--tracking-meta);
+  }
+  .entry__author:hover {
+    border-bottom-color: var(--entry-color, var(--color-accent));
+  }
+  .entry__cite-sep { color: var(--color-ink-faint); }
+  .entry__date {
+    color: var(--color-ink-muted);
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-meta);
+    font-feature-settings: var(--features-oldstyle);
+  }
+
+  /* ── EMPTY STATE ───────────────────────────────────────────── */
+  .marg__empty {
+    margin-top: var(--space-8);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    color: var(--color-ink-muted);
+  }
+
+  /* ── FOOT ORNAMENT ─────────────────────────────────────────── */
+  .marg__foot {
+    margin-top: var(--space-16);
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+    text-align: center;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-faint);
+    letter-spacing: 0.5em;
+  }
+
+  /* ── RESPONSIVE ────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .marg__title-emphasis { font-size: var(--type-h1); }
+
+    .marg__meta {
+      grid-template-columns: 1fr;
+      gap: var(--space-1);
+    }
+    .marg__meta dt { padding-top: var(--space-3); }
+
+    .month__head {
+      grid-template-columns: auto auto 1fr;
+      gap: var(--space-3);
+    }
+    .month__numeral {
+      text-align: left;
+      font-size: var(--type-h3);
+    }
+    .month__count { display: none; }
+
+    .entry {
+      grid-template-columns: 2.5rem 1fr;
+      column-gap: var(--space-4);
+      padding: var(--space-5) 0;
+    }
+    .entry__day { font-size: 2rem; }
+    .entry__quote { font-size: var(--type-body); }
+    .entry__cite {
+      flex-wrap: wrap;
+      row-gap: var(--space-1);
+    }
+  }
+</style>
