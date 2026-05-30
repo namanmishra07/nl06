@@ -8,10 +8,19 @@ import Container  from "@nl06/design-system/components/Container.astro";
 import lotsData from "../content/lots.json";
 import metaData from "../content/meta.json";
 
+type Annexure = {
+  filename: string;
+  url:      string;
+  has_text: boolean;
+};
+
 type Lot = {
   id:               string;
   source:           string;
   source_url:       string;
+  mstc_listing_url: string | null;
+  auction_id:       string | null;
+  sublot_count:     number;
   title:            string;
   seller:           string | null;
   seller_category:  string;
@@ -26,6 +35,9 @@ type Lot = {
   note:             string | null;
   note_is_editor:   boolean;
   boosted:          boolean;
+  annexures:        Annexure[];
+  group_total?:     number;
+  group_more?:      number;
 };
 
 const lots: Lot[] = lotsData as Lot[];
@@ -48,6 +60,35 @@ const lowestThreshold = Math.min(
   filter.prestige_seller_floor,
 );
 
+// Filter facets — pre-counted at build time so chip labels are honest.
+const PRESTIGE_SELLERS = new Set(filter.prestige_categories);
+const CLOSING_SOON_DAYS = 7;
+const closingSoonCutoffMs = synced.getTime() + CLOSING_SOON_DAYS * 86400 * 1000;
+const isPrestigeSeller = (l: Lot) => PRESTIGE_SELLERS.has(l.seller_category);
+const isClosingSoon = (l: Lot) =>
+  !!l.close_at_utc && Date.parse(l.close_at_utc) <= closingSoonCutoffMs;
+
+const CATEGORIES = ["curio", "arbitrage", "prestige-seller", "niche-instrument"] as const;
+const CATEGORY_LABELS: Record<typeof CATEGORIES[number], string> = {
+  "curio": "Curio",
+  "arbitrage": "Arbitrage",
+  "prestige-seller": "Prestige",
+  "niche-instrument": "Niche",
+};
+const SCORE_STEPS = [4, 5, 6, 7, 8, 9];
+
+const facetCounts = {
+  total: lots.length,
+  category: Object.fromEntries(
+    CATEGORIES.map(c => [c, lots.filter(l => l.category === c).length])
+  ) as Record<typeof CATEGORIES[number], number>,
+  minScore: Object.fromEntries(
+    SCORE_STEPS.map(s => [s, lots.filter(l => (l.score ?? 0) >= s).length])
+  ) as Record<number, number>,
+  prestigeSeller: lots.filter(isPrestigeSeller).length,
+  closingSoon: lots.filter(isClosingSoon).length,
+};
+
 function fmtINR(rupees: number | null): string {
   if (rupees == null) return "—";
   if (rupees >= 10_000_000) return `₹${(rupees / 10_000_000).toFixed(2)} cr`;
@@ -69,7 +110,7 @@ function statusMark(lot: Lot): string {
 ---
 <BaseLayout
   title="auctionhouse.nl06 — A register of government lots"
-  description="A curated register of Indian government surplus and disposal auctions from MSTC India. Updated nightly."
+  description="A register of Indian government surplus and disposal auctions listed on MSTC India. Scored and updated nightly."
   itemNumber="№ AH00"
 >
   <article class="ah">
@@ -89,44 +130,94 @@ function statusMark(lot: Lot): string {
             <span class="ah__title-emphasis">What the state is selling.</span>
           </h1>
           <p class="ah__lede dropcap-text">
-            Every working day the Government of India puts thousands of lots on the open
-            market through <strong>MSTC Limited</strong> &mdash; the public-sector
-            e-auction platform that handles surplus, disposal, and confiscated-goods sales
-            for the Ministries, the Railways, defence-PSU yards, port trusts, customs
-            warehouses, and the central banks of seized metal. Most of it goes through
-            quietly. This register watches the ones that don&rsquo;t.
+            Each working day the Government of India lists thousands of lots through
+            <strong>MSTC Limited</strong> &mdash; the public-sector e-auction platform that
+            handles surplus, disposal, and confiscated-goods sales for the ministries, the
+            Railways, defence-PSU yards, port trusts, and customs warehouses. This page
+            tracks those listings and surfaces the ones worth a closer look.
           </p>
 
           <p class="ah__sub">
-            Scored nightly against four axes: <em>arbitrage</em> (a deal that
-            exceeds the reserve), <em>niche-instrument</em> (a tool that
-            rarely surfaces), <em>prestige-seller</em> (the seller is the
-            story), and <em>curio</em> (the object is the story). The
-            editorial floor differs by axis — arbitrage needs to be a real
-            deal ({filter.category_thresholds["arbitrage"]}+/10); prestige
+            Scored nightly on four axes: <em>arbitrage</em> (priced below likely
+            resale value), <em>niche-instrument</em> (a tool that rarely comes up),
+            <em>prestige-seller</em> (notable selling agency), and <em>curio</em>
+            (unusual object). The publishing floor differs by axis — arbitrage needs
+            a clear margin ({filter.category_thresholds["arbitrage"]}+/10); prestige
             and curio surface earlier ({filter.category_thresholds["prestige-seller"]}+).
-            Anything from a prestige seller (DRDO, ISRO, CSIR, HAL,
-            academic) also surfaces at {filter.prestige_seller_floor}+
-            regardless of category fit.
+            Anything from a prestige seller (DRDO, ISRO, CSIR, HAL, academic) also
+            surfaces at {filter.prestige_seller_floor}+ regardless of category fit.
           </p>
         </div>
       </header>
 
       <!-- REGISTER ──────────────────────────────────────────────── -->
       <section class="ah__register" id="register">
-        <header class="ah__banner">
+        <header class="ah__banner reveal">
           <span class="ah__banner__num">¶</span>
           <h2 class="ah__banner__title">The register</h2>
           <span class="ah__banner__rule" aria-hidden="true"></span>
           <span class="ah__banner__count">
-            {lots.length} above threshold · {counts.active} active · {counts.scored_active} scored
+            {lots.length} surfaced
+            {counts.collapsed_seller_category
+              ? ` · ${counts.collapsed_seller_category} near-duplicates collapsed` : ""}
+             · {counts.active} active · {counts.scored_active} scored
           </span>
         </header>
+
+        {lots.length > 0 && (
+          <form class="ah__filters" data-ah-filters>
+            <div class="ah__filter-row">
+              <span class="ah__filter-label">Show</span>
+              <button type="button" class="ah__chip is-active"
+                      data-facet="category" data-value="*"
+                      aria-pressed="true">
+                All <small>{facetCounts.total}</small>
+              </button>
+              {CATEGORIES.map(cat => (
+                <button type="button" class="ah__chip"
+                        data-facet="category" data-value={cat}
+                        aria-pressed="false">
+                  {CATEGORY_LABELS[cat]} <small>{facetCounts.category[cat]}</small>
+                </button>
+              ))}
+            </div>
+            <div class="ah__filter-row">
+              <span class="ah__filter-label">Score</span>
+              {SCORE_STEPS.map(s => (
+                <button type="button" class="ah__chip"
+                        data-facet="minscore" data-value={String(s)}
+                        aria-pressed="false">
+                  ≥{s} <small>{facetCounts.minScore[s]}</small>
+                </button>
+              ))}
+            </div>
+            <div class="ah__filter-row">
+              <span class="ah__filter-label">Subset</span>
+              <button type="button" class="ah__chip"
+                      data-facet="prestige-seller" data-value="1"
+                      aria-pressed="false">
+                From prestige seller <small>{facetCounts.prestigeSeller}</small>
+              </button>
+              <button type="button" class="ah__chip"
+                      data-facet="closing-soon" data-value="1"
+                      aria-pressed="false">
+                Closing in {CLOSING_SOON_DAYS}d <small>{facetCounts.closingSoon}</small>
+              </button>
+              <button type="button" class="ah__chip ah__chip--reset"
+                      data-facet="reset" hidden>
+                Reset
+              </button>
+              <span class="ah__filter-status" data-ah-status>
+                {lots.length} showing
+              </span>
+            </div>
+          </form>
+        )}
 
         {lots.length === 0 ? (
           <div class="ah__empty">
             <p class="ah__empty-headline">
-              The register is open. No lots currently clear the editorial floor.
+              No active lots currently meet the publishing threshold.
             </p>
             <p class="ah__empty-detail">
               The pipeline ran at <time datetime={meta.synced_at_utc}>{syncedISO}</time>.
@@ -134,7 +225,7 @@ function statusMark(lot: Lot): string {
               twenty regional offices, and has scored <strong>{counts.scored_active}</strong>
               of them. The highest-scoring active lot today is
               <strong> {counts.top_active_score}/10</strong>. New lots arrive nightly;
-              the lowest editorial floor is {lowestThreshold}/10 (prestige &amp; curio).
+              the lowest publishing floor is {lowestThreshold}/10 (prestige &amp; curio).
             </p>
             {lastRunErr ? (
               <p class="ah__empty-error">
@@ -144,12 +235,20 @@ function statusMark(lot: Lot): string {
             ) : null}
           </div>
         ) : (
-          <ol class="ah__register-list">
+          <ol class="ah__register-list" data-ah-list>
             {lots.map((lot, i) => (
-              <li>
+              <li
+                class="reveal"
+                data-ah-item
+                data-index={String(i + 1)}
+                data-category={lot.category ?? ""}
+                data-score={String(lot.score ?? 0)}
+                data-prestige-seller={isPrestigeSeller(lot) ? "1" : "0"}
+                data-close-utc={lot.close_at_utc ?? ""}
+              >
                 <article class="ah-lot">
                   <aside class="ah-lot__rail">
-                    <span class="ah-lot__mark">Lot №&nbsp;{String(i + 1).padStart(2, "0")}</span>
+                    <span class="ah-lot__mark" data-ah-mark>Lot №&nbsp;{String(i + 1).padStart(2, "0")}</span>
                     <span class:list={[
                       "status-mark",
                       lot.status === "active" ? "status-mark--live" : "status-mark--unresolved",
@@ -160,6 +259,9 @@ function statusMark(lot: Lot): string {
                     {lot.category ? (
                       <span class="ah-lot__cat">{lot.category}</span>
                     ) : null}
+                    {lot.sublot_count > 1 ? (
+                      <span class="ah-lot__sublots">× {lot.sublot_count} sublots</span>
+                    ) : null}
                     {lot.close_at_utc ? (
                       <span class="ah-lot__when">Close · {fmtClose(lot.close_at_utc)}</span>
                     ) : null}
@@ -169,6 +271,11 @@ function statusMark(lot: Lot): string {
                     <h3 class="ah-lot__title">
                       <a href={lot.source_url} rel="noopener" target="_blank">{lot.title}</a>
                     </h3>
+                    {lot.group_more && lot.group_more > 0 ? (
+                      <p class="ah-lot__more">
+                        + {lot.group_more} more {lot.category} {lot.group_more === 1 ? "lot" : "lots"} from this seller, collapsed
+                      </p>
+                    ) : null}
                     {lot.note ? (
                       <p class:list={["ah-lot__note", lot.note_is_editor && "ah-lot__note--editor"]}>
                         {lot.note}
@@ -184,13 +291,33 @@ function statusMark(lot: Lot): string {
                         <div class="ah-lot__row"><dt>Location</dt><dd>{lot.location}</dd></div>
                       )}
                       {lot.start_price_inr != null && (
-                        <div class="ah-lot__row"><dt>Reserve</dt><dd class="tabular">{fmtINR(lot.start_price_inr)}</dd></div>
+                        <div class="ah-lot__row"><dt>Reserve</dt>
+                          <dd class="tabular">
+                            {fmtINR(lot.start_price_inr)}
+                            {lot.sublot_count > 1 ? (
+                              <span class="ah-lot__sublot-note">&nbsp;per sublot</span>
+                            ) : null}
+                          </dd></div>
                       )}
                       {lot.emd_inr != null && (
                         <div class="ah-lot__row"><dt>EMD</dt><dd class="tabular">{fmtINR(lot.emd_inr)}</dd></div>
                       )}
                       {lot.close_at_utc && (
                         <div class="ah-lot__row"><dt>Closes</dt><dd class="tabular">{fmtClose(lot.close_at_utc)}</dd></div>
+                      )}
+                      {lot.annexures && lot.annexures.length > 0 && (
+                        <div class="ah-lot__row"><dt>Annexures</dt><dd>
+                          <ul class="ah-lot__annex">
+                            {lot.annexures.map(ax => (
+                              <li>
+                                <a href={ax.url} rel="noopener" target="_blank">{ax.filename}</a>
+                                {ax.has_text
+                                  ? null
+                                  : <span class="ah-lot__annex-note"> (no extractable text)</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </dd></div>
                       )}
                     </dl>
                   </div>
@@ -203,7 +330,7 @@ function statusMark(lot: Lot): string {
 
       <!-- METHODOLOGY ─────────────────────────────────────────── -->
       <section class="ah__method" id="methodology">
-        <header class="ah__banner">
+        <header class="ah__banner reveal">
           <span class="ah__banner__num">§</span>
           <h2 class="ah__banner__title">Methodology</h2>
           <span class="ah__banner__rule" aria-hidden="true"></span>
@@ -211,7 +338,7 @@ function statusMark(lot: Lot): string {
         </header>
 
         <ol class="ah__method-steps">
-          <li class="ah-step">
+          <li class="ah-step reveal">
             <span class="ah-step__num">01</span>
             <div class="ah-step__body">
               <h3 class="ah-step__head">Ingest</h3>
@@ -222,7 +349,7 @@ function statusMark(lot: Lot): string {
               </p>
             </div>
           </li>
-          <li class="ah-step">
+          <li class="ah-step reveal">
             <span class="ah-step__num">02</span>
             <div class="ah-step__body">
               <h3 class="ah-step__head">Normalise</h3>
@@ -234,28 +361,28 @@ function statusMark(lot: Lot): string {
               </p>
             </div>
           </li>
-          <li class="ah-step">
+          <li class="ah-step reveal">
             <span class="ah-step__num">03</span>
             <div class="ah-step__body">
               <h3 class="ah-step__head">Score</h3>
               <p class="ah-step__text">
                 Every lot is scored 1&ndash;10 against four categories:
                 arbitrage, niche-instrument, prestige-seller, curio. The
-                editorial floor is per-category, not uniform — arbitrage
-                must be a real deal; prestige and curio surface earlier.
+                publishing floor is per-category, not uniform — arbitrage
+                needs a clear margin; prestige and curio surface earlier.
                 Anything from a prestige seller is included regardless of
                 category fit.
               </p>
             </div>
           </li>
-          <li class="ah-step">
+          <li class="ah-step reveal">
             <span class="ah-step__num">04</span>
             <div class="ah-step__body">
               <h3 class="ah-step__head">Annotate</h3>
               <p class="ah-step__text">
                 A small subset of lots gets a written note &mdash; what&rsquo;s
-                being sold, why it&rsquo;s interesting, what the close attracted.
-                Hand-written, infrequent, opinionated.
+                being sold, why it&rsquo;s notable, and what the close attracted.
+                Hand-written and infrequent.
               </p>
             </div>
           </li>
@@ -264,7 +391,7 @@ function statusMark(lot: Lot): string {
 
       <!-- SOURCES ─────────────────────────────────────────────── -->
       <section class="ah__sources" id="sources">
-        <header class="ah__banner">
+        <header class="ah__banner reveal">
           <span class="ah__banner__num">¤</span>
           <h2 class="ah__banner__title">Primary sources</h2>
           <span class="ah__banner__rule" aria-hidden="true"></span>
@@ -301,9 +428,8 @@ function statusMark(lot: Lot): string {
 
         <p class="ah__caveat">
           The register tracks what is publicly listed on MSTC. It does not predict
-          outcomes, advise on bidding, or represent any seller or buyer. The
-          intent is the same as the rest of <a href="https://nl06.com">nl06</a>:
-          watch a running system, write down what it does.
+          outcomes, advise on bidding, or represent any seller or buyer. Like the rest
+          of <a href="https://nl06.com">nl06</a>, it records what a running system does.
         </p>
       </section>
 
@@ -321,6 +447,148 @@ function statusMark(lot: Lot): string {
       <p class="ornament" aria-hidden="true"></p>
     </Container>
   </article>
+
+  <script>
+    type FacetState = {
+      categories: Set<string>;
+      minScore: number | null;
+      prestigeSeller: boolean;
+      closingSoon: boolean;
+    };
+
+    const root = document.querySelector<HTMLFormElement>("[data-ah-filters]");
+    const list = document.querySelector<HTMLOListElement>("[data-ah-list]");
+    if (root && list) {
+      const items = Array.from(list.querySelectorAll<HTMLLIElement>("[data-ah-item]"));
+      const status = root.querySelector<HTMLElement>("[data-ah-status]");
+      const resetBtn = root.querySelector<HTMLButtonElement>("[data-facet=reset]");
+      const allBtn   = root.querySelector<HTMLButtonElement>('[data-facet=category][data-value="*"]');
+      const total    = items.length;
+      const closingSoonMs = Date.now() + 7 * 86_400_000;
+
+      const state: FacetState = {
+        categories: new Set<string>(),
+        minScore: null,
+        prestigeSeller: false,
+        closingSoon: false,
+      };
+
+      function press(btn: HTMLButtonElement | null, on: boolean) {
+        if (!btn) return;
+        btn.classList.toggle("is-active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+
+      function apply() {
+        let shown = 0;
+        for (const li of items) {
+          const cat   = li.dataset.category || "";
+          const score = Number(li.dataset.score || 0);
+          const ps    = li.dataset.prestigeSeller === "1";
+          const close = li.dataset.closeUtc;
+          const closeMs = close ? Date.parse(close) : Infinity;
+
+          const okCat   = state.categories.size === 0 || state.categories.has(cat);
+          const okScore = state.minScore == null || score >= state.minScore;
+          const okPs    = !state.prestigeSeller || ps;
+          const okClose = !state.closingSoon    || closeMs <= closingSoonMs;
+
+          const show = okCat && okScore && okPs && okClose;
+          li.hidden = !show;
+          if (show) shown++;
+        }
+        let n = 0;
+        for (const li of items) {
+          if (li.hidden) continue;
+          n++;
+          const mark = li.querySelector<HTMLElement>("[data-ah-mark]");
+          if (mark) mark.textContent = `Lot № ${String(n).padStart(2, "0")}`;
+        }
+        if (status) {
+          status.textContent = shown === total
+            ? `${shown} showing`
+            : `${shown} of ${total} showing`;
+        }
+        const anyActive =
+          state.categories.size > 0 ||
+          state.minScore != null ||
+          state.prestigeSeller ||
+          state.closingSoon;
+        if (resetBtn) resetBtn.hidden = !anyActive;
+      }
+
+      function handle(btn: HTMLButtonElement) {
+        const facet = btn.dataset.facet!;
+        const value = btn.dataset.value;
+
+        if (facet === "category") {
+          if (value === "*") {
+            state.categories.clear();
+          } else if (value) {
+            if (state.categories.has(value)) state.categories.delete(value);
+            else state.categories.add(value);
+          }
+          press(allBtn, state.categories.size === 0);
+          root!.querySelectorAll<HTMLButtonElement>(
+            '[data-facet=category]:not([data-value="*"])'
+          ).forEach(b => press(b, state.categories.has(b.dataset.value!)));
+        } else if (facet === "minscore") {
+          const n = Number(value);
+          state.minScore = state.minScore === n ? null : n;
+          root!.querySelectorAll<HTMLButtonElement>("[data-facet=minscore]")
+            .forEach(b => press(b, Number(b.dataset.value) === state.minScore));
+        } else if (facet === "prestige-seller") {
+          state.prestigeSeller = !state.prestigeSeller;
+          press(btn, state.prestigeSeller);
+        } else if (facet === "closing-soon") {
+          state.closingSoon = !state.closingSoon;
+          press(btn, state.closingSoon);
+        } else if (facet === "reset") {
+          state.categories.clear();
+          state.minScore = null;
+          state.prestigeSeller = false;
+          state.closingSoon = false;
+          root!.querySelectorAll<HTMLButtonElement>(".ah__chip").forEach(b =>
+            press(b, false)
+          );
+          press(allBtn, true);
+        }
+        apply();
+      }
+
+      root.addEventListener("click", (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ah__chip");
+        if (!btn) return;
+        handle(btn);
+      });
+      // Don't let the form try to submit on Enter.
+      root.addEventListener("submit", (e) => e.preventDefault());
+
+      apply();
+    }
+  </script>
+
+  <script>
+    // Stagger sections in as they enter the viewport. Arming is JS-gated,
+    // so with JS disabled every .reveal element renders visible.
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const targets = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
+    if (targets.length && !reduced && "IntersectionObserver" in window) {
+      document.documentElement.classList.add("js-reveal");
+      const io = new IntersectionObserver(
+        (records, obs) => {
+          records.forEach((rec) => {
+            if (rec.isIntersecting) {
+              rec.target.classList.add("is-in");
+              obs.unobserve(rec.target);
+            }
+          });
+        },
+        { rootMargin: "0px 0px -10% 0px", threshold: 0.12 }
+      );
+      targets.forEach((el) => io.observe(el));
+    }
+  </script>
 </BaseLayout>
 
 <style>
@@ -454,6 +722,75 @@ function statusMark(lot: Lot): string {
     font-weight: 500;
   }
 
+  /* FILTERS ─────────────────────────────────────────────────── */
+  .ah__filters {
+    margin: var(--space-6) 0 0;
+    padding: var(--space-5) 0 var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    border-bottom: 1px dashed var(--color-rule);
+  }
+  .ah__filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .ah__filter-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-weight: 600;
+    min-width: 4.5rem;
+  }
+  .ah__chip {
+    appearance: none;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule-strong);
+    padding: 0.25rem 0.7rem;
+    line-height: 1.2;
+    transition: background 80ms, color 80ms, border-color 80ms;
+  }
+  .ah__chip small {
+    margin-left: 0.4em;
+    font-feature-settings: var(--features-tabular);
+    color: var(--color-ink-muted);
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+  .ah__chip:hover { border-color: var(--color-ink); }
+  .ah__chip.is-active {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-color: var(--color-ink);
+  }
+  .ah__chip.is-active small {
+    color: var(--color-paper);
+    opacity: 0.75;
+  }
+  .ah__chip--reset {
+    border-style: dashed;
+    color: var(--color-ink-muted);
+  }
+  .ah__filter-status {
+    margin-left: auto;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+
   /* EMPTY STATE ─────────────────────────────────────────────── */
   .ah__empty {
     margin: var(--space-10) 0;
@@ -505,7 +842,10 @@ function statusMark(lot: Lot): string {
     padding: var(--space-8);
     border: 1px solid var(--color-ink);
     background: var(--color-paper-margin);
+    transition: border-color 160ms ease;
   }
+  .ah-lot:hover,
+  .ah-lot:focus-within { border-color: var(--color-accent); }
   .ah-lot__rail {
     display: flex;
     flex-direction: column;
@@ -546,6 +886,16 @@ function statusMark(lot: Lot): string {
     border-bottom: 1px dotted var(--color-rule-strong);
   }
   .ah-lot__title a:hover { color: var(--color-accent); }
+  .ah-lot__more {
+    margin: var(--space-3) 0 0;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
   .ah-lot__note {
     margin: var(--space-4) 0 0;
     font-family: var(--font-serif);
@@ -692,6 +1042,30 @@ function statusMark(lot: Lot): string {
     text-transform: uppercase;
   }
   .ah__pipeline-fail { color: #b94a47; }
+
+  /* Entrance choreography — the masthead rises on load; section banners,
+     lot cards, and methodology steps stagger in as they scroll into view.
+     JS arms it (.js-reveal on <html>); no-JS renders everything visible
+     and prefers-reduced-motion suppresses it. Lot cards are deliberately
+     un-staggered: they enter one at a time, and the list is filterable. */
+  @keyframes ah-rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .ah__head {
+      opacity: 0;
+      animation: ah-rise 720ms cubic-bezier(0.2, 0.7, 0.3, 1) 60ms both;
+    }
+    .js-reveal .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 620ms ease,
+                  transform 620ms cubic-bezier(0.2, 0.7, 0.3, 1);
+      transition-delay: calc(var(--reveal-i, 0) * 80ms);
+    }
+    .js-reveal .reveal.is-in { opacity: 1; transform: none; }
+  }
 
   @media (max-width: 760px) {
     .ah :global(.ah__inner),

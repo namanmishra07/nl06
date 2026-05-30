@@ -1,0 +1,535 @@
+---
+import { Image, getImage } from "astro:assets";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+
+/* Build photographs — raw phone shots of the antenna construction, dropped
+   into src/workshop/<antenna>/ and renamed to describe what they show.
+   Auto-discovered at build time, grouped by the antenna sub-folder; each
+   filename becomes a caption. Phone JPEGs are multi-megabyte raw, so every
+   image is optimised to a thumbnail and a sized lightbox version. */
+const modules = import.meta.glob<{ default: ImageMetadata }>(
+  "../workshop/*/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}",
+  { eager: true },
+);
+
+// Display titles for the known antenna builds; unknown folders fall back to a
+// tidied version of the folder name, so dropping in a new folder just works.
+const GROUP_TITLES: Record<string, string> = {
+  "trough":   "60 cm parabolic trough",
+  "helix":    "12-turn helix",
+  "biquad":   "Biquad feed",
+  "v-dipole": "V-dipole",
+};
+const GROUP_ORDER = ["trough", "helix", "biquad", "v-dipole"];
+
+function titleForGroup(slug: string): string {
+  if (GROUP_TITLES[slug]) return GROUP_TITLES[slug];
+  const t = slug.replace(/[-_]+/g, " ").trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function captionFromFilename(name: string): string {
+  let base = name
+    .replace(/\.[^.]+$/, "")        // drop extension
+    .replace(/^\d+[-_.\s]+/, "")    // drop a leading order prefix like "01-"
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!base.length) return "Untitled";
+  base = base.charAt(0).toUpperCase() + base.slice(1);
+  // Light term-casing so technical names read right in prose captions.
+  return base
+    .replace(/\bgk-?2a\b/gi, "GK-2A")
+    .replace(/\belektro-?l\b/gi, "Elektro-L")
+    .replace(/\belektro\b/gi, "Elektro")
+    .replace(/\bpvc\b/gi, "PVC");
+}
+
+// Group the optimised photos by their antenna folder.
+interface Photo { name: string; img: ImageMetadata; caption: string; full: string; }
+const byGroup = new Map<string, Photo[]>();
+for (const [path, mod] of Object.entries(modules)) {
+  const rel = path.split("/workshop/")[1] ?? "";
+  const [slug, ...rest] = rel.split("/");
+  const name = rest.join("/");
+  const full = await getImage({ src: mod.default, width: 1600, format: "webp", quality: 82 });
+  const list = byGroup.get(slug) ?? [];
+  list.push({ name, img: mod.default, caption: captionFromFilename(name), full: full.src });
+  byGroup.set(slug, list);
+}
+
+const groups = [...byGroup.entries()]
+  .map(([slug, photos]) => ({
+    slug,
+    title: titleForGroup(slug),
+    photos: photos.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+  }))
+  .sort((a, b) => {
+    const ai = GROUP_ORDER.indexOf(a.slug);
+    const bi = GROUP_ORDER.indexOf(b.slug);
+    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || a.slug.localeCompare(b.slug);
+  });
+
+const count = Object.values(modules).length;
+const pad = (n: number) => String(n).padStart(2, "0");
+// Running frame index across all groups, for the "NN / total" frame marks.
+let frameNo = 0;
+---
+<BaseLayout
+  title="gs.nl06 — The builds"
+  description="Raw phone photographs of the antenna builds — cardboard formers, foil reflectors, hand-wound helices. How the instruments were actually made."
+  itemNumber="№ GS05"
+>
+  <article class="build">
+    <Container size="wide" class="build__inner">
+      <header class="build__head">
+        <div class="build__rail">
+          <span class="rail__label">Field record</span>
+          <span class="rail__rule" aria-hidden="true"></span>
+          <span class="rail__date">{count === 0 ? "In preparation" : `${count} ${count === 1 ? "frame" : "frames"}`}</span>
+        </div>
+        <div class="build__heading">
+          <h1 class="build__title">
+            <span class="build__title-line">The builds.</span>
+            <span class="build__title-emphasis">How the antennas were made.</span>
+          </h1>
+          <p class="build__lede">
+            Phone photographs from the bench &mdash; cardboard formers, foil
+            reflectors, a hand-wound helix, dipoles cut to length. Unretouched
+            and out of sequence, kept here as the record of what the instruments
+            on the <a href="/instrument">reference page</a> actually looked like
+            while they were being built.
+          </p>
+        </div>
+      </header>
+
+      {count === 0 ? (
+        <div class="build__empty">
+          <p class="build__empty-mark">No frames yet</p>
+          <p class="build__empty-body">
+            Build photographs are being added. They&rsquo;ll appear here as a
+            contact sheet once they&rsquo;re on file.
+          </p>
+        </div>
+      ) : (
+        groups.map((g) => (
+          <section class="group" aria-label={g.title}>
+            <header class="group__head">
+              <h2 class="group__name">{g.title}</h2>
+              <span class="group__rule" aria-hidden="true"></span>
+              <span class="group__count">{g.photos.length} {g.photos.length === 1 ? "frame" : "frames"}</span>
+            </header>
+            <ol class="sheet__grid">
+              {g.photos.map((p) => {
+                frameNo += 1;
+                const num = pad(frameNo);
+                return (
+                  <li class="sheet__cell reveal" style={`--reveal-i:${(frameNo - 1) % 8}`}>
+                    <button
+                      type="button"
+                      class="frame"
+                      data-full={p.full}
+                      data-caption={p.caption}
+                      data-file={p.name}
+                      data-num={num}
+                      aria-haspopup="dialog"
+                      aria-label={`Open photograph: ${p.caption}`}
+                    >
+                      <span class="frame__img">
+                        <Image
+                          src={p.img}
+                          widths={[320, 640]}
+                          sizes="(max-width: 760px) 50vw, 320px"
+                          format="webp"
+                          quality={72}
+                          alt={p.caption}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </span>
+                      <span class="frame__cap">
+                        <span class="frame__num">{num} / {pad(count)}</span>
+                        <span class="frame__caption">{p.caption}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ))
+      )}
+    </Container>
+
+    <!-- ───────────────────── LIGHTBOX ───────────────────── -->
+    <dialog class="lb" id="lb" aria-label="Build photograph">
+      <figure class="lb__card" id="lb-card">
+        <button class="lb__close" type="button" aria-label="Close" data-lb-close>&times;</button>
+        <span class="lb__frame">
+          <img class="lb__img" data-lb-img alt="" />
+        </span>
+        <figcaption class="lb__cap">
+          <span class="lb__num" data-lb-num></span>
+          <span class="lb__caption" data-lb-caption></span>
+          <span class="lb__file" data-lb-file></span>
+        </figcaption>
+      </figure>
+    </dialog>
+  </article>
+
+  <script is:inline>
+    (function () {
+      var frames = document.querySelectorAll(".frame");
+      if (!frames.length) return;
+
+      // Stagger frames in as they scroll into view (reduced-motion safe).
+      var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var cells = document.querySelectorAll(".sheet__cell");
+      if (cells.length && !reduced && "IntersectionObserver" in window) {
+        document.documentElement.classList.add("js-reveal");
+        var io = new IntersectionObserver(function (recs, obs) {
+          recs.forEach(function (r) {
+            if (r.isIntersecting) { r.target.classList.add("is-in"); obs.unobserve(r.target); }
+          });
+        }, { rootMargin: "0px 0px -8% 0px", threshold: 0.1 });
+        cells.forEach(function (c) { io.observe(c); });
+      }
+
+      // Lightbox.
+      var dialog = document.getElementById("lb");
+      var card = document.getElementById("lb-card");
+      if (!dialog || !card || typeof dialog.showModal !== "function") return;
+      var imgEl  = card.querySelector("[data-lb-img]");
+      var capEl  = card.querySelector("[data-lb-caption]");
+      var numEl  = card.querySelector("[data-lb-num]");
+      var fileEl = card.querySelector("[data-lb-file]");
+
+      function open(frame) {
+        imgEl.setAttribute("src", frame.getAttribute("data-full") || "");
+        imgEl.setAttribute("alt", frame.getAttribute("data-caption") || "");
+        capEl.textContent  = frame.getAttribute("data-caption") || "";
+        numEl.textContent  = "Frame " + (frame.getAttribute("data-num") || "");
+        fileEl.textContent = frame.getAttribute("data-file") || "";
+        if (!dialog.open) dialog.showModal();
+      }
+
+      frames.forEach(function (f) {
+        f.addEventListener("click", function () { open(f); });
+      });
+      dialog.addEventListener("click", function (e) {
+        if (e.target === dialog) dialog.close();
+      });
+      card.querySelector("[data-lb-close]").addEventListener("click", function () {
+        dialog.close();
+      });
+    })();
+  </script>
+</BaseLayout>
+
+<style>
+  .build { padding-top: var(--space-12); padding-bottom: var(--space-16); }
+  .build :global(.build__inner) {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* HEAD ────────────────────────────────────────────────────── */
+  .build__head {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-10);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .build__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+  .rail__label, .rail__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .rail__label { color: var(--color-ink); font-weight: 600; }
+  .rail__date  { color: var(--color-ink-muted); }
+  .rail__rule  { height: 1px; background: var(--color-rule); }
+
+  .build__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-jumbo);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-jumbo);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .build__title-line { display: block; }
+  .build__title-emphasis {
+    display: block;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+  .build__lede {
+    margin-top: var(--space-5);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+    max-width: 44rem;
+  }
+  .build__lede a {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+  .build__lede a:hover { border-bottom-color: var(--color-accent); }
+
+  /* EMPTY ───────────────────────────────────────────────────── */
+  .build__empty {
+    grid-column: 1 / -1;
+    margin-top: var(--space-10);
+    padding: var(--space-8);
+    border: 1px dashed var(--color-rule-strong);
+    background: var(--color-paper-margin);
+    max-width: 44rem;
+  }
+  .build__empty-mark {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-accent);
+    font-weight: 700;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: var(--space-4);
+  }
+  .build__empty-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+
+  /* CONTACT SHEET ───────────────────────────────────────────── */
+  /* one section per antenna build */
+  .group {
+    grid-column: 1 / -1;
+    margin-top: var(--space-12);
+  }
+  .group:first-of-type { margin-top: var(--space-10); }
+  .group__head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--color-ink);
+  }
+  .group__name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    font-feature-settings: var(--features-display);
+  }
+  .group__rule { height: 1px; background: var(--color-rule); align-self: center; }
+  .group__count {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .sheet__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: var(--space-8) var(--space-6);
+  }
+  .sheet__cell { margin: 0; }
+
+  .frame {
+    appearance: none;
+    width: 100%;
+    display: block;
+    text-align: left;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule-strong);
+    padding: var(--space-2);
+    cursor: pointer;
+    transition: border-color 140ms ease;
+  }
+  .frame:hover,
+  .frame:focus-visible { border-color: var(--color-accent); outline: none; }
+  .frame__img {
+    display: block;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: #000;
+  }
+  .frame__img :global(img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.96);
+    transition: transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .frame:hover .frame__img :global(img) { transform: scale(1.03); }
+  .frame__cap {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-1) var(--space-1);
+  }
+  .frame__num {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 600;
+  }
+  .frame__caption {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+  }
+
+  /* LIGHTBOX ────────────────────────────────────────────────── */
+  .lb {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: var(--space-6);
+    border: 0;
+    background: transparent;
+    overflow-y: auto;
+  }
+  .lb[open] { display: grid; place-items: center; }
+  .lb::backdrop { background: color-mix(in srgb, var(--color-ink) 70%, transparent); }
+  .lb__card {
+    position: relative;
+    margin: 0;
+    max-width: min(60rem, 100%);
+    background: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    padding: var(--space-3);
+    animation: lb-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @keyframes lb-in {
+    from { opacity: 0; transform: translateY(0.5rem) scale(0.99); }
+    to   { opacity: 1; transform: none; }
+  }
+  .lb__frame {
+    display: block;
+    background: #000;
+    border: 1px solid var(--color-rule);
+  }
+  .lb__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 76vh;
+    object-fit: contain;
+  }
+  .lb__cap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-2) var(--space-1);
+  }
+  .lb__num {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 700;
+  }
+  .lb__caption {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    color: var(--color-ink);
+  }
+  .lb__file {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-faint);
+  }
+  .lb__close {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    appearance: none;
+    border: 0;
+    background: color-mix(in srgb, var(--color-paper) 80%, transparent);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--color-ink);
+    transition: color 120ms ease;
+    z-index: 1;
+  }
+  .lb__close:hover { color: var(--color-accent); }
+
+  /* entrance reveal ─────────────────────────────────────────── */
+  @media (prefers-reduced-motion: no-preference) {
+    .js-reveal .sheet__cell {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 600ms ease, transform 600ms cubic-bezier(0.2, 0.7, 0.3, 1);
+      transition-delay: calc(var(--reveal-i, 0) * 60ms);
+    }
+    .js-reveal .sheet__cell.is-in { opacity: 1; transform: none; }
+    .lb__card { animation: lb-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lb__card { animation: none; }
+  }
+
+  /* responsive ──────────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .build :global(.build__inner),
+    .build__head { grid-template-columns: 1fr; }
+    .build__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .build__rail .rail__rule { flex: 1; }
+    .build__title { font-size: var(--type-display); }
+    .sheet__grid { grid-template-columns: repeat(2, 1fr); gap: var(--space-5) var(--space-4); }
+  }
+</style>

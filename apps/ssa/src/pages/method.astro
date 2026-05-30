@@ -42,13 +42,13 @@ const inl_v = tex(`v`, false);
       <section class="prose">
         <p>
           Every active satellite is tracked from the ground, and the resulting
-          orbits are published as element sets. Left alone, an orbit changes
-          only in ways physics dictates: atmospheric drag slowly lowers it,
-          the Earth&rsquo;s equatorial bulge rotates its plane, the Sun and
-          Moon tug on it. All of that is smooth. A maneuver &mdash; a thruster
-          firing &mdash; is none of those things. It appears as a sudden break
-          in an otherwise smooth curve. This page watches the published orbits
-          of active payloads and surfaces those breaks.
+          orbits are published as element sets. Without a maneuver, an orbit
+          changes only in predictable ways: atmospheric drag slowly lowers it,
+          the Earth&rsquo;s equatorial bulge rotates its plane, and the Sun and
+          Moon perturb it. These changes are smooth. A maneuver &mdash; a
+          thruster firing &mdash; produces a sudden break in an otherwise
+          smooth curve. This page reads the published orbits of active payloads
+          and flags those breaks.
         </p>
 
         <h2>The measurement</h2>
@@ -108,10 +108,8 @@ const inl_v = tex(`v`, false);
           shared dips as weather and keep only object-specific breaks. And the
           catalog itself carries noise. So read each entry as &ldquo;this
           orbit changed in a way that looks deliberate,&rdquo; not as a claim
-          about intent, payload, or operator. The satellites that maneuver in
-          the most interesting ways are often the ones that states would
-          rather you not watch closely. This is one small, public way of
-          watching anyway.
+          about intent, payload, or operator. It is one way to track
+          maneuvers from public data.
         </p>
       </section>
 

@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-05-28T10:56:46.322207+00:00",
+  "window_days": 30,
+  "payloads_tracked": 0,
+  "events_in_window": 214,
+  "by_classification": {
+    "plane_change": 80,
+    "stationkeeping_ns": 64,
+    "lower": 27,
+    "stationkeeping_ew": 22,
+    "raise": 21
+  },
+  "by_kind": {
+    "out_of_plane": 144,
+    "in_plane": 70
+  },
+  "by_confidence": {
+    "LOW": 127,
+    "HIGH": 87
+  },
+  "by_constellation": {}
+}

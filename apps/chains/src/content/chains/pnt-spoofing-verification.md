@@ -8,10 +8,10 @@ steps:
   - "Insurance and cargo industries demand independent verification of vessel and aircraft positioning before underwriting routes."
   - "Receiver-internal anti-spoofing (multi-constellation, RAIM) hits a ceiling — one receiver can't disambiguate a coherent multi-system spoof from real geometry."
   - "Infrastructure gap: a network of independent commercial-grade ground stations dense enough to triangulate PNT consensus, sold to insurers and operators rather than aerospace primes."
-verdict_reason: "Maritime insurance is the wedge — they pay first. Watching for a Tier 1 carrier to mandate verification."
+verdict_reason: "Maritime insurers pay first. Watching for a Tier 1 carrier to mandate verification."
 draft: false
 ---
 
 The clean cross-receiver consensus model assumes you can deploy and maintain
 ground stations cheaply enough to make density economic. That's the part I'm
-sceptical of and the part I can test, partly with the Lucknow rig.
+sceptical of and the part I can test, partly with the ground station.

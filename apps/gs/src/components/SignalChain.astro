@@ -27,7 +27,7 @@ interface Props {
 
 const {
   nodes,
-  domainTags = ["Rooftop · Lucknow", "NAS · /satellite"],
+  domainTags = ["Antenna · RF", "NAS · /satellite"],
   dividerAfter,
   caption,
 } = Astro.props;
@@ -39,7 +39,27 @@ const usable = W - PAD * 2;
 const step = nodes.length > 1 ? usable / (nodes.length - 1) : usable;
 const yMid = 140;
 const boxW = 156;
-const boxH = 100;
+const boxH = 112;
+const innerW = boxW - 16;
+
+/* Wrap a label into at most two lines that fit inside the box, breaking
+   on whitespace. Any single line that is still too wide is squeezed to
+   the box width via textLength so nothing spills outside the box. */
+function wrapText(t: string, maxChars: number): string[] {
+  const tokens = t.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let cur = "";
+  for (const tok of tokens) {
+    const cand = cur ? `${cur} ${tok}` : tok;
+    if (cand.length > maxChars && cur) { lines.push(cur); cur = tok; }
+    else cur = cand;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > 2) return [lines[0], lines.slice(1).join(" ")];
+  return lines;
+}
+const clampLen = (t: string, perChar: number): number | undefined =>
+  t.length * perChar > innerW ? innerW : undefined;
 
 // Place the divider half-way between the two nodes on either side of it.
 const dividerIdx = dividerAfter ?? Math.floor(nodes.length / 2) - 1;
@@ -120,17 +140,32 @@ const dividerX = PAD + step * (dividerIdx + 0.5);
           <text x={x + boxW - 10} y={y + 17}
             text-anchor="end" class="sc-folio" fill="var(--color-ink-muted)"
           >{String(i + 1).padStart(2, "0")}</text>
-          <text x={x + boxW / 2} y={y + 48}
-            text-anchor="middle" class="sc-name" fill="var(--color-ink)"
-          >{n.name}</text>
-          <text x={x + boxW / 2} y={y + 70}
-            text-anchor="middle" class="sc-spec" fill="var(--color-ink-soft)"
-          >{n.spec}</text>
-          {n.spec2 && (
-            <text x={x + boxW / 2} y={y + 88}
-              text-anchor="middle" class="sc-spec-sm" fill="var(--color-ink-muted)"
-            >{n.spec2}</text>
-          )}
+          {(() => {
+            const specLines  = wrapText(n.spec, 26);
+            const spec2Lines = n.spec2 ? wrapText(n.spec2, 28) : [];
+            const specStartY = y + 56;
+            const spec2StartY = specStartY + specLines.length * 14 + 2;
+            return (
+              <g>
+                <text x={x + boxW / 2} y={y + 40}
+                  text-anchor="middle" class="sc-name" fill="var(--color-ink)"
+                  textLength={clampLen(n.name, 8.6)} lengthAdjust="spacingAndGlyphs"
+                >{n.name}</text>
+                {specLines.map((ln, k) => (
+                  <text x={x + boxW / 2} y={specStartY + k * 14}
+                    text-anchor="middle" class="sc-spec" fill="var(--color-ink-soft)"
+                    textLength={clampLen(ln, 6.2)} lengthAdjust="spacingAndGlyphs"
+                  >{ln}</text>
+                ))}
+                {spec2Lines.map((ln, k) => (
+                  <text x={x + boxW / 2} y={spec2StartY + k * 13}
+                    text-anchor="middle" class="sc-spec-sm" fill="var(--color-ink-muted)"
+                    textLength={clampLen(ln, 5.4)} lengthAdjust="spacingAndGlyphs"
+                  >{ln}</text>
+                ))}
+              </g>
+            );
+          })()}
         </g>
       );
     })}

@@ -8,6 +8,6 @@ steps:
   - "Grid frequency excursions outside 49.5–50.5 Hz become weekly events, not yearly. SLDCs lack the instrumentation to attribute causes in real time."
   - "Discoms and large industrial consumers face PPA penalty exposure when frequency-linked clauses trigger — and they have no independent way to verify SLDC attribution."
   - "Infrastructure gap: substation-edge frequency-and-quality telemetry exposed via API to the parties paying penalties, not just to the regulator."
-verdict_reason: "Industrials are the wedge — they pay first. Discoms buy second, regulator never."
+verdict_reason: "Industrials pay first, discoms second, the regulator likely not at all."
 draft: false
 ---

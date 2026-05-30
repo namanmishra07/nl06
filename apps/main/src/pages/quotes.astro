@@ -36,6 +36,8 @@ function toRoman(n: number): string {
 // ── Build the calendar atlas ────────────────────────────────────
 // Index entries by ISO date for O(1) lookup per cell.
 const entriesByDate = new Map(entries.map((e) => [e.date_ist, e]));
+// Catalogue number per entry — oldest is № 001 (entries are newest-first).
+const entryNum = new Map(entries.map((e, i) => [e.date_ist, entries.length - i]));
 
 // Render months from the earliest entry's month through the latest's.
 // (When the agent runs forward indefinitely, more months appear naturally.)
@@ -104,9 +106,8 @@ const months: Month[] = [];
   }
 }
 
-// Newest entry is the default for the reading panel.
 const total = entries.length;
-const defaultEntry = entries[0] ?? null;
+const hasEntries = entries.length > 0;
 
 // Author census, in canonical order.
 const census = (["claude", "openai", "gemini"] as const).map((key) => ({
@@ -121,7 +122,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 ---
 <BaseLayout
   title="Marginalia — NL06"
-  description="A daily atlas of one-line aphorisms composed for the nl06.com footer by Claude, ChatGPT, and Gemini. Click a day to read its line."
+  description="One short aphorism a day, composed for the nl06.com footer by Claude, ChatGPT, and Gemini. Click a day to read its line."
   pathname="/quotes"
   itemNumber="№ 006"
 >
@@ -139,9 +140,9 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
         <h1 class="masthead__title">Marginalia.</h1>
 
         <p class="masthead__lede">
-          A daily atlas of aphorisms &mdash; composed, in turn, by Claude,
-          ChatGPT, and Gemini. <span class="masthead__instruction">Tap a
-          filled day to read its line.</span>
+          One short aphorism a day, composed in turn by Claude, ChatGPT, and
+          Gemini. <span class="masthead__instruction">Tap any filled day to open
+          its line.</span>
         </p>
 
         <ul class="census" aria-label="Edition census">
@@ -162,73 +163,53 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
         </ul>
       </header>
 
-      {defaultEntry === null ? (
+      {!hasEntries ? (
         <p class="atlas-sheet__empty">
-          The atlas is empty. Tomorrow&rsquo;s line will be the first.
+          No entries yet. The first line lands tomorrow.
         </p>
       ) : (
-        <>
-          <!-- ───────────────────── READING PANEL ─────────────────── -->
-          <section class="reading" id="reading" aria-live="polite" aria-atomic="true">
-            {entries.map((e, i) => (
-              <article
-                class:list={["leaf", `leaf--${e.author_key}`, i === 0 && "is-active"]}
-                data-q={e.date_ist}
-                id={`q-${e.date_ist}`}
-              >
-                <blockquote class="leaf__text">
-                  <span class="leaf__mark" aria-hidden="true">&ldquo;</span>{e.quote}
-                </blockquote>
-                <footer class="leaf__meta">
-                  <span class={`leaf__dot leaf__dot--${e.author_key}`} aria-hidden="true"></span>
-                  <a class="leaf__author" href={e.author_url} rel="noopener">{e.author}</a>
-                  <span class="leaf__sep" aria-hidden="true">·</span>
-                  <span class="leaf__date">{e.date_display}</span>
-                  <span class="leaf__sep" aria-hidden="true">·</span>
-                  <span class="leaf__num">№ {String(entries.length - i).padStart(3, "0")}</span>
-                </footer>
-              </article>
-            ))}
-          </section>
-
-          <!-- ───────────────────── ATLAS GRID ───────────────────── -->
-          <section class="atlas" aria-label="Calendar atlas">
-            {months.map((mo) => (
-              <article class="month">
-                <header class="month__head">
-                  <h2 class="month__name">{mo.label}</h2>
-                  <span class="month__year" aria-hidden="true">{mo.yearRoman}</span>
-                  <span class="month__rule" aria-hidden="true"></span>
-                  <span class="month__count">{mo.count} {mo.count === 1 ? "piece" : "pieces"}</span>
-                </header>
-                <div class="cal" role="grid" aria-label={`${mo.label} ${mo.year}`}>
-                  {DOW.map((d, i) => (
-                    <span class="cal__dow" role="columnheader" aria-label={["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][i]}>{d}</span>
-                  ))}
-                  {mo.cells.map((c) => (
-                    c.empty ? (
-                      <span class="cal__cell cal__cell--empty" role="gridcell" aria-hidden="true"></span>
-                    ) : c.entry ? (
-                      <a
-                        class:list={["cal__cell", "cal__cell--filled", `cal__cell--${c.entry.author_key}`]}
-                        href={`#q-${c.entry.date_ist}`}
-                        data-q={c.entry.date_ist}
-                        role="gridcell"
-                        aria-label={`Quote by ${c.entry.author} on ${c.entry.date_display}`}
-                      >
-                        <span class="cal__day">{c.day}</span>
-                      </a>
-                    ) : (
-                      <span class="cal__cell cal__cell--blank" role="gridcell">
-                        <span class="cal__day">{c.day}</span>
-                      </span>
-                    )
-                  ))}
-                </div>
-              </article>
-            ))}
-          </section>
-        </>
+        <section class="atlas" aria-label="Calendar atlas">
+          {months.map((mo) => (
+            <article class="month">
+              <header class="month__head">
+                <h2 class="month__name">{mo.label}</h2>
+                <span class="month__year" aria-hidden="true">{mo.yearRoman}</span>
+                <span class="month__rule" aria-hidden="true"></span>
+                <span class="month__count">{mo.count} {mo.count === 1 ? "piece" : "pieces"}</span>
+              </header>
+              <div class="cal" role="grid" aria-label={`${mo.label} ${mo.year}`}>
+                {DOW.map((d, i) => (
+                  <span class="cal__dow" role="columnheader" aria-label={["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][i]}>{d}</span>
+                ))}
+                {mo.cells.map((c) => (
+                  c.empty ? (
+                    <span class="cal__cell cal__cell--empty" role="gridcell" aria-hidden="true"></span>
+                  ) : c.entry ? (
+                    <button
+                      type="button"
+                      class:list={["cal__cell", "cal__cell--filled", `cal__cell--${c.entry.author_key}`]}
+                      data-quote={c.entry.quote}
+                      data-author={c.entry.author}
+                      data-author-url={c.entry.author_url}
+                      data-author-key={c.entry.author_key}
+                      data-date={c.entry.date_display}
+                      data-num={String(entryNum.get(c.entry.date_ist)).padStart(3, "0")}
+                      aria-haspopup="dialog"
+                      aria-label={`Quote by ${c.entry.author} on ${c.entry.date_display}`}
+                      role="gridcell"
+                    >
+                      <span class="cal__day">{c.day}</span>
+                    </button>
+                  ) : (
+                    <span class="cal__cell cal__cell--blank" role="gridcell">
+                      <span class="cal__day">{c.day}</span>
+                    </span>
+                  )
+                ))}
+              </div>
+            </article>
+          ))}
+        </section>
       )}
 
       <footer class="atlas-sheet__foot" aria-hidden="true">
@@ -236,54 +217,62 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
       </footer>
 
     </Container>
+
+    <!-- ───────────────────── FLOATING QUOTE BOX ───────────────────── -->
+    <dialog class="qd" id="qd" aria-label="Quote of the day">
+      <div class="qd__card" id="qd-card">
+        <button class="qd__close" type="button" aria-label="Close" data-qd-close>&times;</button>
+        <blockquote class="qd__text">
+          <span class="qd__mark" aria-hidden="true">&ldquo;</span><span data-qd-quote></span>
+        </blockquote>
+        <footer class="qd__meta">
+          <span class="qd__dot" aria-hidden="true" data-qd-dot></span>
+          <a class="qd__author" data-qd-author href="#" rel="noopener"></a>
+          <span class="qd__sep" aria-hidden="true">·</span>
+          <span class="qd__date" data-qd-date></span>
+          <span class="qd__sep" aria-hidden="true">·</span>
+          <span class="qd__num" data-qd-num></span>
+        </footer>
+      </div>
+    </dialog>
   </article>
 
   <script is:inline>
     (function () {
-      var days = document.querySelectorAll('.cal__cell--filled');
-      var leaves = document.querySelectorAll('.leaf');
-      if (!days.length || !leaves.length) return;
+      var dialog = document.getElementById('qd');
+      var card = document.getElementById('qd-card');
+      if (!dialog || !card || typeof dialog.showModal !== 'function') return;
 
-      // If the URL arrived with a hash, jump to that entry immediately.
-      function applyHash() {
-        var hash = window.location.hash;
-        if (!hash || !hash.startsWith('#q-')) return;
-        var q = hash.slice(3);
-        select(q, false);
+      var quoteEl  = card.querySelector('[data-qd-quote]');
+      var authorEl = card.querySelector('[data-qd-author]');
+      var dotEl    = card.querySelector('[data-qd-dot]');
+      var dateEl   = card.querySelector('[data-qd-date]');
+      var numEl    = card.querySelector('[data-qd-num]');
+      var cells    = document.querySelectorAll('.cal__cell--filled');
+
+      function open(cell) {
+        var key = cell.getAttribute('data-author-key') || '';
+        card.className = 'qd__card qd__card--' + key;
+        quoteEl.textContent = cell.getAttribute('data-quote') || '';
+        authorEl.textContent = cell.getAttribute('data-author') || '';
+        authorEl.setAttribute('href', cell.getAttribute('data-author-url') || '#');
+        dateEl.textContent = cell.getAttribute('data-date') || '';
+        numEl.textContent = '№ ' + (cell.getAttribute('data-num') || '');
+        if (!dialog.open) dialog.showModal();
       }
 
-      function select(q, scroll) {
-        var found = false;
-        leaves.forEach(function (l) {
-          var match = l.getAttribute('data-q') === q;
-          l.classList.toggle('is-active', match);
-          if (match) found = true;
-        });
-        if (!found) return;
-        days.forEach(function (d) {
-          d.classList.toggle('is-selected', d.getAttribute('data-q') === q);
-        });
-        if (scroll) {
-          var panel = document.getElementById('reading');
-          if (panel) {
-            var rect = panel.getBoundingClientRect();
-            if (rect.top < 0 || rect.bottom > window.innerHeight) {
-              panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }
-        }
-      }
-
-      days.forEach(function (d) {
-        d.addEventListener('click', function (e) {
-          e.preventDefault();
-          var q = d.getAttribute('data-q');
-          history.replaceState(null, '', '#q-' + q);
-          select(q, true);
-        });
+      cells.forEach(function (cell) {
+        cell.addEventListener('click', function () { open(cell); });
       });
 
-      applyHash();
+      // Dismiss on backdrop click (the dialog element behind the card).
+      dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) dialog.close();
+      });
+      card.querySelector('[data-qd-close]').addEventListener('click', function () {
+        dialog.close();
+      });
+      // Esc is handled natively by <dialog>.
     })();
   </script>
 </BaseLayout>
@@ -297,17 +286,17 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     --gemini: #1B3A5C;   /* ink blue (= site accent) */
   }
 
-  .leaf--claude { --acc: var(--claude); }
-  .leaf--openai { --acc: var(--openai); }
-  .leaf--gemini { --acc: var(--gemini); }
-
-  .leaf__dot--claude,  .census__dot--claude  { background: var(--claude); }
-  .leaf__dot--openai,  .census__dot--openai  { background: var(--openai); }
-  .leaf__dot--gemini,  .census__dot--gemini  { background: var(--gemini); }
+  .census__dot--claude { background: var(--claude); }
+  .census__dot--openai { background: var(--openai); }
+  .census__dot--gemini { background: var(--gemini); }
 
   .cal__cell--claude { --cell: var(--claude); }
   .cal__cell--openai { --cell: var(--openai); }
   .cal__cell--gemini { --cell: var(--gemini); }
+
+  .qd__card--claude { --acc: var(--claude); }
+  .qd__card--openai { --acc: var(--openai); }
+  .qd__card--gemini { --acc: var(--gemini); }
 
   /* ─────────────────── page frame ──────────────────── */
   .atlas-sheet {
@@ -337,11 +326,11 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   .rail__edition  { font-feature-settings: var(--features-tabular); }
 
   .masthead__title {
-    margin: var(--space-8) 0 var(--space-4) 0;
+    margin: var(--space-7) 0 var(--space-4) 0;
     font-family: var(--font-serif);
     font-style: italic;
     font-weight: 700;
-    font-size: clamp(3rem, 7vw, 5rem);
+    font-size: clamp(2.6rem, 6vw, 4.2rem);
     letter-spacing: var(--tracking-display);
     line-height: 1;
     color: var(--color-accent);
@@ -351,7 +340,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   .masthead__lede {
     margin: 0 0 var(--space-7) 0;
     font-family: var(--font-serif);
-    font-size: var(--type-h3);
+    font-size: var(--type-h4);
     line-height: 1.45;
     color: var(--color-ink-soft);
     max-width: 38rem;
@@ -365,7 +354,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   /* Census strip — single horizontal row, restrained labels. */
   .census {
     list-style: none;
-    margin: 0 0 var(--space-12) 0;
+    margin: 0 0 var(--space-10) 0;
     padding: var(--space-4) 0;
     border-top: 1px solid var(--color-rule);
     border-bottom: 1px solid var(--color-rule);
@@ -432,98 +421,12 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     font-size: var(--type-small);
   }
 
-  /* ─────────────────── reading panel ──────────────────── */
-  .reading {
-    position: relative;
-    margin: 0 0 var(--space-16) 0;
-    min-height: 14rem;
-  }
-  .leaf {
-    display: none;
-    max-width: 42rem;
-  }
-  .leaf.is-active {
-    display: block;
-    animation: leaf-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  }
-  @keyframes leaf-in {
-    from { opacity: 0; transform: translateY(0.5rem); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .leaf__text {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 500;
-    font-size: clamp(1.5rem, 3.4vw, 2.5rem);
-    line-height: 1.25;
-    color: var(--color-ink);
-    letter-spacing: var(--tracking-tight);
-    text-indent: -0.4em;
-  }
-  .leaf__mark {
-    color: var(--acc);
-    font-weight: 800;
-    font-size: 1.3em;
-    line-height: 0;
-    vertical-align: -0.1em;
-    margin-right: 0.04em;
-  }
-
-  .leaf__meta {
-    margin-top: var(--space-6);
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0.55em;
-    font-family: var(--font-sans);
-    font-size: var(--type-meta);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-  }
-  .leaf__dot {
-    display: inline-block;
-    width: 0.55em;
-    height: 0.55em;
-    border-radius: 50%;
-    transform: translateY(0.05em);
-  }
-  .leaf__author {
-    color: var(--acc);
-    text-decoration: none;
-    font-weight: 700;
-    border-bottom: 1px solid transparent;
-    transition: border-color 140ms ease;
-  }
-  .leaf__author:hover {
-    border-bottom-color: var(--acc);
-  }
-  .leaf__sep { color: var(--color-ink-faint); }
-  .leaf__date {
-    font-family: var(--font-serif);
-    font-style: italic;
-    color: var(--color-ink-muted);
-    text-transform: none;
-    letter-spacing: var(--tracking-normal);
-    font-size: var(--type-small);
-    font-feature-settings: var(--features-oldstyle);
-  }
-  .leaf__num {
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-oldstyle), "tnum" 1;
-  }
-
-  /* ─────────────────── atlas (calendar) ──────────────────── */
+  /* ─────────────────── atlas (calendar — the centre-piece) ──────── */
   .atlas {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-    gap: var(--space-10) var(--space-12);
-    padding-top: var(--space-7);
-    border-top: 1px solid var(--color-rule);
+    grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+    gap: var(--space-12) var(--space-12);
+    padding-top: var(--space-8);
   }
   .month { min-width: 0; }
   .month__head {
@@ -531,7 +434,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     grid-template-columns: auto auto 1fr auto;
     align-items: baseline;
     gap: var(--space-3);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
     padding-bottom: var(--space-2);
     border-bottom: 1px solid var(--color-rule);
   }
@@ -540,7 +443,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     font-family: var(--font-serif);
     font-style: italic;
     font-weight: 600;
-    font-size: var(--type-h3);
+    font-size: var(--type-h2);
     color: var(--color-ink);
     letter-spacing: var(--tracking-tight);
   }
@@ -566,7 +469,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   .cal {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 0.35rem;
+    gap: 0.45rem;
   }
   .cal__dow {
     text-align: center;
@@ -588,7 +491,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     font-family: var(--font-serif);
     font-feature-settings: var(--features-oldstyle);
     color: var(--color-ink-faint);
-    font-size: var(--type-small);
+    font-size: var(--type-body);
     line-height: 1;
     border-radius: 50%;
     position: relative;
@@ -597,8 +500,11 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   .cal__cell--blank {
     color: var(--color-ink-faint);
   }
-  /* Filled day — disc in LLM colour, day numeral in cream. */
+  /* Filled day — disc in LLM colour, day numeral in cream. It's a button. */
   .cal__cell--filled {
+    appearance: none;
+    border: 0;
+    padding: 0;
     background: var(--cell);
     color: var(--color-paper);
     text-decoration: none;
@@ -613,11 +519,6 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     transform: scale(1.12);
     outline: none;
   }
-  .cal__cell--filled.is-selected {
-    transform: scale(1.12);
-    /* Ring matches the cell colour at higher contrast. */
-    box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 3px var(--color-ink);
-  }
   .cal__cell--filled:focus-visible {
     box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 3px var(--color-accent);
   }
@@ -626,6 +527,126 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
     font-weight: 600;
     font-size: 0.85em;
     letter-spacing: -0.01em;
+  }
+
+  /* ─────────────────── floating quote box ──────────────────── */
+  .qd {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: var(--space-6);
+    border: 0;
+    background: transparent;
+    overflow-y: auto;
+  }
+  .qd[open] {
+    display: grid;
+    place-items: center;
+  }
+  .qd::backdrop {
+    background: color-mix(in srgb, var(--color-ink) 58%, transparent);
+  }
+  .qd__card {
+    --acc: var(--color-accent);
+    position: relative;
+    width: 100%;
+    max-width: 40rem;
+    background: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    border-top: 3px solid var(--acc);
+    padding: var(--space-10) var(--space-9) var(--space-8);
+    animation: qd-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @keyframes qd-in {
+    from { opacity: 0; transform: translateY(0.6rem) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  .qd__close {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    appearance: none;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--color-ink-faint);
+    transition: color 120ms ease;
+  }
+  .qd__close:hover { color: var(--color-ink); }
+  .qd__text {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(1.4rem, 3.2vw, 2.2rem);
+    line-height: 1.28;
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-tight);
+    text-indent: -0.4em;
+  }
+  .qd__mark {
+    color: var(--acc);
+    font-weight: 800;
+    font-size: 1.3em;
+    line-height: 0;
+    vertical-align: -0.1em;
+    margin-right: 0.04em;
+  }
+  .qd__meta {
+    margin-top: var(--space-6);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.55em;
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
+  }
+  .qd__dot {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--acc);
+    transform: translateY(0.05em);
+  }
+  .qd__author {
+    color: var(--acc);
+    text-decoration: none;
+    font-weight: 700;
+    border-bottom: 1px solid transparent;
+    transition: border-color 140ms ease;
+  }
+  .qd__author:hover { border-bottom-color: var(--acc); }
+  .qd__sep { color: var(--color-ink-faint); }
+  .qd__date {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-oldstyle);
+  }
+  .qd__num {
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-oldstyle), "tnum" 1;
   }
 
   /* ─────────────────── empty + foot ──────────────────── */
@@ -650,7 +671,7 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 
   /* ─────────────────── responsive ──────────────────── */
   @media (max-width: 760px) {
-    .masthead__title { font-size: 2.75rem; }
+    .masthead__title { font-size: 2.5rem; }
     .masthead__lede  { font-size: var(--type-body); }
 
     .census {
@@ -659,22 +680,21 @@ const DOW = ["M", "T", "W", "T", "F", "S", "S"];
       gap: var(--space-2);
     }
 
-    .leaf__text { font-size: 1.4rem; }
-    .leaf__meta { font-size: var(--type-marginalia); gap: 0.4em; }
-
     .atlas {
       grid-template-columns: 1fr;
       gap: var(--space-8);
     }
-    .cal { gap: 0.3rem; }
+    .cal { gap: 0.4rem; }
+    .qd__card { padding: var(--space-8) var(--space-6) var(--space-6); }
   }
 
   /* Reduce motion */
   @media (prefers-reduced-motion: reduce) {
-    .leaf.is-active { animation: none; }
+    .qd__card { animation: none; }
     .cal__cell--filled:hover,
-    .cal__cell--filled.is-selected {
+    .cal__cell--filled:focus-visible {
       transform: none;
     }
   }
 </style>
+</BaseLayout>

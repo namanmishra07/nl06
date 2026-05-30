@@ -22,9 +22,15 @@ interface Section {
   id: "gk-2a" | "elektro-l5" | "meteor-m2-4";
   numeral: string;
   label: string;
+  /** Official page for this satellite — operating agency where available. */
+  officialUrl: string;
   target: string;
   band: string;
   instrumentHref: string;
+  /** Display numeral of the instrument this section's captures are produced by. */
+  instrumentNumeral: string;
+  /** Display label shown next to the instrument link. */
+  instrumentLabel: string;
   emptyMessage?: string;
   entries: typeof all;
 }
@@ -34,28 +40,37 @@ const sections: Section[] = [
     id: "gk-2a",
     numeral: "I",
     label: "GK-2A",
+    officialUrl: "https://nmsc.kma.go.kr/enhome/html/main/main.do",
     target: "GEO-KOMPSAT-2A · 128.2°E",
     band: "L-band · 1692.140 MHz",
-    instrumentHref: "/instrument#ii-l-band-gk2a",
+    instrumentHref: "/instrument#i-l-band-gk2a-trough",
+    instrumentNumeral: "I",
+    instrumentLabel: "parabolic trough (current); see also Instrument II — 12-turn helix (retired)",
     entries: all.filter((p) => sectionKey(p.data.satellite) === "gk-2a"),
   },
   {
     id: "elektro-l5",
     numeral: "II",
     label: "Elektro-L5",
+    officialUrl: "https://en.wikipedia.org/wiki/Elektro-L",
     target: "Elektro-L5 · 76°E",
     band: "L-band · 1691.000 MHz",
     instrumentHref: "/instrument#iii-l-band-elektro",
-    emptyMessage: "Elektro-L5 is in commissioning at 76°E. Broadcasts are sporadic, clustered around 08:00 UTC, and the first-light attempt on 2026-05-17 yielded no decoded frames. Images appear here once the bird is reliably transmitting and the chain locks.",
+    instrumentNumeral: "III",
+    instrumentLabel: "L-band · Elektro-L5",
+    emptyMessage: "Elektro-L5 is in commissioning at 76°E. Broadcasts are sporadic, clustered around 08:00 UTC, and the 2026-05-17 attempt yielded no decoded frames. Images appear here once the satellite transmits reliably and the chain locks.",
     entries: all.filter((p) => sectionKey(p.data.satellite) === "elektro-l5"),
   },
   {
     id: "meteor-m2-4",
     numeral: "III",
     label: "METEOR M2-4",
+    officialUrl: "https://en.wikipedia.org/wiki/Meteor-M",
     target: "METEOR-M N2-4 (and N2-3) · polar LEO",
     band: "VHF · 137.900 MHz",
-    instrumentHref: "/instrument#i-v-dipole",
+    instrumentHref: "/instrument#iv-v-dipole",
+    instrumentNumeral: "IV",
+    instrumentLabel: "137 MHz V-dipole",
     entries: all.filter((p) => sectionKey(p.data.satellite) === "meteor-m2-4"),
   },
 ];
@@ -87,10 +102,10 @@ const totalImaged = all.length;
             <span class="plates__title-emphasis">By satellite, then by time.</span>
           </h1>
           <p class="plates__lede">
-            Every frame this rig has filed, grouped by which bird it came from. Each
-            section is fed by one configured chain; clicking the section header takes
-            you to that instrument's page. Failed captures and unlocked passes are
-            kept in the <a href="/log">operational log</a>, not here.
+            Every decoded frame this rig has filed, grouped by source satellite. Each
+            section is fed by one configured chain; the section header links to that
+            instrument's page. Failed captures and unlocked passes are kept in the
+            <a href="/log">operational log</a>, not here.
           </p>
         </div>
       </header>
@@ -121,10 +136,14 @@ const totalImaged = all.length;
                 {s.band}
                 <span class="plates__section-kicker-sep" aria-hidden="true">·</span>
                 <a href={s.instrumentHref} class="plates__section-instrument-link">
-                  Instrument {s.numeral} ↗
+                  Instrument {s.instrumentNumeral} · {s.instrumentLabel} ↗
                 </a>
               </span>
-              <h2 class="plates__section-title">{s.label}</h2>
+              <h2 class="plates__section-title">
+                <a class="plates__section-title-link" href={s.officialUrl} rel="noopener" target="_blank">
+                  {s.label}<span class="plates__section-title-arrow" aria-hidden="true">↗</span>
+                </a>
+              </h2>
               <p class="plates__section-target">{s.target}</p>
             </div>
             <span class="plates__section-count">
@@ -344,6 +363,24 @@ const totalImaged = all.length;
     letter-spacing: var(--tracking-display);
     color: var(--color-ink);
     font-feature-settings: var(--features-display);
+  }
+  .plates__section-title-link {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.2em;
+    transition: color 100ms ease;
+  }
+  .plates__section-title-link:hover { color: var(--color-accent); }
+  .plates__section-title-arrow {
+    font-size: 0.42em;
+    color: var(--color-ink-faint);
+    transition: color 100ms ease, transform 200ms cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  .plates__section-title-link:hover .plates__section-title-arrow {
+    color: var(--color-accent);
+    transform: translate(0.15em, -0.15em);
   }
   .plates__section-target {
     margin-top: var(--space-3);

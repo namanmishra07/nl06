@@ -34,8 +34,8 @@ const log = all.slice(0, LOG_HOME_ROWS);
 const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
 ---
 <BaseLayout
-  title="gs.nl06 — Observations from a Lucknow rooftop"
-  description="A one-metre offset dish, a helix feed, and an RTL-SDR pointed at GK-2A. Plates and a log."
+  title="gs.nl06 — Observations from the ground station"
+  description="A hand-built 60 cm parabolic trough and an RTL-SDR pointed at GK-2A. Plates and a log."
   itemNumber="№ GS01"
 >
   <!-- HERO ──────────────────────────────────────────────────────── -->
@@ -70,18 +70,18 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
 
       <div class="gs-hero__lede">
         <span class="gs-hero__eyebrow">
-          A standing log of one instrument
+          Capture log, one instrument
           <span aria-hidden="true">·</span>
           {fmtDate(hero.data.captured_at)}
         </span>
         <h1 class="gs-hero__head">
-          <span class="gs-hero__head-line">A dish.</span>
-          <span class="gs-hero__head-emphasis">A satellite. A log.</span>
+          <span class="gs-hero__head-line">One dish,</span>
+          <span class="gs-hero__head-emphasis">one satellite, one log.</span>
         </h1>
         <p class="gs-hero__sub">
-          A one-metre offset dish on a rooftop in Lucknow, pointed thirty
-          degrees up and a hundred and twelve east of true. It listens to a
-          single geostationary weather satellite and writes the pictures down.
+          A hand-built 60&nbsp;cm parabolic trough, pointed at elevation
+          25&deg;, azimuth 103&deg; true. It receives one geostationary weather
+          satellite and decodes the images.
         </p>
 
         <dl class="gs-hero__counts">
@@ -99,7 +99,7 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
           </div>
           <div class="gs-hero__count gs-hero__count--accent">
             <dt>Pointing</dt>
-            <dd class="tabular">112.6° / 29.6°</dd>
+            <dd class="tabular">103° / 25°</dd>
           </div>
         </dl>
       </div>
@@ -109,11 +109,11 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
   <!-- GALLERY ────────────────────────────────────────────────────── -->
   <Container size="wide">
     <section class="gs-gallery" aria-labelledby="recent">
-      <header class="gs-banner">
+      <header class="gs-banner reveal">
         <span class="gs-banner__num">II</span>
         <h2 id="recent" class="gs-banner__title">Recent plates</h2>
         <span class="gs-banner__rule" aria-hidden="true"></span>
-        <span class="gs-banner__count">{gallery.length} preceding the cover</span>
+        <span class="gs-banner__count">{gallery.length} after the cover</span>
       </header>
 
       <ol class="gs-gallery__grid">
@@ -121,7 +121,7 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
           const romanIdx = i + 2; // hero is I, gallery starts at II
           const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"][romanIdx - 1];
           return (
-            <li class="gs-gallery__cell">
+            <li class="gs-gallery__cell reveal" style={`--reveal-i:${i}`}>
               <a class="gs-gallery__link" href={`/plates#${p.id}`}>
                 <figure class="gs-gallery__figure">
                   <picture>
@@ -148,7 +148,7 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
 
     <!-- INSTRUMENT preview ─────────────────────────────────────── -->
     <section class="gs-instrument" aria-labelledby="instrument">
-      <header class="gs-banner">
+      <header class="gs-banner reveal">
         <span class="gs-banner__num">III</span>
         <h2 id="instrument" class="gs-banner__title">The instruments</h2>
         <span class="gs-banner__rule" aria-hidden="true"></span>
@@ -156,12 +156,12 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
       </header>
       <SignalChain
         nodes={[
-          { mark: "I",   name: "Antenna",    spec: "1 m parabolic",         spec2: "az 112.6°  ·  el 29.6°" },
-          { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",    spec2: "1692.14 MHz centre" },
-          { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",         spec2: "LNA + SAW filter, ext. PSU" },
-          { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  2.4 Msps" },
-          { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "pipeline · gk2a_lrit" },
-          { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",     spec2: "blue underlay  ·  haze 0.6" },
+          { mark: "I",   name: "Reflector",  spec: "60×60 cm parabolic trough", spec2: "f = 10 cm  ·  Al-foil on plastic film" },
+          { mark: "II",  name: "Feed",       spec: "λ/2 linear dipole",         spec2: "8.9 cm at 1.69 GHz" },
+          { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",             spec2: "LNA + SAW filter, ext. PSU" },
+          { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",           spec2: "cu8  ·  2.4 Msps" },
+          { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",          spec2: "pipeline · gk2a_lrit_aggressive" },
+          { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",         spec2: "blue underlay  ·  haze 0.6" },
         ]}
         dividerAfter={3}
         caption="Featured chain: the L-band path pointed at GK-2A. Two more instruments listed on the dedicated page."
@@ -175,14 +175,14 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
 
     <!-- LOG ────────────────────────────────────────────────────── -->
     <section class="gs-log" id="log" aria-labelledby="log-head">
-      <header class="gs-banner">
+      <header class="gs-banner reveal">
         <span class="gs-banner__num">IV</span>
         <h2 id="log-head" class="gs-banner__title">Operational log</h2>
         <span class="gs-banner__rule" aria-hidden="true"></span>
         <span class="gs-banner__count">Last {LOG_HOME_ROWS} sessions</span>
       </header>
 
-      <table class="gs-log__table">
+      <table class="gs-log__table reveal">
         <thead>
           <tr>
             <th class="gs-log__col-num">No.</th>
@@ -506,6 +506,9 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
     line-height: var(--leading-snug);
   }
   .gs-gallery__link:hover .gs-gallery__line { color: var(--color-ink); }
+  .gs-gallery__link:focus-visible { outline: none; }
+  .gs-gallery__link:focus-visible .gs-gallery__figure { border-color: var(--color-accent); }
+  .gs-gallery__link:focus-visible .gs-gallery__line { color: var(--color-ink); }
 
   .gs-gallery__more {
     margin-top: var(--space-8);
@@ -621,6 +624,34 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
     border-radius: 2px;
   }
 
+  /* Entrance choreography — hero rises on load; section banners, gallery
+     cells, and the log table stagger in as they scroll into view. The
+     gallery cells use --reveal-i for an inter-cell stagger. JS arms it
+     (.js-reveal on <html>), so with JS disabled everything renders
+     visible; prefers-reduced-motion suppresses all of it. */
+  @keyframes gs-rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .gs-hero__figure,
+    .gs-hero__lede {
+      opacity: 0;
+      animation: gs-rise 720ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    }
+    .gs-hero__figure { animation-delay: 60ms; }
+    .gs-hero__lede   { animation-delay: 200ms; }
+
+    .js-reveal .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 620ms ease,
+                  transform 620ms cubic-bezier(0.2, 0.7, 0.3, 1);
+      transition-delay: calc(var(--reveal-i, 0) * 80ms);
+    }
+    .js-reveal .reveal.is-in { opacity: 1; transform: none; }
+  }
+
   /* responsive ─────────────────────────────────────────────────── */
   @media (max-width: 900px) {
     .gs-hero :global(.gs-hero__inner) {
@@ -644,3 +675,25 @@ const overflow = Math.max(0, all.length - LOG_HOME_ROWS);
     .gs-log__col-band, .gs-log__col-snr { display: none; }
   }
 </style>
+
+<script>
+  // Stagger sections in as they enter the viewport. Arming is JS-gated,
+  // so with JS disabled every .reveal element renders visible.
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const targets = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
+  if (targets.length && !reduced && "IntersectionObserver" in window) {
+    document.documentElement.classList.add("js-reveal");
+    const io = new IntersectionObserver(
+      (records, obs) => {
+        records.forEach((rec) => {
+          if (rec.isIntersecting) {
+            rec.target.classList.add("is-in");
+            obs.unobserve(rec.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.12 }
+    );
+    targets.forEach((el) => io.observe(el));
+  }
+</script>

@@ -8,6 +8,6 @@ steps:
   - "As net metering tariffs decline (discom resistance to peak-rate buy-back), homeowners look at on-site storage to time-shift consumption."
   - "Battery vendors push residential 5–15 kWh systems with payback claims of 5–7 years."
   - "Infrastructure gap: integrated solar-plus-storage installer network with financing."
-killed_reason: "Killed 2026-03. Net metering rules vary by state but tariff structures uniformly hostile to residential storage payback. Real economics 12+ year payback in most states. Wrong layer — the buyer that pays first is industrial, not residential. Folded into the substation-telemetry chain."
+killed_reason: "Killed 2026-03. Net metering rules vary by state, but tariff structures are uniformly hostile to residential storage payback — 12+ years in most states. The buyer that pays first is industrial, not residential. Folded into the substation-telemetry chain."
 draft: false
 ---

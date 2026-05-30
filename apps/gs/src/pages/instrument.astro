@@ -31,12 +31,104 @@ interface InstrumentSpec {
 
 const instruments: InstrumentSpec[] = [
   {
-    id: "i-v-dipole",
+    id: "i-l-band-gk2a-trough",
     numeral: "I",
+    name: "L-band chain · GK-2A · parabolic trough",
+    target: "GEO-KOMPSAT-2A",
+    targetStatus: "Geostationary, 128.2°E · current chain",
+    band: "L · 1692.140 MHz",
+    lede: "A 60 × 60 cm cylindrical parabolic trough, hand-built from cardboard formers, a nichrome-wire skeleton, a tensioned plastic-film skin and an aluminium-foil reflector, with a linear half-wave dipole at the focal line. Aimed at GK-2A. Full-disk images on this site dated 23 May 2026 or later were captured with this instrument.",
+    nodes: [
+      { mark: "I",   name: "Reflector",  spec: "60×60 cm parabolic trough", spec2: "f = 10 cm  ·  Al-foil on plastic film" },
+      { mark: "II",  name: "Feed",       spec: "λ/2 linear dipole",         spec2: "8.9 cm at 1.69 GHz  ·  parallel to spine" },
+      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",             spec2: "LNA + SAW filter, ext. PSU" },
+      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",           spec2: "cu8  ·  2.4 Msps  ·  gain 25 dB" },
+      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",          spec2: "pipeline · gk2a_lrit_aggressive" },
+      { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",         spec2: "geostationary projection · blue underlay" },
+    ],
+    dividerAfter: 3,
+    specs: [
+      { k: "Antenna",   v: "60 × 60 cm cylindrical parabolic trough, hand-built (23 May 2026)" },
+      { k: "Reflector", v: "Cardboard formers · nichrome wire skeleton · plastic-film skin · aluminium-foil surface" },
+      { k: "Feed",      v: "Linear half-wave dipole at the focal line (8.9 cm @ 1.69 GHz), parallel to the spine" },
+      { k: "Pointing",  v: "az 103° true · el 25° (→ 128.2°E geostationary)" },
+      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, externally powered; SDR bias-tee OFF)" },
+      { k: "Frequency", v: "1692.140 MHz (LRIT, BPSK 128 ksymb/s post-Viterbi 64 kbps)" },
+      { k: "Sample rate", v: "2.4 Msps cu8, --dc_block=true" },
+      { k: "Post",      v: "Sanchez geostationary projection · blue underlay · haze 0.6" },
+    ],
+    note: "GK-2A LRIT is right-hand circularly polarised; a linear dipole takes a fixed 3 dB cross-polarisation loss regardless of orientation. The trough's larger aperture partly compensates — the 24 May timelapse held lock for nine consecutive slots above the 1.5 dB Peak-SNR threshold this rig needs to decode. The cleanest recovery path is to swap the dipole for an RHCP helix feed at the same focal line; the trough geometry is unchanged.",
+    capturesHref: "/plates#gk-2a",
+    capturesLabel: "View captures from this instrument",
+    hasCaptures: true,
+  },
+  {
+    id: "ii-l-band-gk2a-helix",
+    numeral: "II",
+    name: "L-band chain · GK-2A · 12-turn helix",
+    target: "GEO-KOMPSAT-2A",
+    targetStatus: "Retired 23 May 2026 · superseded by Instrument I",
+    band: "L · 1692.140 MHz",
+    lede: "A 12-turn axial-mode helix wound for RHCP, on a 25 × 25 cm aluminium ground plane, hand-pointed. It produced the first decoded GK-2A frames on 22 May 2026. Replaced the next day by the parabolic trough at Instrument I; kept here for provenance.",
+    nodes: [
+      { mark: "I",   name: "Antenna",    spec: "12-turn axial helix, RHCP", spec2: "25×25 cm Al reflector  ·  hand-aimed" },
+      { mark: "II",  name: "Front-end",  spec: "SAWbird+ GOES",             spec2: "LNA + SAW filter, ext. PSU" },
+      { mark: "III", name: "Receiver",   spec: "RTL-SDR Blog V4",           spec2: "cu8  ·  2.4 Msps  ·  gain 25 dB" },
+      { mark: "IV",  name: "Decoder",    spec: "SatDump v2.0.0-α",          spec2: "pipeline · gk2a_lrit" },
+      { mark: "V",   name: "Composite",  spec: "Sanchez v1.0.26.1",         spec2: "geostationary projection · blue underlay" },
+    ],
+    dividerAfter: 2,
+    specs: [
+      { k: "Antenna",   v: "12-turn axial-mode helix, RHCP, hand-wound" },
+      { k: "Reflector", v: "25 × 25 cm aluminium ground plane" },
+      { k: "Pointing",  v: "az 103° true · el 25° (→ 128.2°E geostationary), hand-aimed" },
+      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU; bias-tee OFF)" },
+      { k: "Frequency", v: "1692.140 MHz (LRIT, BPSK 128 ksymb/s)" },
+      { k: "Sample rate", v: "2.4 Msps cu8, --dc_block=true" },
+      { k: "Status",    v: "Retired 23 May 2026; replaced by the parabolic trough at Instrument I" },
+    ],
+    note: "The helix matched GK-2A's RHCP downlink, so unlike the trough's linear dipole there was no 3 dB cross-polarisation loss in the link budget. The trade-off was capture area: a 25 × 25 cm helix collects less signal than a 60 × 60 cm parabolic surface, and the larger aperture was preferred. Result on this chain: 22 May 2026, 3 IR105 full-disk images at ~2.2 dB Peak SNR.",
+    capturesHref: "/plates#gk-2a",
+    capturesLabel: "View captures from this instrument (22 May 2026 plate)",
+    hasCaptures: true,
+  },
+  {
+    id: "iii-l-band-elektro",
+    numeral: "III",
+    name: "L-band chain · Elektro-L5",
+    target: "Elektro-L5",
+    targetStatus: "Geostationary, 76°E · commissioning",
+    band: "L · 1691.000 MHz",
+    lede: "The same parabolic trough and SAWbird+ front-end as Instrument I, repointed west towards the 76°E geostationary slot to receive Elektro-L5's LRIT broadcasts. L5 is in commissioning and transmits only sporadically.",
+    nodes: [
+      { mark: "I",   name: "Reflector",  spec: "60×60 cm parabolic trough", spec2: "shared with Instrument I, repointed" },
+      { mark: "II",  name: "Feed",       spec: "λ/2 linear dipole",         spec2: "8.9 cm at 1.69 GHz" },
+      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",             spec2: "LNA + SAW filter, ext. PSU" },
+      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",           spec2: "cu8  ·  2.4 Msps" },
+      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",          spec2: "pipeline · elektro_lrit" },
+      { mark: "VI",  name: "Composite",  spec: "Sanchez (planned)",         spec2: "geostationary · 76°E centred" },
+    ],
+    dividerAfter: 3,
+    specs: [
+      { k: "Antenna",   v: "60 × 60 cm parabolic trough (shared with Instrument I)" },
+      { k: "Feed",      v: "Linear half-wave dipole at the focal line" },
+      { k: "Pointing",  v: "Repointed west of GK-2A by ~52° in azimuth (target 76°E equator)" },
+      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU)" },
+      { k: "Frequency", v: "1691.000 MHz (LRIT)" },
+      { k: "Schedule",  v: "Sporadic — slots at :12/:27/:42/:57 UTC, mostly silent" },
+    ],
+    note: "L5 has been in commissioning since 2026-02-12, with broadcasts clustered around 08:00 UTC and rare outside that window. The first attempt on 2026-05-17 produced zero CADU — Viterbi never synced, and an FFT confirmed no signal in band. It is not yet known whether the antenna was off the bird, the polarisation sense was wrong, or L5 was not transmitting during that slot.",
+    capturesHref: "/plates#elektro-l5",
+    capturesLabel: "View captures (commissioning, no images yet)",
+    hasCaptures: false,
+  },
+  {
+    id: "iv-v-dipole",
+    numeral: "IV",
     name: "137 MHz V-dipole",
     target: "METEOR M2-4 (and M2-3)",
     band: "VHF · 137.900 MHz",
-    lede: "A pair of crossed half-wave elements on a rooftop pole, listening for the LRPT downlink as METEOR sweeps overhead. The simplest instrument on the roof — and the one that has produced the only polar-orbit imagery in the register so far.",
+    lede: "A pair of crossed half-wave elements on a rooftop pole, receiving the LRPT downlink during METEOR overpasses. The simplest chain on the rig, and the source of the only polar-orbit imagery in the register so far.",
     nodes: [
       { mark: "I",   name: "V-dipole",   spec: "Linear, ~1 m elements", spec2: "Pole, ~3.6 m, RHCP loss ~3 dB" },
       { mark: "II",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  1.024 Msps  ·  gain 25 dB" },
@@ -51,77 +143,48 @@ const instruments: InstrumentSpec[] = [
       { k: "Gain",      v: "RTL gain 25 dB (no physical LNA in chain)" },
       { k: "Decode",    v: "SatDump on NAS, --dc_block=true mandatory for cu8" },
     ],
-    note: "The V-dipole is linear and LRPT is circular, so there's an unavoidable ~3 dB cross-polarisation loss before anything else fails. The instrument's real failure mode isn't the polarisation though — it's the tuner gain. Pushing the R828D above 30 dB compresses the front end and raises the noise floor by 20+ dB; at 25 dB the rig is the quietest it has ever been measured.",
+    note: "The V-dipole is linear and LRPT is circular, so there is an unavoidable ~3 dB cross-polarisation loss. The dominant limit, though, is tuner gain rather than polarisation: pushing the R828D above 30 dB compresses the front end and raises the noise floor by 20+ dB. At 25 dB the rig is the quietest it has been measured.",
     capturesHref: "/plates#meteor-m2-4",
     capturesLabel: "View captures from this instrument",
     hasCaptures: true,
   },
   {
-    id: "ii-l-band-gk2a",
-    numeral: "II",
-    name: "L-band chain · GK-2A",
+    id: "v-l-band-gk2a-biquad",
+    numeral: "V",
+    name: "L-band chain · GK-2A · biquad on 1 m dish",
     target: "GEO-KOMPSAT-2A",
-    targetStatus: "Geostationary, 128.2°E",
+    targetStatus: "Geostationary, 128.2°E · Lucknow site",
     band: "L · 1692.140 MHz",
-    lede: "A one-metre offset dish on the rooftop, repurposed from a Ku-band TV setup, with a hand-wound RHCP helix at the focus and a SAWbird+ GOES doing the front-end work. Aimed thirty degrees up and 112° east of true. Decodes a full-disk Earth every ten minutes.",
+    lede: "The Lucknow L-band chain: a biquad feed in a tin-box reflector at the focus of a 1 m parabolic dish, pointed at GK-2A. This is the permanent-site build the 1 m dish was planned around — the trough and helix were the temporary Mumbai rigs that proved the link first. Build photographs are in the field record.",
     nodes: [
-      { mark: "I",   name: "Antenna",    spec: "1 m parabolic",         spec2: "az 112.6°  ·  el 29.6°" },
-      { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",    spec2: "1692.14 MHz centre" },
-      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",         spec2: "LNA + SAW filter, ext. PSU" },
-      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  2.4 Msps" },
-      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "pipeline · gk2a_lrit" },
-      { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",     spec2: "blue underlay  ·  haze 0.6" },
+      { mark: "I",   name: "Reflector",  spec: "1 m parabolic dish",       spec2: "100 cm aperture · prime focus" },
+      { mark: "II",  name: "Feed",       spec: "Biquad in tin-box cavity",  spec2: "linear pol · biscuit-tin reflector" },
+      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",             spec2: "LNA + SAW filter, ext. PSU" },
+      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",           spec2: "cu8  ·  2.4 Msps" },
+      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",          spec2: "pipeline · gk2a_lrit_aggressive" },
+      { mark: "VI",  name: "Composite",  spec: "Sanchez v1.0.26.1",         spec2: "geostationary projection · blue underlay" },
     ],
     dividerAfter: 3,
     specs: [
-      { k: "Antenna",   v: "1 m offset parabolic (ex-Ku TV)" },
-      { k: "Feed",      v: "3-turn RHCP helix, hand-wound" },
-      { k: "Pointing",  v: "az 112.6° true · el 29.6°" },
-      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU)" },
+      { k: "Antenna",   v: "1 m prime-focus parabolic dish (100 cm aperture), Lucknow site" },
+      { k: "Feed",      v: "Biquad (double-quad) at the dish focus, in a biscuit-tin reflector cavity" },
+      { k: "Polarisation", v: "Linear — fixed 3 dB cross-polarisation loss against GK-2A's RHCP downlink" },
+      { k: "Pointing",  v: "az 112.6° true · el 29.6° (Lucknow 26.85°N 80.95°E → 128.2°E geostationary)" },
+      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU; bias-tee OFF)" },
       { k: "Frequency", v: "1692.140 MHz (LRIT, BPSK 128 ksymb/s)" },
-      { k: "Sample rate", v: "2.4 Msps cu8" },
-      { k: "Post",      v: "Sanchez · geostationary projection · blue underlay" },
+      { k: "Sample rate", v: "2.4 Msps cu8, --dc_block=true" },
+      { k: "Also",      v: "The same dish repoints ~52° west to Elektro-L5 at 76°E" },
     ],
-    note: "The chain is shared between GK-2A and Elektro-L5 — only the pointing changes. SAWbird+ GOES is externally powered; the SDR's bias-tee must remain off. Beamwidth at L-band with the 1 m dish is roughly 12°, so a re-aim for any non-GK-2A target is a deliberate manual operation, not a click.",
-    capturesHref: "/plates#gk-2a",
-    capturesLabel: "View captures from this instrument",
-    hasCaptures: true,
-  },
-  {
-    id: "iii-l-band-elektro",
-    numeral: "III",
-    name: "L-band chain · Elektro-L5",
-    target: "Elektro-L5",
-    targetStatus: "Geostationary, 76°E · commissioning",
-    band: "L · 1691.000 MHz",
-    lede: "The same one-metre dish and helix-and-SAWbird front-end as Instrument II, repointed south-southwest at the 76°E geostationary slot. Listening for Elektro-L5's sporadic LRIT broadcasts during its commissioning window — currently silent more often than not.",
-    nodes: [
-      { mark: "I",   name: "Antenna",    spec: "1 m parabolic",         spec2: "az 190.9°  ·  el 58.0°" },
-      { mark: "II",  name: "Feed",       spec: "3-turn helix, RHCP",    spec2: "1691.000 MHz centre" },
-      { mark: "III", name: "Front-end",  spec: "SAWbird+ GOES",         spec2: "LNA + SAW filter, ext. PSU" },
-      { mark: "IV",  name: "Receiver",   spec: "RTL-SDR Blog V4",       spec2: "cu8  ·  2.4 Msps" },
-      { mark: "V",   name: "Decoder",    spec: "SatDump v2.0.0-α",      spec2: "pipeline · elektro_lrit" },
-      { mark: "VI",  name: "Composite",  spec: "Sanchez (planned)",     spec2: "geostationary · 76°E centred" },
-    ],
-    dividerAfter: 3,
-    specs: [
-      { k: "Antenna",   v: "1 m offset parabolic (shared with II)" },
-      { k: "Feed",      v: "3-turn RHCP helix" },
-      { k: "Pointing",  v: "az 190.9° true · el 58.0° (target 76°E equator)" },
-      { k: "Front-end", v: "Nooelec SAWbird+ GOES (LNA + SAW, ext. PSU)" },
-      { k: "Frequency", v: "1691.000 MHz (LRIT)" },
-      { k: "Schedule",  v: "Sporadic — slots at :12/:27/:42/:57 UTC, mostly silent" },
-    ],
-    note: "L5 has been in commissioning since 2026-02-12, with broadcasts clustered around 08:00 UTC and rarely lit outside that window. The first-light attempt on 2026-05-17 produced zero CADU — Viterbi never synced, FFT confirmed no signal in band — leaving the unanswered question of whether the dish was on the bird, the polarisation sense was wrong, or L5 simply wasn't transmitting during that slot.",
-    capturesHref: "/plates#elektro-l5",
-    capturesLabel: "View captures (commissioning, no images yet)",
+    note: "A biquad is linearly polarised, so like the trough's dipole it takes a fixed 3 dB cross-polarisation loss against GK-2A's right-hand circular downlink. The 1 m dish has roughly 2.5× the collecting area of the 60 cm Mumbai trough, which more than offsets that loss; the biscuit-tin box behind the biquad acts as a sub-reflector, tightening the feed pattern onto the dish. At a 1 m aperture the L-band beamwidth is only ~12°, so the dish has to be aimed far more precisely than the hand-pointed Mumbai rigs.",
+    capturesHref: "/build",
+    capturesLabel: "See the build photographs",
     hasCaptures: false,
   },
 ];
 ---
 <BaseLayout
   title="gs.nl06 — The instruments"
-  description="Three configured chains, three satellites. Antenna to composite, end to end."
+  description="Receive chains for three satellites, documented from antenna to composite."
   itemNumber="№ GS03"
 >
   <article class="inst">
@@ -130,19 +193,22 @@ const instruments: InstrumentSpec[] = [
         <div class="inst__rail">
           <span class="rail__label">Reference</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">Three chains</span>
+          <span class="rail__date">Five configurations</span>
         </div>
         <div class="inst__heading">
           <h1 class="inst__title">
             <span class="inst__title-line">The instruments.</span>
-            <span class="inst__title-emphasis">Three chains, three targets.</span>
+            <span class="inst__title-emphasis">Five configurations, three targets.</span>
           </h1>
           <p class="inst__lede dropcap-text">
-            The rig is not one antenna. It&rsquo;s three operating configurations of the
-            same rooftop &mdash; a V-dipole on a pole for the polar pass, a one-metre
-            offset dish aimed at GK-2A through the morning haze, and the same dish
-            repointed south-southwest when Elektro-L5 decides to broadcast. Each
-            configuration is its own instrument. Each instrument writes its own log.
+            The rig runs in five configurations &mdash; a hand-built
+            60&nbsp;cm parabolic trough currently aimed at GK-2A; the
+            12-turn helix it replaced on 23 May 2026, kept here for
+            provenance; the same trough repointed west for Elektro-L5; a
+            137&nbsp;MHz V-dipole on a pole for polar passes; and a biquad-fed
+            1&nbsp;m dish at the Lucknow site, also on GK-2A. Each configuration
+            is documented as a separate instrument below. Photographs of the
+            builds are in the <a href="/build">field record</a>.
           </p>
         </div>
       </header>
@@ -175,7 +241,7 @@ const instruments: InstrumentSpec[] = [
           <SignalChain
             nodes={inst.nodes}
             dividerAfter={inst.dividerAfter}
-            domainTags={["Rooftop · Lucknow", "NAS · /satellite"]}
+            domainTags={["Antenna · RF", "NAS · /satellite"]}
             caption={`The ${inst.name} chain, antenna to ${inst.nodes[inst.nodes.length - 1].name.toLowerCase()}.`}
           />
 
@@ -213,7 +279,7 @@ const instruments: InstrumentSpec[] = [
         <dl class="inst__ops-rows">
           <div class="inst__ops-row">
             <dt>Switching</dt>
-            <dd>Only one chain is wired to the RTL-SDR at a time. The SPDT switch the rig was designed around is not yet installed, so moving between instruments is a manual coax swap and, for II&ndash;III, a physical re-aim.</dd>
+            <dd>Only one chain is wired to the RTL-SDR at a time. The SPDT switch the rig was designed around is not yet installed, so moving between instruments is a manual coax swap and, for I&ndash;II, a physical re-aim.</dd>
           </div>
           <div class="inst__ops-row">
             <dt>Cadence</dt>

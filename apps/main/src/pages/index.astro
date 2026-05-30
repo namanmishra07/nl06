@@ -2,63 +2,71 @@
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
 
+type Sigil = "globe" | "orbit" | "register";
+
 interface Sub {
   numeral: string;
-  label: string;
-  href: string;
-  kicker: string;
-  blurb: string;
+  name:    string;
+  code:    string;
+  href:    string;
+  blurb:   string;
+  sigil:   Sigil;
 }
 
 const subdomains: Sub[] = [
   {
     numeral: "I",
-    label:   "gs.",
+    name:    "Ground station",
+    code:    "gs.nl06.com",
     href:    "https://gs.nl06.com",
-    kicker:  "The instrument",
-    blurb:   "A hand-built 60 cm parabolic trough on a Mumbai balcony, pointed at GK-2A. Decodes a full-disk Earth every ten minutes. Logs go straight into the index.",
+    blurb:   "Live weather-satellite imagery, decoded from a small dish as it comes down. A new full-Earth frame every ten minutes.",
+    sigil:   "globe",
   },
   {
     numeral: "II",
-    label:   "ssa.",
+    name:    "Satellite tracker",
+    code:    "ssa.nl06.com",
     href:    "https://ssa.nl06.com",
-    kicker:  "The watch",
-    blurb:   "Satellites that maneuvered, detected from public orbital data.",
+    blurb:   "Which satellites have shifted orbit recently, derived from public tracking data.",
+    sigil:   "orbit",
   },
   {
     numeral: "III",
-    label:   "auctionhouse.",
+    name:    "Government auctions",
+    code:    "auctionhouse.nl06.com",
     href:    "https://auctionhouse.nl06.com",
-    kicker:  "The register",
-    blurb:   "What the Government of India is selling on MSTC, normalised into a single daily register. Backend in development.",
+    blurb:   "What the Indian government is selling at public auction, gathered into a single daily register.",
+    sigil:   "register",
   },
   // Temporarily off the published list (2026-05-28); code retained. To
   // restore: un-comment these two blocks and renumber.
   // {
   //   numeral: "—",
-  //   label:   "chains.",
+  //   name:    "Consequence chains",
+  //   code:    "chains.nl06.com",
   //   href:    "https://chains.nl06.com",
-  //   kicker:  "The reasoning",
-  //   blurb:   "Macro shifts traced four levels down. Live, killed, and the few I'm still resolving. The killed ones are the more useful read.",
+  //   blurb:   "Macro shifts traced four levels down. Live, killed, and the few I'm still resolving.",
+  //   sigil:   "register",
   // },
   // {
   //   numeral: "—",
-  //   label:   "reading.",
+  //   name:    "Reading notes",
+  //   code:    "reading.nl06.com",
   //   href:    "https://reading.nl06.com",
-  //   kicker:  "The intake",
-  //   blurb:   "A note every time something I read shifts how I think. One per source. RSS, no archive of half-thoughts.",
+  //   blurb:   "A note every time something I read shifts how I think. One per source.",
+  //   sigil:   "register",
   // },
 ];
 
 const plate = {
   number: "I",
   title:  "GK-2A · IR 105 channel",
-  body:   "Full-disk Earth, recovered through a 60 cm parabolic trough on a Mumbai balcony at 19:20 UTC on 24 May 2026 — closing frame of a fourteen-chunk timelapse.",
+  body:   "60-cm parabolic dish, RTL-SDR. May 24, 2026 · 19:20 UTC.",
 };
 ---
 <BaseLayout
   title="NL06 — A Field Notebook"
-  description="An index of running instruments and the notes that go with them. Built from one room in Lucknow."
+  description="An index of running instruments and the notes that go with them."
   itemNumber="№ 001"
 >
   <!-- HERO ──────────────────────────────────────────────────── -->
@@ -71,14 +79,17 @@ const plate = {
           Vol. I, 2026
         </span>
         <h1 class="hero__head">
-          <span class="hero__head-line">An index of</span>
-          <span class="hero__head-emphasis">things that work.</span>
+          <span class="hero__head-emphasis">Live work.</span>
         </h1>
         <p class="hero__sub">
-          Each subdomain below is a tool that runs &mdash; built and observed from
-          one room in Lucknow, written up as it goes. The work is the artefact;
-          this is where the artefact is kept.
+          Each entry below is a working system.
         </p>
+
+        <a class="hero__scroll" href="#contents" aria-label="Scroll to the index">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="7 10, 12 15, 17 10" />
+          </svg>
+        </a>
       </div>
 
       <figure class="hero__plate">
@@ -91,7 +102,7 @@ const plate = {
             <source srcset="/hero/gk2a-20260524-1920-sanchez.webp" type="image/webp" />
             <img
               src="/hero/gk2a-20260524-1920-sanchez.png"
-              alt="GK-2A full-disk Earth, IR105 channel, captured from Mumbai at 19:20 UTC on 24 May 2026."
+              alt="GK-2A full-disk Earth, IR105 channel, captured at 19:20 UTC on 24 May 2026."
               loading="eager"
               fetchpriority="high"
             />
@@ -100,26 +111,63 @@ const plate = {
         <figcaption class="hero__cap">
           <span class="hero__cap-eyebrow">Plate {plate.number}  ·  {plate.title}</span>
           <span class="hero__cap-body">{plate.body}</span>
+          <a
+            class="hero__cap-link"
+            href="/hero/gk2a-20260524-1920-sanchez.png"
+            target="_blank"
+            rel="noopener"
+          >View full PNG ↗</a>
         </figcaption>
       </figure>
     </Container>
   </section>
 
   <!-- TABLE OF CONTENTS ──────────────────────────────────────── -->
-  <section class="contents">
+  <section class="contents" id="contents">
     <Container size="wide" class="contents__inner">
+      <header class="contents__rubric">
+        <span class="contents__rubric-label">Currently running</span>
+        <span class="contents__rubric-meta">{subdomains.length} instruments</span>
+      </header>
       <ol class="contents__list">
         {subdomains.map((s, i) => (
-          <li class="entry">
+          <li class="entry" style={`--reveal-i:${i}`}>
             <a class="entry__link" href={s.href}>
-              <span class="entry__kicker">{s.kicker}</span>
               <span class="entry__folio" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
-              <span class="entry__num" aria-hidden="true">{s.numeral}</span>
+
+              <span class="entry__sigil" aria-hidden="true">
+                {s.sigil === "globe" && (
+                  <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round">
+                    <circle cx="22" cy="22" r="16" />
+                    <ellipse cx="22" cy="22" rx="16" ry="6" />
+                    <line x1="22" y1="6" x2="22" y2="38" />
+                  </svg>
+                )}
+                {s.sigil === "orbit" && (
+                  <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round">
+                    <g transform="rotate(-22 22 22)">
+                      <ellipse cx="22" cy="22" rx="17" ry="7" />
+                    </g>
+                    <circle cx="37" cy="16" r="1.8" fill="currentColor" stroke="none" />
+                  </svg>
+                )}
+                {s.sigil === "register" && (
+                  <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round">
+                    <rect x="9" y="8" width="26" height="28" />
+                    <line x1="9" y1="15" x2="35" y2="15" />
+                    <line x1="14" y1="22" x2="30" y2="22" />
+                    <line x1="14" y1="27" x2="30" y2="27" />
+                    <line x1="14" y1="32" x2="25" y2="32" />
+                  </svg>
+                )}
+              </span>
+
               <div class="entry__body">
-                <span class="entry__title">
-                  {s.label}
+                <h2 class="entry__title">
+                  {s.name}
                   <span class="entry__arrow" aria-hidden="true">↗</span>
-                </span>
+                </h2>
+                <span class="entry__code">{s.code}</span>
                 <p class="entry__blurb">{s.blurb}</p>
               </div>
             </a>
@@ -143,6 +191,43 @@ const plate = {
     padding-bottom: var(--space-12);
     background: #000;
     color: var(--color-paper);
+  }
+
+  /* Scroll cue — bobbing chevron tucked under the lede, near the
+     headline. Click smooth-scrolls to the index section. */
+  .hero__scroll {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: var(--space-8);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--color-paper) 35%, transparent);
+    color: var(--color-paper);
+    text-decoration: none;
+    animation: hero-bob 2.4s ease-in-out infinite;
+    transition: border-color 200ms ease, background-color 200ms ease;
+  }
+  .hero__scroll svg {
+    width: 26px;
+    height: 26px;
+    display: block;
+  }
+  .hero__scroll:hover {
+    border-color: var(--color-paper);
+    background-color: color-mix(in srgb, var(--color-paper) 10%, transparent);
+  }
+  .hero__scroll:focus-visible {
+    outline: 2px solid var(--color-paper);
+    outline-offset: 3px;
+  }
+  @keyframes hero-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(6px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero__scroll { animation: none; }
   }
   .hero :global(.hero__inner) {
     display: grid;
@@ -208,7 +293,6 @@ const plate = {
     height: auto;
     max-height: 60vh;
     object-fit: contain;
-    /* No border — image edges dissolve into the black strip. */
   }
   .hero__cap {
     margin-top: var(--space-3);
@@ -235,6 +319,21 @@ const plate = {
     color: var(--color-ink-faint);
     line-height: var(--leading-normal);
   }
+  .hero__cap-link {
+    grid-column: 2;
+    justify-self: start;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-paper);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-paper) 40%, transparent);
+    padding-bottom: 1px;
+    transition: border-color 100ms ease, opacity 100ms ease;
+  }
+  .hero__cap-link:hover { border-color: var(--color-paper); opacity: 0.85; }
 
   /* CONTENTS ────────────────────────────────────────────────────── */
   .contents {
@@ -242,10 +341,9 @@ const plate = {
     padding-bottom: var(--space-16);
   }
   .contents__list {
-    margin-top: var(--space-8);
+    margin-top: var(--space-6);
     list-style: none;
     padding: 0;
-    border-top: 1px solid var(--color-rule);
   }
   .entry {
     margin: 0;
@@ -253,52 +351,57 @@ const plate = {
   }
   .entry + .entry { margin-top: 0; }
   .entry__link {
+    position: relative;
     display: grid;
     grid-template-columns: var(--width-marginalia) minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     column-gap: var(--space-8);
     row-gap: var(--space-4);
-    align-items: baseline;
+    align-items: start;
     padding: var(--space-8) 0;
     text-decoration: none;
     color: var(--color-ink);
-    transition: color 100ms ease;
-  }
-  .entry__kicker {
-    grid-column: 2;
-    grid-row: 1;
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
+    transition: color 100ms ease, background-color 160ms ease;
   }
   .entry__folio {
     grid-column: 3;
     grid-row: 1;
     justify-self: end;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+    font-feature-settings: var(--features-tabular);
+    font-weight: 500;
   }
-  .entry__num {
+
+  /* Sigil — 44px monochrome line-art mark in the marginalia gutter.
+     Replaces the Roman numeral. Picks up the entry's ink-soft tone by
+     default; lifts to the accent on hover, mirroring the title. */
+  .entry__sigil {
     grid-column: 1;
     grid-row: 2;
-    font-family: var(--font-serif);
-    font-weight: 800;
-    font-size: var(--type-display);
-    line-height: 0.85;
-    letter-spacing: var(--tracking-jumbo);
-    color: var(--color-accent);
-    font-feature-settings: var(--features-display);
+    width: 44px;
+    height: 44px;
+    color: var(--color-ink-soft);
+    transition: color 100ms ease;
   }
+  .entry__sigil svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
   .entry__body {
     grid-column: 2 / -1;
     grid-row: 2;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
   }
   .entry__title {
+    margin: 0;
     font-family: var(--font-serif);
     font-weight: 700;
     font-size: var(--type-h1);
@@ -316,15 +419,68 @@ const plate = {
     transition: color 100ms ease, transform 200ms cubic-bezier(0.2, 0.7, 0.4, 1);
     transform: translate(0, 0);
   }
+  .entry__code {
+    font-family: var(--font-sans);
+    font-size: var(--type-meta);
+    letter-spacing: var(--tracking-meta);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
   .entry__blurb {
-    margin-top: var(--space-2);
+    margin: 0;
     font-family: var(--font-serif);
     font-size: var(--type-body);
     line-height: var(--leading-prose);
     color: var(--color-ink-soft);
     max-width: 38rem;
   }
-  .entry__folio {
+  .entry__link:hover .entry__title { color: var(--color-accent); }
+  .entry__link:hover .entry__arrow { color: var(--color-accent); transform: translate(0.1em, -0.1em); }
+  .entry__link:hover .entry__sigil { color: var(--color-accent); }
+
+  /* Hover/focus affordance — faint accent wash + a marginal accent tick
+     in the page gutter, so a whole row reads as one tappable object. */
+  .entry__link::before {
+    content: "";
+    position: absolute;
+    left: calc(-1 * var(--space-4));
+    top: var(--space-6);
+    bottom: var(--space-6);
+    width: 2px;
+    background: var(--color-accent);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  .entry__link:hover { background-color: color-mix(in srgb, var(--color-accent) 4%, transparent); }
+  .entry__link:hover::before { transform: scaleY(1); }
+  .entry__link:hover .entry__folio { color: var(--color-accent); }
+  .entry__link:focus-visible {
+    outline: none;
+    background-color: color-mix(in srgb, var(--color-accent) 5%, transparent);
+  }
+  .entry__link:focus-visible::before { transform: scaleY(1); }
+  .entry__link:focus-visible .entry__title { color: var(--color-accent); }
+
+  /* Index rubric — a running header that labels the section and counts
+     what's live, reinforcing that these are operating systems. */
+  .contents__rubric {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .contents__rubric-label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .contents__rubric-meta {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
@@ -332,10 +488,36 @@ const plate = {
     color: var(--color-ink-faint);
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
-    /* grid placement already declared above; this rule carries typography */
   }
-  .entry__link:hover .entry__title { color: var(--color-accent); }
-  .entry__link:hover .entry__arrow { color: var(--color-accent); transform: translate(0.1em, -0.1em); }
+
+  /* Entrance choreography — hero rises on load; index entries stagger in
+     as they scroll into view (armed by JS, see <script> below). All of it
+     is suppressed under prefers-reduced-motion. */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero__lede,
+    .hero__plate {
+      opacity: 0;
+      animation: rise 720ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    }
+    .hero__lede  { animation-delay: 60ms; }
+    .hero__plate { animation-delay: 200ms; }
+
+    .contents.is-armed .entry {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 620ms ease,
+                  transform 620ms cubic-bezier(0.2, 0.7, 0.3, 1);
+      transition-delay: calc(var(--reveal-i, 0) * 80ms);
+    }
+    .contents.is-armed .entry.is-in {
+      opacity: 1;
+      transform: none;
+    }
+  }
 
   /* responsive ────────────────────────────────────────────────────── */
   @media (max-width: 900px) {
@@ -350,16 +532,47 @@ const plate = {
     .hero__sub  { font-size: var(--type-small); }
 
     .entry__link {
-      grid-template-columns: 4rem minmax(0, 1fr);
-      grid-template-rows: auto auto;
+      grid-template-columns: 44px minmax(0, 1fr);
+      grid-template-rows: auto auto auto;
       column-gap: var(--space-4);
       row-gap: var(--space-3);
       padding: var(--space-6) 0;
     }
-    .entry__kicker { grid-column: 1 / -1; grid-row: 1; }
-    .entry__num    { grid-column: 1;     grid-row: 2; font-size: var(--type-h1); }
+    .entry__sigil  { grid-column: 1;     grid-row: 2; }
     .entry__body   { grid-column: 2;     grid-row: 2; }
     .entry__title  { font-size: var(--type-h2); }
     .entry__folio  { display: none; }
   }
 </style>
+
+<script>
+  const cue = document.querySelector<HTMLAnchorElement>(".hero__scroll");
+  const target = document.querySelector<HTMLElement>("#contents");
+  if (cue && target) {
+    cue.addEventListener("click", (e) => {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  // Stagger the index entries in as they enter the viewport. Arming is
+  // JS-gated, so with JS disabled the entries simply render visible.
+  const contents = document.querySelector<HTMLElement>(".contents");
+  const entries = Array.from(document.querySelectorAll<HTMLElement>(".entry"));
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (contents && entries.length && !reduced && "IntersectionObserver" in window) {
+    contents.classList.add("is-armed");
+    const io = new IntersectionObserver(
+      (records, obs) => {
+        records.forEach((rec) => {
+          if (rec.isIntersecting) {
+            rec.target.classList.add("is-in");
+            obs.unobserve(rec.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.12 }
+    );
+    entries.forEach((el) => io.observe(el));
+  }
+</script>

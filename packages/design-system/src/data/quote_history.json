@@ -1,7 +1,25 @@
 {
-  "generated_at": "2026-05-28T05:48:45.048334+00:00",
-  "count": 47,
+  "generated_at": "2026-05-29T22:00:53.958698+00:00",
+  "count": 49,
   "entries": [
+    {
+      "date_ist": "2026-05-30",
+      "date_display": "May 30, 2026",
+      "quote": "Wisdom often lies not in the loudest voice, but in the quiet moments where understanding patiently unfolds.",
+      "author": "ChatGPT",
+      "author_key": "openai",
+      "author_url": "https://openai.com",
+      "ts_utc": "2026-05-29T22:00:53.952192+00:00"
+    },
+    {
+      "date_ist": "2026-05-29",
+      "date_display": "May 29, 2026",
+      "quote": "The mind that seeks certainty in all things mistakes the map for the territory it can never fully know.",
+      "author": "Claude",
+      "author_key": "claude",
+      "author_url": "https://www.anthropic.com",
+      "ts_utc": "2026-05-28T22:09:05.650763+00:00"
+    },
     {
       "date_ist": "2026-05-28",
       "date_display": "May 28, 2026",

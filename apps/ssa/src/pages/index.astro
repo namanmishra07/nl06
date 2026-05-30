@@ -67,7 +67,7 @@ const PLAIN_TAG: Record<string, string> = {
 ---
 <BaseLayout
   title="SSA — Live satellite tracker"
-  description="Satellite stalking from public orbital data: every maneuver detected in the last 30 days, in one console view."
+  description="Satellite maneuvers detected from public orbital data over the last 30 days, in one console view."
   pathname="/"
   itemNumber="№ 001"
 >
@@ -81,8 +81,8 @@ const PLAIN_TAG: Record<string, string> = {
           <span class="trackbar__lbl">Tracking</span>
           <span class="trackbar__sep">·</span>
           <span class="trackbar__title">
-            <span class="trackbar__title-pre">Satellites in</span>
-            <span class="trackbar__title-main">motion.</span>
+            <span class="trackbar__title-pre">Satellites that</span>
+            <span class="trackbar__title-main">maneuvered</span>
           </span>
         </div>
         <div class="trackbar__right">
@@ -100,9 +100,15 @@ const PLAIN_TAG: Record<string, string> = {
         </div>
       </header>
 
+      <p class="console-intro">
+        A satellite maneuver is a deliberate orbit change &mdash; a thruster firing.
+        This page compares public tracking data against an undisturbed orbit
+        prediction and lists every maneuver it finds in the last 30 days.
+      </p>
+
       {ordered.length === 0 ? (
         <p class="console-empty">
-          No usable maneuvers in the last 30 days. Pipeline may be mid-bootstrap.
+          No usable maneuvers in the last 30 days. The pipeline may still be bootstrapping.
         </p>
       ) : (
         <section class="console" aria-label="Maneuver console">
@@ -257,16 +263,16 @@ const PLAIN_TAG: Record<string, string> = {
       };
       const PLAIN_TAG = {
         raise: "Orbit raised", lower: "Orbit lowered",
-        deorbit: "Rapid altitude loss", plane_change: "Orbital plane shifted",
-        stationkeeping_ew: "Routine east-west adjustment",
-        stationkeeping_ns: "Routine north-south adjustment",
+        deorbit: "Altitude lowered", plane_change: "Orbital plane changed",
+        stationkeeping_ew: "Station-keeping (east-west)",
+        stationkeeping_ns: "Station-keeping (north-south)",
       };
       const TYPE_VERB = {
         raise: "raised its orbit", lower: "lowered its orbit",
-        deorbit: "dropped altitude fast",
-        plane_change: "shifted its orbital plane",
-        stationkeeping_ew: "nudged east-or-west",
-        stationkeeping_ns: "nudged north-or-south",
+        deorbit: "lowered its altitude",
+        plane_change: "changed its orbital plane",
+        stationkeeping_ew: "adjusted east-west",
+        stationkeeping_ns: "adjusted north-south",
       };
 
       // ── Language ────────────────────────────────────────────
@@ -278,11 +284,11 @@ const PLAIN_TAG: Record<string, string> = {
         return `high orbit (${(a / 1000).toFixed(0)}k km)`;
       }
       function plainSize(dv) {
-        if (dv < 0.05) return "a tiny nudge";
-        if (dv < 0.5)  return "a small move";
-        if (dv < 5)    return "a noticeable burn";
-        if (dv < 50)   return "a significant maneuver";
-        return "a major maneuver";
+        if (dv < 0.05) return "very small";
+        if (dv < 0.5)  return "small";
+        if (dv < 5)    return "moderate";
+        if (dv < 50)   return "large";
+        return "very large";
       }
       function plainDistance(km) {
         const abs = Math.abs(km);
@@ -591,12 +597,23 @@ const PLAIN_TAG: Record<string, string> = {
     border-bottom: 1px solid color-mix(in srgb, currentColor 40%, transparent);
   }
 
+  /* Standfirst — a plain explanation of what this page is, above the
+     console, in full sentences rather than a cryptic title alone. */
+  .console-intro {
+    margin: 0 0 var(--space-4);
+    max-width: 60rem;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-soft);
+  }
+
   /* ─── console grid ─── */
   .console {
     display: grid;
     grid-template-columns: 280px 1fr 300px;
     gap: var(--space-3);
-    height: calc(100vh - 220px);
+    height: calc(100vh - 268px);
     min-height: 560px;
     max-height: 760px;
   }

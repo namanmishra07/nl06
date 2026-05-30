@@ -20,8 +20,8 @@ const sourceLabel = (t: string) => ({
 }[t] ?? t);
 ---
 <BaseLayout
-  title="reading.nl06 — A Review Section"
-  description="Notes on what I'm reading. One per source, only when it shifts something."
+  title="reading.nl06 — Reading notes"
+  description="Notes on what I'm reading. One per source."
   itemNumber="№ R01"
 >
   <article class="reading">
@@ -30,24 +30,23 @@ const sourceLabel = (t: string) => ({
         <div class="reading__rail">
           <span class="rail__label">Index</span>
           <span class="rail__rule" aria-hidden="true"></span>
-          <span class="rail__date">Updated as it goes</span>
+          <span class="rail__date">Updated occasionally</span>
         </div>
 
         <div class="reading__heading">
           <h1 class="reading__title">
-            <span class="reading__title-line">Notes,</span>
-            <span class="reading__title-emphasis">one per source.</span>
+            <span class="reading__title-line">Reading</span>
+            <span class="reading__title-emphasis">notes.</span>
           </h1>
           <p class="reading__lede">
-            A standing record of what has moved a thought, set in chronological
-            descent. Each entry is one book, paper, or post and the specific
-            shift it caused. Nothing here is a review; everything here is a
-            citation with a margin note.
+            Notes on what I'm reading, newest first. Each entry is one book,
+            paper, or post and what I took from it. These are notes, not
+            reviews.
           </p>
           <p class="reading__meta">
             <span class="reading__meta-count tabular">{String(notes.length).padStart(2, "0")}</span>
             <span class="reading__meta-rule" aria-hidden="true"></span>
-            <span class="reading__meta-label">Entries on file</span>
+            <span class="reading__meta-label">Entries</span>
             <span class="reading__meta-sep" aria-hidden="true">·</span>
             <a class="reading__meta-link" href="/rss.xml">RSS feed</a>
           </p>

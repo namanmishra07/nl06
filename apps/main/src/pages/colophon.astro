@@ -17,7 +17,7 @@ const swatches: { name: string; var: string; use: string; hex: string }[] = [
 
 const typeScale: { token: string; size: string; sample: string }[] = [
   { token: "marginalia", size: "12 / 16", sample: "Updated 21·05·2026" },
-  { token: "meta",       size: "13 / 19", sample: "PLATE I · LUCKNOW" },
+  { token: "meta",       size: "13 / 19", sample: "PLATE I · GK-2A" },
   { token: "body",       size: "17 / 29", sample: "Set in Source Serif 4." },
   { token: "h3",         size: "22 / 28", sample: "A sub-section head." },
   { token: "h2",         size: "28 / 35", sample: "A section head, set serif." },
@@ -42,13 +42,12 @@ const typeScale: { token: string; size: string; sample: string }[] = [
         </div>
         <h1 class="colophon-page__title">
           <span class="cp__title-line">How this</span>
-          <span class="cp__title-emphasis">site is set.</span>
+          <span class="cp__title-emphasis">site is built.</span>
         </h1>
         <p class="colophon-page__epigraph">
-          A site set to be read, not scrolled past. The aesthetic is editorial,
-          the constraints are deliberate: one serif, one sans, one accent, no
-          shadows, no gradients, no images-as-background. What richness is here
-          is set, not painted.
+          The design is editorial, with a few deliberate constraints: one serif,
+          one sans, one accent, no shadows, no gradients, no images as
+          background.
         </p>
       </header>
 
@@ -69,7 +68,7 @@ const typeScale: { token: string; size: string; sample: string }[] = [
               stylistic alternates. Chrome &mdash; dateline, marginalia,
               section labels &mdash; uses <em>Inter</em> 400 / 500 / 600 at
               13&thinsp;px with wide tracking, lining tabular figures.
-              No third typeface. Restraint is the point.
+              No third typeface.
             </p>
           </div>
 
@@ -96,7 +95,7 @@ const typeScale: { token: string; size: string; sample: string }[] = [
         </header>
         <p class="section__lede">
           Background is a paper cream rather than white. Text is a slightly
-          cool near-black. One restrained accent &mdash; ink blue &mdash; carries
+          cool near-black. One accent &mdash; ink blue &mdash; is used for
           links, drop caps, hung folios, and the live-chain status mark.
         </p>
 
@@ -130,9 +129,8 @@ const typeScale: { token: string; size: string; sample: string }[] = [
             </p>
             <p>
               Deployed via Cloudflare Pages with custom domains on the apex and
-              four subdomains. Continuous deployment from
-              <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a>
-              &mdash; every push to <code>main</code> builds and ships.
+              four subdomains. Each build is a direct upload of the static
+              output &mdash; no Git-connected CI in the loop.
             </p>
           </div>
           <aside class="section__aside">
@@ -141,7 +139,7 @@ const typeScale: { token: string; size: string; sample: string }[] = [
               <div class="kv__row"><dt>Utility CSS</dt><dd>Tailwind 3 (preset disables shadow, gradient)</dd></div>
               <div class="kv__row"><dt>Package manager</dt><dd>pnpm 11</dd></div>
               <div class="kv__row"><dt>Hosting</dt><dd>Cloudflare Pages, four subdomains</dd></div>
-              <div class="kv__row"><dt>Source</dt><dd><a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a></dd></div>
+              <div class="kv__row"><dt>Deploy</dt><dd>Direct wrangler upload</dd></div>
             </dl>
           </aside>
         </div>
@@ -157,21 +155,21 @@ const typeScale: { token: string; size: string; sample: string }[] = [
           <div class="section__prose">
             <p>
               The full-disk Earth on the home page comes from
-              <a href="https://gs.nl06.com">gs.</a>, the rooftop ground
-              station in Lucknow. The receiver chain is a one-metre offset
-              dish, a 3-turn RHCP helix feed, a SAWbird+ GOES low-noise
-              amplifier, and an RTL-SDR. Decoding runs through SatDump;
-              post-processing through Sanchez.
+              <a href="https://gs.nl06.com">gs.</a>, the ground station. The
+              receiver chain is a hand-built 60&nbsp;cm parabolic trough, a
+              linear dipole feed, a SAWbird+ GOES low-noise amplifier, and an
+              RTL-SDR. Decoding runs through SatDump; post-processing through
+              Sanchez.
             </p>
             <p>
-              Captures are dated, plate-numbered, and signed off in the
-              station log before they appear on this site.
+              Captures are dated and plate-numbered, and logged at the station
+              before they appear on this site.
             </p>
           </div>
           <aside class="section__aside">
             <dl class="kv">
-              <div class="kv__row"><dt>Antenna</dt><dd>1 m offset dish</dd></div>
-              <div class="kv__row"><dt>Feed</dt><dd>3-turn RHCP helix</dd></div>
+              <div class="kv__row"><dt>Antenna</dt><dd>60 cm parabolic trough</dd></div>
+              <div class="kv__row"><dt>Feed</dt><dd>linear dipole</dd></div>
               <div class="kv__row"><dt>LNA</dt><dd>SAWbird+ GOES</dd></div>
               <div class="kv__row"><dt>SDR</dt><dd>RTL-SDR Blog V4</dd></div>
               <div class="kv__row"><dt>Decoder</dt><dd>SatDump</dd></div>
@@ -188,9 +186,9 @@ const typeScale: { token: string; size: string; sample: string }[] = [
           <h2 class="section__title">Provenance</h2>
         </header>
         <p class="section__lede">
-          If something on this site looks wrong, the source is in git.
-          <a href="https://github.com/namanmishra07/nl06" rel="noopener">github.com/namanmishra07/nl06</a>.
-          Issues, pull requests, and email at the address in the footer are all read.
+          If something on this site looks wrong, email me at the address in the
+          footer. The ground-station captures carry per-frame provenance at
+          <a href="https://gs.nl06.com">gs.</a>
         </p>
       </section>
 

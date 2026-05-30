@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import sqlite3
+from collections import Counter
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -47,13 +48,24 @@ from pathlib import Path
 WEBSITE_ROOT  = Path("/website")
 BACKEND_ROOT  = Path("/agents/auctionhouse-backend")
 AUCTIONS_DB   = BACKEND_ROOT / "data" / "auctions.db"
-CONTENT_DIR   = WEBSITE_ROOT / "apps" / "auctionhouse" / "src" / "content"
+APP_ROOT      = WEBSITE_ROOT / "apps" / "auctionhouse"
+CONTENT_DIR   = APP_ROOT / "src" / "content"
 LOTS_JSON     = CONTENT_DIR / "lots.json"
 META_JSON     = CONTENT_DIR / "meta.json"
+CATALOGUE_DIR = APP_ROOT / "public" / "catalogue"
 
 CF_TOKEN_PATH = Path.home() / ".config" / "nl06" / "cloudflare.token"
 CF_ACCOUNT_ID = "412810aff4761352d5c33b9257311f20"
 CF_PROJECT    = "nl06-auctionhouse"
+
+# MSTC has no GET endpoint for catalogue PDFs — only POST to
+# auction_detailed_report_pdf.jsp. We generate a one-line static HTML
+# shim per distinct auction at public/catalogue/<aid>.html that
+# auto-POSTs in the visitor's browser, so the title link lands on the
+# real PDF without us republishing it.
+MSTC_DETAIL_PDF_URL = "https://www.mstcecommerce.com/auctionhome/mstc/auction_detailed_report_pdf.jsp"
+MSTC_ANNEX_URL_TPL  = ("https://www.mstcecommerce.com/auctionhome/mstc/admin/upload/"
+                      "downAttachedFiles.jsp?FILE_ID={filename}&doc_type=attached_annex")
 
 # ── publish filter ───────────────────────────────────────────────────────────
 #
@@ -91,6 +103,12 @@ if _uniform_override is not None:
     PUBLISH_THRESHOLDS    = {k: _val for k in PUBLISH_THRESHOLDS}
     PRESTIGE_SELLER_FLOOR = _val
 
+# Max lots surfaced per (seller, interesting_category). A single high-volume
+# seller disposing of one consumable across dozens of near-identical lots (an
+# ordnance factory's webbing curios, say) would otherwise dominate the register
+# and make the scoring look undiscriminating. 0 disables the cap.
+MAX_PER_SELLER_CATEGORY = int(os.environ.get("AUCTIONHOUSE_MAX_PER_SELLER_CATEGORY", "3"))
+
 
 # ── DB read ──────────────────────────────────────────────────────────────────
 
@@ -109,7 +127,8 @@ def load_published_lots(conn: sqlite3.Connection) -> list[dict]:
                title, seller, seller_category, location,
                start_price_inr, emd_inr, close_at_utc, status,
                score, score_reason, interesting_category, confidence,
-               manual_override, editor_note
+               manual_override, editor_note, annexure_excerpts,
+               vision_condition
           FROM lots
          WHERE (manual_override = 'boost')
             OR (
@@ -222,6 +241,91 @@ def load_meta(conn: sqlite3.Connection, published_count: int) -> dict:
     }
 
 
+# ── dedupe + annexure helpers ────────────────────────────────────────────────
+
+
+def _auction_id(source: str, source_id: str) -> str:
+    """MSTC source_id is '<auction_id>-<sublot>/<seller-path>'; the auction_id
+    is everything before the first dash. Unknown sources fall back to the
+    full source_id (each lot becomes its own group)."""
+    if source == "mstc":
+        return source_id.split("-", 1)[0]
+    return source_id
+
+
+def dedupe_sublots(rows: list[dict]) -> list[dict]:
+    """Collapse rows sharing (source, auction_id, title) into one. The input
+    is already ordered by the publish-filter SQL (boosted, score, confidence,
+    close), so the first occurrence per group is the natural representative.
+    Adds `sublot_count` and `auction_id` to each emitted row."""
+    seen: dict[tuple, dict] = {}
+    out: list[dict] = []
+    for r in rows:
+        aid = _auction_id(r["source"], r["source_id"])
+        key = (r["source"], aid, r["title"])
+        if key in seen:
+            seen[key]["sublot_count"] += 1
+            continue
+        rep = dict(r, sublot_count=1, auction_id=aid)
+        seen[key] = rep
+        out.append(rep)
+    return out
+
+
+def collapse_seller_category(rows: list[dict], cap: int) -> tuple[list[dict], int]:
+    """Cap the number of lots shown per (seller, interesting_category) group so
+    one prolific seller's near-identical lots can't flood the register. Input is
+    already score-ordered, so the kept representatives are the strongest. Each
+    kept row gets `group_total`; the last kept rep of an over-cap group also gets
+    `group_more` (how many were collapsed) so the page can surface it — nothing
+    is dropped silently. Returns (kept_rows, dropped_count)."""
+    if cap <= 0:
+        return rows, 0
+    totals: Counter = Counter((r["seller"], r["interesting_category"]) for r in rows)
+    kept: list[dict] = []
+    kept_n: Counter = Counter()
+    last_idx: dict[tuple, int] = {}
+    dropped = 0
+    for r in rows:
+        key = (r["seller"], r["interesting_category"])
+        if kept_n[key] >= cap:
+            dropped += 1
+            continue
+        kept_n[key] += 1
+        kept.append(dict(r, group_total=totals[key]))
+        last_idx[key] = len(kept) - 1
+    for key, idx in last_idx.items():
+        kept[idx]["group_more"] = totals[key] - kept_n[key]
+    return kept, dropped
+
+
+def _parse_annexures(row: dict) -> list[dict]:
+    """Read annexure_excerpts JSON, return [{filename, url, excerpt_preview}].
+    URL is reconstructed from the canonical MSTC template — the adapter
+    doesn't persist it but the filename uniquely keys the endpoint."""
+    raw = row.get("annexure_excerpts")
+    if not raw:
+        return []
+    try:
+        items = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    out = []
+    for item in items or []:
+        fn = item.get("filename")
+        if not fn:
+            continue
+        url = item.get("url") or MSTC_ANNEX_URL_TPL.format(filename=fn)
+        excerpt = (item.get("excerpt") or "").strip()
+        empty = excerpt in ("", "(annexure empty)")
+        out.append({
+            "filename": fn,
+            "url":      url,
+            "has_text": not empty,
+        })
+    return out
+
+
 # ── JSON projection ──────────────────────────────────────────────────────────
 
 
@@ -229,11 +333,21 @@ def project_lot(row: dict) -> dict:
     """Drop adapter-internal fields. Keep what the Astro page renders.
     `note` is the editor's hand-written caption when present, otherwise
     the model's score_reason — same field on the page, different
-    provenance, which is fine for v1."""
+    provenance, which is fine for v1.
+
+    `source_url` is the in-site shim that auto-POSTs to MSTC for the
+    catalogue PDF; MSTC's deep-link (a generic forthcoming-auctions
+    page with a fragment anchor) is preserved on `mstc_listing_url`
+    as the search fallback."""
+    aid = row.get("auction_id") or _auction_id(row["source"], row["source_id"])
     return {
         "id":               f"{row['source']}-{row['source_id']}",
         "source":           row["source"],
-        "source_url":       row["source_url"],
+        "source_url":       f"/catalogue/{aid}.html" if row["source"] == "mstc"
+                              else row["source_url"],
+        "mstc_listing_url": row["source_url"],
+        "auction_id":       aid,
+        "sublot_count":     row.get("sublot_count", 1),
         "title":            row["title"],
         "seller":           row["seller"],
         "seller_category":  row["seller_category"],
@@ -248,7 +362,75 @@ def project_lot(row: dict) -> dict:
         "note":             row["editor_note"] or row["score_reason"],
         "note_is_editor":   bool(row["editor_note"]),
         "boosted":          row["manual_override"] == "boost",
+        "annexures":        _parse_annexures(row),
+        "vision_condition": row.get("vision_condition"),
+        "group_total":      row.get("group_total", 1),
+        "group_more":       row.get("group_more", 0),
     }
+
+
+# ── catalogue shim writer ────────────────────────────────────────────────────
+
+
+_SHIM_TPL = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MSTC auction {aid} — catalogue PDF</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  body {{ font-family: ui-serif, Georgia, serif; max-width: 36rem;
+         margin: 4rem auto; padding: 0 1rem; color: #1a1814;
+         background: #f7f3ec; }}
+  h1 {{ font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: .72rem; text-transform: uppercase; letter-spacing: .14em;
+        color: #7a6f5e; margin: 0 0 1.5em; font-weight: 600; }}
+  p {{ line-height: 1.55; font-size: 1rem; }}
+  code {{ font-family: ui-monospace, monospace; background: #ece4d2;
+          padding: .1em .35em; }}
+  .row {{ margin-top: 2rem; padding-top: 1rem;
+          border-top: 1px solid #d6cdb8; font-size: .9rem;
+          color: #5b5346; display: flex; gap: 1.2em; align-items: center; }}
+  button, a.btn {{ font: inherit; padding: .45rem .9rem; cursor: pointer;
+            background: #1a1814; color: #f7f3ec; border: 1px solid #1a1814;
+            text-decoration: none; }}
+  a {{ color: #6b3e1a; }}
+</style>
+</head>
+<body>
+<h1>auctionhouse.nl06 · catalogue handoff</h1>
+<p>Loading the catalogue PDF for MSTC auction <code>{aid}</code> from
+<code>mstcecommerce.com</code>&hellip; The PDF is served by MSTC over a POST
+endpoint, so this page hands the request off to your browser.</p>
+<form id="f" method="post" action="{detail_url}" target="_self">
+  <input type="hidden" name="auc" value="{aid}">
+</form>
+<div class="row">
+  <button onclick="document.getElementById('f').submit()">Open PDF</button>
+  <a href="https://www.mstcindia.co.in/">mstcindia.co.in</a>
+</div>
+<script>setTimeout(function(){{document.getElementById('f').submit();}}, 60);</script>
+</body>
+</html>
+"""
+
+
+def write_catalogue_shims(lots: list[dict], dest: Path) -> int:
+    """One static HTML per distinct MSTC auction. The Astro page links to
+    /catalogue/<aid>.html; the shim auto-submits a POST to MSTC's PDF
+    endpoint so the visitor lands on the real PDF without us hosting it.
+    Returns the number of files written. Removes stale shims first so
+    we don't leak files for auctions that have aged out."""
+    dest.mkdir(parents=True, exist_ok=True)
+    for existing in dest.glob("*.html"):
+        existing.unlink()
+    aids = {l["auction_id"] for l in lots if l["source"] == "mstc"}
+    for aid in sorted(aids):
+        (dest / f"{aid}.html").write_text(
+            _SHIM_TPL.format(aid=aid, detail_url=MSTC_DETAIL_PDF_URL)
+        )
+    return len(aids)
 
 
 # ── deploy ───────────────────────────────────────────────────────────────────
@@ -307,15 +489,24 @@ def main() -> int:
     conn = sqlite3.connect(f"file:{AUCTIONS_DB}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
 
-    rows         = load_published_lots(conn)
-    lots_payload = [project_lot(r) for r in rows]
-    meta_payload = load_meta(conn, len(lots_payload))
+    rows           = load_published_lots(conn)
+    raw_count      = len(rows)
+    deduped_rows   = dedupe_sublots(rows)
+    collapsed_rows, collapsed_dropped = collapse_seller_category(
+        deduped_rows, MAX_PER_SELLER_CATEGORY)
+    lots_payload   = [project_lot(r) for r in collapsed_rows]
+    meta_payload   = load_meta(conn, len(lots_payload))
+    meta_payload["counts"]["published_sublots"]        = raw_count
+    meta_payload["counts"]["collapsed_seller_category"] = collapsed_dropped
+    meta_payload["publish_filter"]["max_per_seller_category"] = MAX_PER_SELLER_CATEGORY
     conn.close()
 
     thr = PUBLISH_THRESHOLDS
     print(f"sync-auctionhouse: {meta_payload['counts']['active']} active lots, "
           f"{meta_payload['counts']['scored_active']} scored; "
-          f"{len(lots_payload)} clear publish filter "
+          f"{raw_count} clear publish filter → {len(deduped_rows)} after sublot dedupe "
+          f"→ {len(lots_payload)} after seller/category collapse "
+          f"(cap {MAX_PER_SELLER_CATEGORY}, dropped {collapsed_dropped}) "
           f"(arb≥{thr['arbitrage']} / niche≥{thr['niche-instrument']} / "
           f"prestige≥{thr['prestige-seller']} / curio≥{thr['curio']} / "
           f"prestige-seller≥{PRESTIGE_SELLER_FLOOR})")
@@ -326,8 +517,10 @@ def main() -> int:
 
     LOTS_JSON.write_text(json.dumps(lots_payload, indent=2, ensure_ascii=False) + "\n")
     META_JSON.write_text(json.dumps(meta_payload, indent=2, ensure_ascii=False) + "\n")
-    print(f"sync-auctionhouse: wrote {LOTS_JSON.relative_to(WEBSITE_ROOT)} "
-          f"and {META_JSON.relative_to(WEBSITE_ROOT)}")
+    n_shims = write_catalogue_shims(lots_payload, CATALOGUE_DIR)
+    print(f"sync-auctionhouse: wrote {LOTS_JSON.relative_to(WEBSITE_ROOT)}, "
+          f"{META_JSON.relative_to(WEBSITE_ROOT)}, "
+          f"and {n_shims} catalogue shims")
 
     if args.deploy:
         return deploy_auctionhouse()

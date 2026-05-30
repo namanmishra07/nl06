@@ -37,7 +37,7 @@ import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -131,6 +131,8 @@ def is_colorised(name: str) -> bool:
     n = name.lower()
     return any(k in n for k in ("sanchez", "redblue", "red_blue", "purple_yellow"))
 
+_GK2A_TS_RE = re.compile(r"(\d{8}T\d{6})Z")
+
 def find_image_for(entry: dict) -> Path | None:
     """Best-effort search for a decoded PNG matching one NDJSON entry."""
     skey = entry.get("satellite", "")
@@ -142,14 +144,33 @@ def find_image_for(entry: dict) -> Path | None:
 
     candidates: list[Path] = []
 
-    # GK-2A imagery lives under /satellite/images/gk-2a/{sanchez,raw}/
+    # GK-2A imagery lives under /satellite/images/gk-2a/{sanchez,raw}/.
+    # Image filenames embed the LRIT slot timestamp (when the satellite
+    # transmitted), not the capture-start time. Slots arrive on a ~10-min
+    # cadence and a typical capture is 15-30 min, so an image's timestamp
+    # is normally up to 30 min AFTER capture-start. Match anything in
+    # [aos - 2m, aos + 35m]; prefer Sanchez over raw, then larger file.
     if skey == "gk-2a":
+        lo = dt - timedelta(minutes=2)
+        hi = dt + timedelta(minutes=35)
+        gk2a_hits: list[Path] = []
         for variant in ("sanchez", "raw"):
             d = IMAGES_ROOT / "gk-2a" / variant
-            if d.exists():
-                for png in sorted(d.glob("*.png")):
-                    if ts_utc_compact in png.name:
-                        candidates.append(png)
+            if not d.exists():
+                continue
+            for png in d.glob("*.png"):
+                m = _GK2A_TS_RE.search(png.name)
+                if m:
+                    img_dt = datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+                    if lo <= img_dt <= hi:
+                        gk2a_hits.append(png)
+                elif ts_utc_compact in png.name:
+                    # legacy filename pattern (no Z-terminated ISO stamp)
+                    gk2a_hits.append(png)
+        def _rank(p: Path) -> tuple[int, int]:
+            return (0 if "sanchez" in p.parent.name else 1, -p.stat().st_size)
+        gk2a_hits.sort(key=_rank)
+        candidates.extend(gk2a_hits)
 
     # METEOR decoded products live under /satellite/images/meteor-<sat>/<date>/
     if skey.startswith("m2-"):
@@ -373,6 +394,21 @@ def main(argv: list[str]) -> int:
     for p in added:
         marker = "IMG" if p.get("image") else "log"
         print(f"  [{marker}] {p['id']:60}  {p['captured_at']}  {p['outcome']:14}")
+
+    # Hero promotion: the most-recent newly-added plate that has an
+    # image becomes the homepage hero, and any prior `hero: true` flag
+    # is cleared. This codifies "latest pushed = hero" so the curator
+    # doesn't have to hand-edit plates.json after every decode.
+    new_imaged = [p for p in added if p.get("image")]
+    if new_imaged:
+        new_imaged.sort(key=lambda p: p["captured_at"], reverse=True)
+        promoted = new_imaged[0]
+        for e in existing:
+            e.pop("hero", None)
+        for p in added:
+            p.pop("hero", None)
+        promoted["hero"] = True
+        print(f"sync-plates: promoting hero -> {promoted['id']}")
 
     if dry_run:
         print("sync-plates: --dry-run; not writing, no images copied.")

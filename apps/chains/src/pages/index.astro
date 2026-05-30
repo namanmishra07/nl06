@@ -41,14 +41,14 @@ all.forEach((c, i) => (numbering[c.id] = i + 1));
         <div class="chains-index__heading">
           <h1 class="chains-index__title">
             <span class="chains-index__title-line">Chains.</span>
-            <span class="chains-index__title-emphasis">Four questions, traced down.</span>
+            <span class="chains-index__title-emphasis">Four questions per entry.</span>
           </h1>
           <p class="chains-index__lede">
-            A standing public log of consequence-chain reasoning. Macro shifts
-            traced through their second-order effects, the forced problems they
-            create, and the infrastructure those problems make necessary. The
-            killed entries are the more useful read &mdash; they show where the
-            reasoning breaks.
+            A public log of consequence-chain reasoning. Each entry traces a
+            macro shift through its second-order effects, the problems it
+            forces, and the infrastructure those problems require. The killed
+            entries are often the more useful read; they show where the
+            reasoning broke.
           </p>
         </div>
       </header>
@@ -157,7 +157,7 @@ all.forEach((c, i) => (numbering[c.id] = i + 1));
             <span class="section-banner__count">{killed.length} archived</span>
           </header>
           <p class="dossiers__blurb">
-            Chains that died. The reason is the point of the entry.
+            Chains that didn't hold. The reason is the point of the entry.
           </p>
           <ol class="dossiers__list">
             {killed.map((c) => (
