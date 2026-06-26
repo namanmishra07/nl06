@@ -126,9 +126,9 @@ def load_published_lots(conn: sqlite3.Connection) -> list[dict]:
         SELECT source, source_id, source_url,
                title, seller, seller_category, location,
                start_price_inr, emd_inr, close_at_utc, status,
-               score, score_reason, interesting_category, confidence,
+               score, score_title, score_reason, interesting_category, confidence,
                manual_override, editor_note, annexure_excerpts,
-               vision_condition
+               vision_condition, first_seen_utc
           FROM lots
          WHERE (manual_override = 'boost')
             OR (
@@ -169,13 +169,18 @@ def load_meta(conn: sqlite3.Connection, published_count: int) -> dict:
 
     total_lots     = scalar("SELECT COUNT(*) FROM lots")
     active_lots    = scalar("SELECT COUNT(*) FROM lots WHERE status='active'")
+    # Exclude gate-sentinel rows (score_prompt_version='gate-v1', a score of 1
+    # written for blacklist-gated junk) so "scored" means real LLM scores.
     scored_active  = scalar(
         "SELECT COUNT(*) FROM lots "
-        " WHERE status='active' AND score IS NOT NULL")
+        " WHERE status='active' AND score IS NOT NULL"
+        "   AND COALESCE(score_prompt_version,'') != 'gate-v1'")
     top_score      = scalar(
         "SELECT COALESCE(MAX(score), 0) FROM lots WHERE status='active'")
     by_category    = dict(conn.execute(
-        "SELECT COALESCE(interesting_category, 'unscored') AS cat, COUNT(*) "
+        "SELECT CASE WHEN score_prompt_version = 'gate-v1' THEN 'gated' "
+        "            WHEN interesting_category IS NULL      THEN 'unscored' "
+        "            ELSE interesting_category END AS cat, COUNT(*) "
         "  FROM lots WHERE status='active' "
         " GROUP BY cat ORDER BY 2 DESC"
     ).fetchall())
@@ -357,6 +362,7 @@ def project_lot(row: dict) -> dict:
         "close_at_utc":     row["close_at_utc"],
         "status":           row["status"],
         "score":            row["score"],
+        "score_title":      row.get("score_title"),
         "category":         row["interesting_category"],
         "confidence":       row["confidence"],
         "note":             row["editor_note"] or row["score_reason"],
@@ -364,9 +370,330 @@ def project_lot(row: dict) -> dict:
         "boosted":          row["manual_override"] == "boost",
         "annexures":        _parse_annexures(row),
         "vision_condition": row.get("vision_condition"),
+        "first_seen_utc":   row.get("first_seen_utc"),
         "group_total":      row.get("group_total", 1),
         "group_more":       row.get("group_more", 0),
+        "photos":           [],   # filled by extract_photos() when PDFs yield images
     }
+
+
+# ── search index (ALL active lots, not just published) ──────────────────────
+#
+# The register surfaces ~dozens of curated lots; search spans the whole
+# active database (~20k) so "boeing" finds the airframe nobody scored a 9.
+# Compact parallel-array JSON, lazy-fetched by the page on first search
+# focus. Snippets only for lots with extractable annexure text, truncated
+# hard — the budget is "comfortably under 1 MB brotli'd".
+
+SEARCH_JSON   = APP_ROOT / "public" / "search.json"
+SNIPPET_CHARS = 110
+
+
+def build_search_index(conn: sqlite3.Connection,
+                       published_ids: set[str] | None = None) -> tuple[int, int]:
+    """Write search.json. Returns (row_count, byte_size). Rows carry a
+    trailing pub flag (1 = on the register) so the client can route a hit
+    to the lot plate instead of the raw MSTC PDF."""
+    published_ids = published_ids or set()
+    rows = conn.execute("""
+        SELECT source, source_id, title, seller, seller_category, location,
+               start_price_inr, close_at_utc, score, interesting_category,
+               annexure_excerpts
+          FROM lots
+         WHERE status = 'active'
+           AND (manual_override IS NULL OR manual_override != 'suppress')
+         ORDER BY score DESC NULLS LAST, close_at_utc ASC
+    """).fetchall()
+
+    out = []
+    for r in rows:
+        snippet = ""
+        if r["annexure_excerpts"] and r["annexure_excerpts"] != "[]":
+            try:
+                for ax in json.loads(r["annexure_excerpts"]):
+                    ex = (ax.get("excerpt") or "").strip()
+                    if ex and ex != "(annexure empty)":
+                        snippet = " ".join(ex.split())[:SNIPPET_CHARS]
+                        break
+            except (TypeError, ValueError):
+                pass
+        lot_id = f"{r['source']}-{r['source_id']}"
+        out.append([
+            lot_id,
+            _auction_id(r["source"], r["source_id"]),
+            r["title"],
+            r["seller"] or "",
+            r["location"] or "",
+            r["score"] or 0,
+            r["interesting_category"] or "",
+            r["start_price_inr"],
+            r["close_at_utc"] or "",
+            snippet,
+            1 if lot_id in published_ids else 0,
+        ])
+    payload = json.dumps({"fields": ["id", "aid", "title", "seller", "location",
+                                     "score", "category", "price_inr",
+                                     "close_utc", "snippet", "pub"],
+                          "rows": out}, ensure_ascii=False,
+                         separators=(",", ":"))
+    SEARCH_JSON.write_text(payload + "\n")
+    return len(out), len(payload.encode("utf-8"))
+
+
+# ── spotlight selection ──────────────────────────────────────────────────────
+#
+# The strangest live objects, chosen from the published payload: curio /
+# niche-instrument / prestige-seller lots, highest score first, one lot per
+# seller so a single agency can't fill the shelf. The model's score_reason
+# (already on `note`) is the caption. Exported in meta.json so the page and
+# the spotlight feed agree on the same picks.
+
+SPOTLIGHT_CATEGORIES = ("curio", "niche-instrument", "prestige-seller")
+SPOTLIGHT_N          = 10
+
+
+def pick_spotlight(lots: list[dict]) -> list[str]:
+    """Never feature a lot whose hammer has already fallen: anything with
+    a close time in the past is excluded (the page also hides a card
+    client-side if its close passes during the day)."""
+    now_iso = _utcnow_iso()
+    picks, sellers_seen = [], set()
+    pool = [l for l in lots
+            if l["category"] in SPOTLIGHT_CATEGORIES and l.get("note")
+            and (not l["close_at_utc"] or l["close_at_utc"] > now_iso)]
+    pool.sort(key=lambda l: (-(l["score"] or 0), -(l["confidence"] or 0)))
+    for l in pool:
+        if l["seller"] in sellers_seen:
+            continue
+        sellers_seen.add(l["seller"])
+        picks.append(l["id"])
+        if len(picks) >= SPOTLIGHT_N:
+            break
+    return picks
+
+
+# ── spotlight history (feeds the /spotlight-archive page) ────────────────────
+#
+# Every lot that ever makes the spotlight is snapshotted once, with the
+# date it was featured and a private copy of its first photo (the live
+# photo dirs are wiped each sync, so the archive keeps its own). The
+# archive page renders from this file alone — closed lots stay readable
+# long after they leave the register.
+
+SPOTLIGHT_HISTORY     = CONTENT_DIR / "spotlight-history.json"
+PHOTO_ARCHIVE_DIR     = APP_ROOT / "public" / "photos-archive"
+SPOTLIGHT_HISTORY_MAX = 90
+
+
+def update_spotlight_history(lots: list[dict], spotlight_ids: list[str]) -> int:
+    """Append never-before-seen picks to the history snapshot. Returns the
+    number of new entries. Trims to the most recent SPOTLIGHT_HISTORY_MAX
+    and garbage-collects archived photos that fell off the end."""
+    import shutil
+    by_id = {l["id"]: l for l in lots}
+    try:
+        hist = json.loads(SPOTLIGHT_HISTORY.read_text())
+    except (OSError, ValueError):
+        hist = []
+    known = {h["id"] for h in hist}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    added = 0
+    for sid in spotlight_ids:
+        if sid in known or sid not in by_id:
+            continue
+        l = by_id[sid]
+        photo = None
+        if l.get("photos"):
+            src = APP_ROOT / "public" / l["photos"][0].lstrip("/")
+            slug = _safe_slug(sid)
+            try:
+                PHOTO_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, PHOTO_ARCHIVE_DIR / f"{slug}.webp")
+                photo = f"/photos-archive/{slug}.webp"
+            except OSError:
+                pass
+        hist.append({
+            "id":              sid,
+            "spotlit_on":      today,
+            "title":           l["title"],
+            "seller":          l["seller"],
+            "seller_category": l["seller_category"],
+            "location":        l["location"],
+            "start_price_inr": l["start_price_inr"],
+            "score":           l["score"],
+            "category":        l["category"],
+            "note":            l["note"],
+            "close_at_utc":    l["close_at_utc"],
+            "photo":           photo,
+            "auction_id":      l["auction_id"],
+        })
+        added += 1
+    hist = hist[-SPOTLIGHT_HISTORY_MAX:]
+    keep = {Path(h["photo"]).name for h in hist if h.get("photo")}
+    if PHOTO_ARCHIVE_DIR.exists():
+        for f in PHOTO_ARCHIVE_DIR.glob("*.webp"):
+            if f.name not in keep:
+                f.unlink()
+    SPOTLIGHT_HISTORY.write_text(json.dumps(hist, ensure_ascii=False, indent=1) + "\n")
+    return added
+
+
+# ── feeds (RSS + JSON; static, regenerated nightly) ──────────────────────────
+
+FEEDS_DIR = APP_ROOT / "public" / "feeds"
+SITE_URL  = "https://auctionhouse.nl06.com"
+
+
+def _rss_escape(s: str) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _rss_item(l: dict) -> str:
+    price = l["start_price_inr"]
+    price_s = f"Rs {price:,}" if price is not None else "no reserve"
+    desc = (f"{l['seller'] or '?'} ({l['seller_category']}) · "
+            f"{l['location'] or '?'} · {price_s} reserve · "
+            f"closes {l['close_at_utc'] or '?'} · score {l['score']}/10. "
+            f"{l.get('note') or ''}")
+    pub = l.get("first_seen_utc") or ""
+    if pub:
+        pub_dt = datetime.strptime(pub, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        pub = pub_dt.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    return (f"<item><title>{_rss_escape(l['title'])}</title>"
+            f"<link>{SITE_URL}/register#lot-{_rss_escape(l['id'])}</link>"
+            f"<guid isPermaLink=\"false\">{_rss_escape(l['id'])}</guid>"
+            + (f"<pubDate>{pub}</pubDate>" if pub else "")
+            + f"<description>{_rss_escape(desc)}</description></item>")
+
+
+def _rss_doc(title: str, desc: str, items: list[str]) -> str:
+    now = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    return ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<rss version=\"2.0\"><channel>"
+            f"<title>{_rss_escape(title)}</title>"
+            f"<link>{SITE_URL}</link>"
+            f"<description>{_rss_escape(desc)}</description>"
+            f"<lastBuildDate>{now}</lastBuildDate>"
+            + "".join(items) +
+            "</channel></rss>\n")
+
+
+def write_feeds(lots: list[dict], spotlight_ids: list[str]) -> None:
+    FEEDS_DIR.mkdir(parents=True, exist_ok=True)
+    by_id = {l["id"]: l for l in lots}
+    (FEEDS_DIR / "register.xml").write_text(_rss_doc(
+        "auctionhouse.nl06 · register",
+        "Indian government surplus auctions worth a closer look. Updated nightly.",
+        [_rss_item(l) for l in lots]))
+    (FEEDS_DIR / "spotlight.xml").write_text(_rss_doc(
+        "auctionhouse.nl06 · spotlight",
+        "The strangest live lots on the register. Updated nightly.",
+        [_rss_item(by_id[i]) for i in spotlight_ids if i in by_id]))
+    (FEEDS_DIR / "register.json").write_text(
+        json.dumps({"generated_utc": _utcnow_iso(), "site": SITE_URL,
+                    "spotlight_ids": spotlight_ids, "lots": lots},
+                   ensure_ascii=False, indent=1) + "\n")
+
+
+# ── photo extraction (embedded images in annexure PDFs) ──────────────────────
+#
+# Published lots only (~dozens), so the asset budget stays tiny: capped at
+# MAX_PHOTOS_PER_LOT webp thumbnails per lot and MAX_PHOTO_FILES total per
+# deploy. PDFs were already downloaded by the scraper into data/raw — this
+# touches no network and makes no API calls. Pages-deploy friendly: small
+# files, bounded count, stale dirs wiped each sync.
+
+PHOTOS_DIR          = APP_ROOT / "public" / "photos"
+RAW_DIR             = BACKEND_ROOT / "data" / "raw"
+MAX_PHOTOS_PER_LOT  = 6
+MAX_PHOTO_FILES     = 600
+MIN_IMG_DIM_PX      = 240          # skip logos / signature scans
+MIN_IMG_BYTES       = 12_000
+PHOTO_MAX_DIM       = 1100
+WEBP_QUALITY        = 72
+
+
+def _safe_slug(lot_id: str) -> str:
+    import re
+    return re.sub(r"[^A-Za-z0-9_-]", "_", lot_id)
+
+
+def extract_photos(lots: list[dict]) -> int:
+    """Extract embedded images from each published lot's annexure PDFs into
+    public/photos/<slug>/<n>.webp and fill lot['photos']. Returns total
+    images written. Gracefully no-ops if PyMuPDF/Pillow are unavailable
+    (the script stays runnable under system python)."""
+    try:
+        import fitz                      # PyMuPDF
+        from PIL import Image
+        import io
+    except ImportError:
+        print("sync-auctionhouse: PyMuPDF/Pillow unavailable; skipping photos")
+        return 0
+
+    if PHOTOS_DIR.exists():
+        import shutil
+        shutil.rmtree(PHOTOS_DIR)
+    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+
+    total = 0
+    for lot in lots:
+        if total >= MAX_PHOTO_FILES:
+            print(f"sync-auctionhouse: photo cap {MAX_PHOTO_FILES} hit; "
+                  "remaining lots ship without photos")
+            break
+        if lot["source"] != "mstc" or not lot["annexures"]:
+            continue
+        slug   = _safe_slug(lot["id"])
+        outdir = PHOTOS_DIR / slug
+        wrote  = []
+        seen_xrefs: set[int] = set()
+        for ax in lot["annexures"]:
+            if len(wrote) >= MAX_PHOTOS_PER_LOT:
+                break
+            pdf = RAW_DIR / "mstc" / lot["auction_id"] / Path(ax["filename"]).name
+            if not pdf.is_file():
+                continue
+            try:
+                doc = fitz.open(pdf)
+            except Exception:
+                continue
+            try:
+                for pno in range(min(doc.page_count, 12)):
+                    if len(wrote) >= MAX_PHOTOS_PER_LOT:
+                        break
+                    for img in doc.get_page_images(pno):
+                        xref = img[0]
+                        if xref in seen_xrefs:
+                            continue
+                        seen_xrefs.add(xref)
+                        try:
+                            raw = doc.extract_image(xref)
+                        except Exception:
+                            continue
+                        if len(raw["image"]) < MIN_IMG_BYTES:
+                            continue
+                        try:
+                            im = Image.open(io.BytesIO(raw["image"]))
+                            im.load()
+                        except Exception:
+                            continue
+                        if min(im.size) < MIN_IMG_DIM_PX:
+                            continue
+                        if im.mode not in ("RGB", "L"):
+                            im = im.convert("RGB")
+                        im.thumbnail((PHOTO_MAX_DIM, PHOTO_MAX_DIM))
+                        outdir.mkdir(parents=True, exist_ok=True)
+                        fname = f"{len(wrote)+1}.webp"
+                        im.save(outdir / fname, "WEBP", quality=WEBP_QUALITY)
+                        wrote.append(f"/photos/{slug}/{fname}")
+                        total += 1
+                        if len(wrote) >= MAX_PHOTOS_PER_LOT or total >= MAX_PHOTO_FILES:
+                            break
+            finally:
+                doc.close()
+        lot["photos"] = wrote
+    return total
 
 
 # ── catalogue shim writer ────────────────────────────────────────────────────
@@ -499,6 +826,16 @@ def main() -> int:
     meta_payload["counts"]["published_sublots"]        = raw_count
     meta_payload["counts"]["collapsed_seller_category"] = collapsed_dropped
     meta_payload["publish_filter"]["max_per_seller_category"] = MAX_PER_SELLER_CATEGORY
+
+    spotlight_ids  = pick_spotlight(lots_payload)
+    meta_payload["spotlight_ids"] = spotlight_ids
+
+    if not args.dry_run:
+        search_rows, search_bytes = build_search_index(
+            conn, {l["id"] for l in lots_payload})
+        meta_payload["counts"]["searchable"] = search_rows
+        print(f"sync-auctionhouse: search index {search_rows} lots, "
+              f"{search_bytes/1e6:.1f} MB raw")
     conn.close()
 
     thr = PUBLISH_THRESHOLDS
@@ -515,11 +852,17 @@ def main() -> int:
         print("sync-auctionhouse: --dry-run; no files written, no deploy")
         return 0
 
+    n_photos = extract_photos(lots_payload)
+    n_archived = update_spotlight_history(lots_payload, spotlight_ids)
+    if n_archived:
+        print(f"sync-auctionhouse: {n_archived} new spotlight pick(s) archived")
     LOTS_JSON.write_text(json.dumps(lots_payload, indent=2, ensure_ascii=False) + "\n")
     META_JSON.write_text(json.dumps(meta_payload, indent=2, ensure_ascii=False) + "\n")
+    write_feeds(lots_payload, spotlight_ids)
     n_shims = write_catalogue_shims(lots_payload, CATALOGUE_DIR)
     print(f"sync-auctionhouse: wrote {LOTS_JSON.relative_to(WEBSITE_ROOT)}, "
-          f"{META_JSON.relative_to(WEBSITE_ROOT)}, "
+          f"{META_JSON.relative_to(WEBSITE_ROOT)}, feeds (register/spotlight/json), "
+          f"{n_photos} lot photos, {len(spotlight_ids)} spotlight picks, "
           f"and {n_shims} catalogue shims")
 
     if args.deploy:

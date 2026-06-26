@@ -1,5 +1,5 @@
 {
-  "synced_at_utc": "2026-05-30T12:14:58Z",
+  "synced_at_utc": "2026-06-26T11:03:22Z",
   "publish_filter": {
     "category_thresholds": {
       "arbitrage": 7,
@@ -18,38 +18,51 @@
     "max_per_seller_category": 3
   },
   "counts": {
-    "total": 30281,
-    "active": 21197,
-    "scored_active": 7532,
-    "published": 23,
-    "top_active_score": 8,
-    "published_sublots": 81,
-    "collapsed_seller_category": 58
+    "total": 86883,
+    "active": 16814,
+    "scored_active": 9844,
+    "published": 184,
+    "top_active_score": 9,
+    "published_sublots": 438,
+    "collapsed_seller_category": 168,
+    "searchable": 16814
   },
   "by_category": {
-    "unscored": 13665,
-    "arbitrage": 3861,
-    "curio": 3661,
-    "niche-instrument": 9,
-    "prestige-seller": 1
+    "gated": 6970,
+    "arbitrage": 6139,
+    "curio": 3617,
+    "niche-instrument": 54,
+    "prestige-seller": 34
   },
   "last_run": {
     "source": "score",
-    "started_at_utc": "2026-05-30T00:22:03Z",
-    "finished_at_utc": null,
+    "started_at_utc": "2026-06-26T08:13:29Z",
+    "finished_at_utc": "2026-06-26T08:23:33Z",
     "error": null,
     "lots_seen": 0,
     "lots_new": 0,
     "parse_failures": 0,
-    "score_calls": 0
+    "score_calls": 331
   },
   "spend_30d": {
-    "calls": 14878,
-    "api_calls": 14325,
-    "input_tokens": 16620865,
-    "output_tokens": 1062393,
-    "cache_read_tk": 55870677,
-    "cache_create_tk": 13086,
-    "usd": 27.5363
-  }
+    "calls": 57590,
+    "api_calls": 49386,
+    "input_tokens": 35677779,
+    "output_tokens": 4006009,
+    "cache_read_tk": 287031376,
+    "cache_create_tk": 220339,
+    "usd": 84.6864
+  },
+  "spotlight_ids": [
+    "mstc-587401-1",
+    "baanknet-3889",
+    "mstc-585616-1",
+    "mstc-586725-1",
+    "mstc-587199-/5273324",
+    "mstc-586071-HDC/LOCO/25/03",
+    "mstc-587886-/333",
+    "mstc-586274-49/BTD/26- 27",
+    "mstc-585925-1",
+    "mstc-587764-1"
+  ]
 }

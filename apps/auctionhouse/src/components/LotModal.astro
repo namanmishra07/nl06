@@ -1,0 +1,311 @@
+---
+// LotModal — the "plate": a designed popup rendering one published lot.
+// Opens via any element carrying data-lot-open="<lot id>"; fetches
+// /feeds/register.json once on first open (the same payload the feeds
+// republish, so there is exactly one source of truth). No-JS fallback:
+// the triggering <a href="/register#lot-…"> still navigates.
+---
+<dialog class="ah-plate" data-ah-plate>
+  <button class="ah-plate__close" data-plate-close aria-label="close">×</button>
+  <div class="ah-plate__body" data-plate-body>
+    <p class="ah-plate__loading">Fetching the lot…</p>
+  </div>
+</dialog>
+
+<script>
+  type PlateLot = {
+    id: string; source_url: string; auction_id: string | null;
+    sublot_count: number; title: string; seller: string | null;
+    seller_category: string; location: string | null;
+    start_price_inr: number | null; emd_inr: number | null;
+    close_at_utc: string | null; status: string; score: number | null;
+    category: string | null; note: string | null; note_is_editor: boolean;
+    boosted: boolean; photos?: string[];
+    annexures: { filename: string; url: string }[];
+  };
+
+  const dlg  = document.querySelector<HTMLDialogElement>("[data-ah-plate]");
+  const body = dlg?.querySelector<HTMLElement>("[data-plate-body]");
+  if (dlg && body) {
+    let lots: Map<string, PlateLot> | null = null;
+    let loading: Promise<void> | null = null;
+
+    const esc = (s: string | null) => (s ?? "").replace(/[&<>"]/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+    const inr = (p: number | null) => {
+      if (p == null) return "no reserve";
+      if (p >= 1e7) return `₹${(p / 1e7).toFixed(2)} cr`;
+      if (p >= 1e5) return `₹${(p / 1e5).toFixed(2)} L`;
+      return `₹${p.toLocaleString("en-IN")}`;
+    };
+    // nominal "token" reserves (≤ ₹10) are real listed values, not defaults
+    const TOKEN_TIP = "MSTC publishes this reserve as listed. Token reserves "
+      + "of a few rupees are standard in government disposal auctions; "
+      + "the EMD and competitive bidding set the actual price.";
+    const reserveHTML = (p: number | null) =>
+      p != null && p > 0 && p <= 10
+        ? `${inr(p)} <span class="pl__token" title="${TOKEN_TIP}">token reserve, as listed by MSTC</span>`
+        : inr(p);
+    const until = (iso: string) => {
+      const ms = Date.parse(iso) - Date.now();
+      if (ms <= 0) return "closed";
+      const d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5),
+            m = Math.floor((ms % 36e5) / 6e4);
+      return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+    };
+
+    async function load() {
+      if (lots) return;
+      loading ??= fetch("/feeds/register.json")
+        .then(r => r.json())
+        .then(j => { lots = new Map((j.lots as PlateLot[]).map(l => [l.id, l])); })
+        .catch(() => { lots = new Map(); });
+      await loading;
+    }
+
+    function render(l: PlateLot) {
+      const closeRow = l.close_at_utc
+        ? `<div class="pl__row"><dt>Closes</dt><dd>${esc(l.close_at_utc.replace("T", " ").replace("Z", ""))} UTC
+             <b class="pl__count">${until(l.close_at_utc)}</b></dd></div>`
+        : "";
+      const photos = (l.photos?.length)
+        ? `<div class="pl__photos">${l.photos.map((p, i) =>
+            `<a href="${esc(p)}" target="_blank" rel="noopener"><img src="${esc(p)}"
+              alt="photo ${i + 1} from the annexure PDF" loading="lazy"/></a>`).join("")}
+           <span class="pl__photos-note">photos extracted from the annexure PDF · click to open full size</span></div>`
+        : "";
+      const annex = l.annexures?.length
+        ? `<div class="pl__row"><dt>Annexures</dt><dd>${l.annexures.map(a =>
+            `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.filename)}</a>`
+          ).join(" · ")}</dd></div>`
+        : "";
+      body!.innerHTML = `
+        <header class="pl__head">
+          <span class="pl__stamp"><b>${l.score ?? "·"}</b><i>/10</i></span>
+          <div>
+            <span class="pl__kicker">${esc(l.category ?? "lot")}${l.boosted ? " · boosted" : ""}
+              · ${l.status === "active" ? "live" : esc(l.status)}</span>
+            <h3 class="pl__title">${esc(l.title)}</h3>
+            ${l.note ? `<p class="pl__note${l.note_is_editor ? " pl__note--editor" : ""}">${esc(l.note)}</p>` : ""}
+          </div>
+        </header>
+        ${photos}
+        <dl class="pl__rows">
+          ${l.seller ? `<div class="pl__row"><dt>Selling agency</dt><dd>${esc(l.seller)}
+              <span class="pl__chip">${esc(l.seller_category)}</span></dd></div>` : ""}
+          ${l.location ? `<div class="pl__row"><dt>Location</dt><dd>${esc(l.location)}</dd></div>` : ""}
+          <div class="pl__row"><dt>Reserve</dt><dd>${reserveHTML(l.start_price_inr)}${
+            l.sublot_count > 1 ? ` <small>per sublot · × ${l.sublot_count} sublots</small>` : ""}</dd></div>
+          ${l.emd_inr != null ? `<div class="pl__row"><dt>EMD</dt><dd>${inr(l.emd_inr)}</dd></div>` : ""}
+          ${closeRow}
+          ${annex}
+        </dl>
+        <footer class="pl__foot">
+          <a class="pl__btn" href="${esc(l.source_url)}" target="_blank" rel="noopener">Catalogue PDF ↗</a>
+          <a class="pl__btn pl__btn--ghost" href="/register#lot-${esc(l.id)}">Full entry on the register</a>
+        </footer>`;
+    }
+
+    async function open(id: string) {
+      body!.innerHTML = `<p class="ah-plate__loading">Fetching the lot…</p>`;
+      dlg!.showModal();
+      await load();
+      const l = lots!.get(id);
+      if (!l) {
+        body!.innerHTML = `<p class="ah-plate__loading">This lot is no longer on the
+          register (it may have closed or been rotated out overnight).</p>`;
+        return;
+      }
+      render(l);
+    }
+
+    // expose for the search panel + delegate clicks from any trigger
+    (window as any).__ahOpenLot = open;
+    document.addEventListener("click", (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-lot-open]");
+      if (!t) return;
+      e.preventDefault();
+      open(t.dataset.lotOpen!);
+    });
+    dlg.querySelector("[data-plate-close]")!.addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  }
+</script>
+
+<style is:global>
+  .ah-plate {
+    /* the global reset zeroes margins, which breaks the UA's automatic
+       dialog centering — restore it explicitly */
+    margin: auto;
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper);
+    padding: 0;
+    width: min(94vw, 44rem);
+    max-height: 88vh;
+  }
+  .ah-plate::backdrop { background: rgba(20, 16, 10, 0.72); }
+  .ah-plate__close {
+    appearance: none;
+    position: absolute;
+    top: var(--space-2); right: var(--space-2);
+    z-index: 2;
+    background: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    line-height: 1;
+    width: 2rem; height: 2rem;
+    cursor: pointer;
+  }
+  .ah-plate__close:hover { color: var(--color-accent); border-color: var(--color-accent); }
+  .ah-plate__body { padding: var(--space-7); overflow-y: auto; max-height: 88vh; }
+  .ah-plate__loading {
+    font-family: var(--font-serif); font-style: italic;
+    color: var(--color-ink-muted); margin: var(--space-6) 0;
+  }
+  .pl__head { display: flex; gap: var(--space-5); align-items: flex-start; }
+  .pl__stamp {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: baseline; gap: 0.1em;
+    padding: 0.3em 0.55em;
+    border: 2px solid var(--color-accent);
+    box-shadow: inset 0 0 0 1.5px var(--color-paper), inset 0 0 0 2.5px var(--color-accent);
+    color: var(--color-accent);
+    transform: rotate(-4deg);
+    font-family: var(--font-sans);
+    line-height: 1;
+    margin-top: 0.4rem;
+  }
+  .pl__stamp b { font-size: 1.6em; font-weight: 800; }
+  .pl__stamp i { font-style: normal; font-size: 0.8em; font-weight: 600; }
+  .pl__kicker {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 600;
+  }
+  .pl__title {
+    margin-top: var(--space-2);
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h3);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .pl__note {
+    margin-top: var(--space-3);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .pl__note--editor {
+    font-style: normal;
+    color: var(--color-ink);
+    border-left: 3px solid var(--color-accent);
+    padding-left: var(--space-3);
+  }
+  .pl__photos {
+    margin-top: var(--space-5);
+    display: flex; flex-wrap: wrap; gap: var(--space-2);
+    align-items: flex-end;
+  }
+  .pl__photos a { border: 1px solid var(--color-rule-strong); padding: 2px; background: var(--color-paper-margin); }
+  .pl__photos a:hover { border-color: var(--color-accent); }
+  .pl__photos img { display: block; height: 7rem; width: auto; max-width: 12rem; object-fit: cover; }
+  .pl__photos-note {
+    flex-basis: 100%;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    font-style: italic;
+  }
+  .pl__rows {
+    margin: var(--space-5) 0 0;
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    gap: var(--space-2) var(--space-5);
+  }
+  .pl__row { display: contents; }
+  .pl__rows dt {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink);
+    font-weight: 600;
+    padding-top: 0.18em;
+  }
+  .pl__rows dd {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+  .pl__rows dd a { color: var(--color-ink); }
+  .pl__rows dd a:hover { color: var(--color-accent); }
+  .pl__count {
+    margin-left: 0.6em;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    color: var(--color-accent);
+  }
+  .pl__token {
+    display: inline-block;
+    margin-left: 0.45em;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-accent);
+    border-bottom: 1px dotted var(--color-accent);
+    cursor: help;
+  }
+  .pl__chip {
+    display: inline-block;
+    margin-left: 0.4em;
+    padding: 0 0.45em;
+    background: var(--color-paper-margin);
+    border: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-meta);
+  }
+  .pl__foot {
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
+    display: flex; flex-wrap: wrap; gap: var(--space-3);
+  }
+  .pl__btn {
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--color-paper);
+    background: var(--color-ink);
+    border: 1px solid var(--color-ink);
+    padding: 0.45rem 1rem;
+  }
+  .pl__btn:hover { background: var(--color-accent); border-color: var(--color-accent); }
+  .pl__btn--ghost {
+    color: var(--color-ink);
+    background: transparent;
+  }
+  .pl__btn--ghost:hover { color: var(--color-accent); background: transparent; }
+  @media (max-width: 560px) {
+    .pl__rows { grid-template-columns: 1fr; gap: var(--space-1); }
+    .pl__rows dt { margin-top: var(--space-2); }
+    .pl__head { flex-direction: column; gap: var(--space-3); }
+  }
+</style>

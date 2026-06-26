@@ -21,8 +21,10 @@ const {
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 
 const nav = [
-  { label: "Methodology", href: "#methodology" },
-  { label: "Sources",     href: "#sources"     },
+  { label: "Home",        href: "/" },
+  { label: "Register",    href: "/register" },
+  { label: "Methodology", href: "/#methodology" },
+  { label: "Sources",     href: "/#sources" },
   { label: "← NL06",      href: "https://nl06.com" },
 ];
 ---

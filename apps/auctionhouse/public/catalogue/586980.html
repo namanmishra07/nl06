@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MSTC auction 586980 — catalogue PDF</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  body { font-family: ui-serif, Georgia, serif; max-width: 36rem;
+         margin: 4rem auto; padding: 0 1rem; color: #1a1814;
+         background: #f7f3ec; }
+  h1 { font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: .72rem; text-transform: uppercase; letter-spacing: .14em;
+        color: #7a6f5e; margin: 0 0 1.5em; font-weight: 600; }
+  p { line-height: 1.55; font-size: 1rem; }
+  code { font-family: ui-monospace, monospace; background: #ece4d2;
+          padding: .1em .35em; }
+  .row { margin-top: 2rem; padding-top: 1rem;
+          border-top: 1px solid #d6cdb8; font-size: .9rem;
+          color: #5b5346; display: flex; gap: 1.2em; align-items: center; }
+  button, a.btn { font: inherit; padding: .45rem .9rem; cursor: pointer;
+            background: #1a1814; color: #f7f3ec; border: 1px solid #1a1814;
+            text-decoration: none; }
+  a { color: #6b3e1a; }
+</style>
+</head>
+<body>
+<h1>auctionhouse.nl06 · catalogue handoff</h1>
+<p>Loading the catalogue PDF for MSTC auction <code>586980</code> from
+<code>mstcecommerce.com</code>&hellip; The PDF is served by MSTC over a POST
+endpoint, so this page hands the request off to your browser.</p>
+<form id="f" method="post" action="https://www.mstcecommerce.com/auctionhome/mstc/auction_detailed_report_pdf.jsp" target="_self">
+  <input type="hidden" name="auc" value="586980">
+</form>
+<div class="row">
+  <button onclick="document.getElementById('f').submit()">Open PDF</button>
+  <a href="https://www.mstcindia.co.in/">mstcindia.co.in</a>
+</div>
+<script>setTimeout(function(){document.getElementById('f').submit();}, 60);</script>
+</body>
+</html>

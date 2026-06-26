@@ -1,0 +1,217 @@
+---
+// PRIVATE operator dashboard — pick auctions to watch for item-list changes and
+// drive the calendar sync. This page is NOT linked from anywhere public and is
+// served only behind a Cloudflare Access application (operator's Google login).
+//
+// It is intentionally self-contained (its own <html>, no public nav/footer) so
+// it never leaks into the public site chrome. All private data (watchlist +
+// detected changes) is fetched at runtime from the Access-gated Worker
+// endpoints — nothing private is baked into the static build.
+//
+// Setup required for this to function (see auctionhouse-backend README):
+//   1. A Worker Route `auctionhouse.nl06.com/watch-api/*` → the watch Worker,
+//      so these calls are SAME-ORIGIN (the Access cookie rides along with a
+//      plain fetch; no cross-origin redirect problem).
+//   2. A Cloudflare Access app over BOTH `/watch` (this page) and `/watch-api/*`
+//      (the API), policy = allow only the operator's Google account.
+const WATCH_API = "/watch-api"; // same-origin, Access-gated Worker route
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Auction watch · private</title>
+    <style>
+      :root { --ink:#1a1814; --soft:#6b655c; --bg:#f7f3ec; --card:#fffdf8;
+              --line:#e2dcd0; --accent:#6b3e1a; --good:#2f6b3e; --warn:#9a3b22; }
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; color: var(--ink);
+             background: var(--bg); margin: 0; line-height: 1.5; }
+      .wrap { max-width: 52rem; margin: 0 auto; padding: 2rem 1rem 5rem; }
+      h1 { font-size: 1rem; text-transform: uppercase; letter-spacing: .14em; }
+      h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .1em;
+           color: var(--soft); margin: 2rem 0 .6rem; }
+      .sub { color: var(--soft); font-size: .85rem; margin-top: -.4rem; }
+      input[type="search"] { width: 100%; padding: .6rem .8rem; font-size: 1rem;
+             border: 1px solid var(--line); border-radius: .4rem; background: var(--card); }
+      .card { background: var(--card); border: 1px solid var(--line);
+              border-radius: .5rem; padding: .7rem .9rem; margin: .5rem 0;
+              display: flex; gap: .8rem; align-items: flex-start; }
+      .card .meta { flex: 1; min-width: 0; }
+      .title { font-weight: 600; }
+      .dim { color: var(--soft); font-size: .82rem; }
+      .chips { margin-top: .25rem; }
+      .chip { display: inline-block; font-size: .72rem; text-transform: uppercase;
+              letter-spacing: .06em; color: var(--accent); border: 1px solid var(--line);
+              border-radius: .3rem; padding: .05rem .35rem; margin-right: .3rem; }
+      button { font: inherit; cursor: pointer; border: 1px solid var(--line);
+               border-radius: .4rem; padding: .4rem .7rem; background: var(--bg); }
+      button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+      button:disabled { opacity: .5; cursor: default; }
+      .changes { margin: .3rem 0 0; padding-left: 1rem; font-size: .82rem; }
+      .changes li { margin: 0; }
+      .k-added { color: var(--good); } .k-removed { color: var(--warn); }
+      .empty { color: var(--soft); font-style: italic; }
+      .err { color: var(--warn); }
+      .foot { margin-top: 3rem; color: var(--soft); font-size: .8rem; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Auction watch</h1>
+      <p class="sub">Private. Pick auctions to monitor daily for item-list
+        changes; each is mirrored to your Auctionhouse calendar with its start
+        time and duration.</p>
+
+      <div id="state-err" class="err"></div>
+
+      <h2>Watching</h2>
+      <div id="watched"><p class="empty">Loading…</p></div>
+
+      <h2>Find an auction to watch</h2>
+      <input id="q" type="search" placeholder="Search by title, seller, or auction id…" autocomplete="off" />
+      <div id="results"></div>
+
+      <p class="foot">Last calendar/diff sync runs nightly on the NAS. Changes
+        shown here are from the most recent run.</p>
+    </div>
+
+    <script define:vars={{ WATCH_API }}>
+      const $ = (s) => document.querySelector(s);
+      const api = (p) => `${WATCH_API}${p}`;
+      const opts = { credentials: "include" };
+
+      let FIELDS = {}, AUCTIONS = new Map(), MEMBERS = new Set(), STATUS = {};
+      const key = (s, a) => `${s}::${a}`;
+
+      // Derive {source} from a search.json lot id of the form "<source>-<source_id>".
+      const sourceOf = (id) => id.slice(0, id.indexOf("-"));
+
+      async function loadState() {
+        try {
+          const r = await fetch(api("/watch/state"), opts);
+          if (r.status === 403) { $("#state-err").textContent =
+            "Not authorised. Sign in with the operator account (Cloudflare Access)."; return; }
+          const j = await r.json();
+          MEMBERS = new Set((j.members || []).map((m) => key(m.source, m.auction_id)));
+          STATUS = {};
+          for (const a of (j.status && j.status.auctions) || [])
+            STATUS[key(a.source, a.auction_id)] = a;
+        } catch (e) {
+          $("#state-err").textContent = "Could not reach the watch service: " + e;
+        }
+      }
+
+      async function loadAuctions() {
+        const { fields, rows } = await (await fetch("/search.json")).json();
+        fields.forEach((f, i) => (FIELDS[f] = i));
+        const I = FIELDS;
+        for (const row of rows) {
+          const id = row[I.id], aid = row[I.aid], source = sourceOf(id);
+          const k = key(source, aid);
+          let g = AUCTIONS.get(k);
+          if (!g) { g = { source, aid, title: row[I.title], seller: row[I.seller],
+                          lots: 0, close: row[I.close_utc] || "" }; AUCTIONS.set(k, g); }
+          g.lots++;
+          if (row[I.close_utc] && (!g.close || row[I.close_utc] < g.close)) g.close = row[I.close_utc];
+        }
+      }
+
+      function fmtClose(c) {
+        if (!c) return "no close time";
+        const d = new Date(c);
+        return "closes " + d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
+          day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) + " IST";
+      }
+
+      function changeList(st) {
+        if (!st || !st.changes || !st.changes.length) return "";
+        const items = st.changes.slice(0, 12).map((c) =>
+          `<li class="k-${c.kind}">[${c.kind}] ${esc(c.summary)}</li>`).join("");
+        return `<ul class="changes">${items}</ul>`;
+      }
+
+      const esc = (s) => String(s).replace(/[&<>"]/g,
+        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+      function cardHTML(g, watched) {
+        const st = STATUS[key(g.source, g.aid)];
+        const changed = st && st.changes && st.changes.length;
+        return `<div class="card">
+          <div class="meta">
+            <div class="title">${esc(g.title || "(untitled)")}</div>
+            <div class="dim">${esc(g.seller || "")}</div>
+            <div class="chips">
+              <span class="chip">${g.source}</span>
+              <span class="chip">#${esc(g.aid)}</span>
+              <span class="chip">${g.lots} lot(s)</span>
+            </div>
+            <div class="dim">${fmtClose(g.close)}</div>
+            ${watched && changed ? changeList(st) : ""}
+          </div>
+          <button data-source="${esc(g.source)}" data-aid="${esc(g.aid)}"
+                  class="toggle ${watched ? "on" : ""}">${watched ? "Watching" : "Watch"}</button>
+        </div>`;
+      }
+
+      function renderWatched() {
+        const el = $("#watched");
+        const list = [...MEMBERS].map((k) => AUCTIONS.get(k)).filter(Boolean);
+        // Include watched auctions even if not in search.json (e.g. closed/aged out).
+        for (const k of MEMBERS) if (!AUCTIONS.get(k)) {
+          const [source, aid] = k.split("::");
+          list.push({ source, aid, title: "(not in current listings)", seller: "", lots: 0, close: "" });
+        }
+        el.innerHTML = list.length ? list.map((g) => cardHTML(g, true)).join("")
+                                   : `<p class="empty">No auctions watched yet.</p>`;
+        bindToggles(el);
+      }
+
+      function renderResults() {
+        const q = $("#q").value.trim().toLowerCase();
+        const el = $("#results");
+        if (!q) { el.innerHTML = `<p class="empty">Type to search ${AUCTIONS.size} auctions.</p>`; return; }
+        const hits = [];
+        for (const g of AUCTIONS.values()) {
+          if (`${g.title} ${g.seller} ${g.aid}`.toLowerCase().includes(q)) hits.push(g);
+          if (hits.length >= 50) break;
+        }
+        el.innerHTML = hits.length
+          ? hits.map((g) => cardHTML(g, MEMBERS.has(key(g.source, g.aid)))).join("")
+          : `<p class="empty">No matches.</p>`;
+        bindToggles(el);
+      }
+
+      function bindToggles(scope) {
+        scope.querySelectorAll("button.toggle").forEach((b) => {
+          b.onclick = async () => {
+            const source = b.dataset.source, aid = b.dataset.aid;
+            const on = !MEMBERS.has(key(source, aid));
+            b.disabled = true;
+            try {
+              const r = await fetch(api("/watch"), { ...opts, method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ source, auction_id: aid, on }) });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const j = await r.json();
+              MEMBERS = new Set((j.members || []).map((m) => key(m.source, m.auction_id)));
+              renderWatched(); renderResults();
+            } catch (e) {
+              b.disabled = false; alert("Failed: " + e);
+            }
+          };
+        });
+      }
+
+      (async () => {
+        await Promise.all([loadState(), loadAuctions()]);
+        renderWatched();
+        renderResults();
+        $("#q").addEventListener("input", renderResults);
+      })();
+    </script>
+  </body>
+</html>

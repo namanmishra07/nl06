@@ -108,14 +108,28 @@ def fingerprint(entry: dict) -> tuple[str | None, str | None]:
         return sha, f"{k}@{time_key}"
     return sha, None
 
+def resolve_sat_key(entry: dict) -> str:
+    """Resolve a SAT_INFO key for an entry. Records logged before the
+    'satellite' field was added to the NDJSON schema carry no key but are
+    identifiable by their gk2a pipeline / chunk_* filename — infer gk-2a
+    for those rather than crashing on a missing key."""
+    s = entry.get("satellite")
+    if s:
+        return s
+    pipeline = (entry.get("pipeline") or "").lower()
+    fname = (entry.get("pi_filename") or entry.get("filename") or "").lower()
+    if "gk2a" in pipeline or "gk-2a" in pipeline or fname.startswith("chunk_"):
+        return "gk-2a"
+    return "unknown"
+
 def derive_id(entry: dict) -> str:
     """Stable id for a new plate from filename + AOS timestamp."""
-    fname = entry.get("pi_filename", "unknown.iq")
+    fname = entry.get("pi_filename") or entry.get("filename") or "unknown.iq"
     stem = re.sub(r"\.iq$", "", fname)
     aos = entry.get("aos_iso") or entry.get("pi_mtime_iso") or ""
     dt = parse_iso(aos)
     ts = dt.strftime("%Y%m%dT%H%MZ") if dt else "00000000T0000Z"
-    skey = entry["satellite"].replace("-", "")
+    skey = resolve_sat_key(entry).replace("-", "")
     raw = f"{skey}-{ts}-{stem}"
     safe = re.sub(r"[^A-Za-z0-9._-]", "-", raw)
     return safe[:120]
@@ -135,7 +149,7 @@ _GK2A_TS_RE = re.compile(r"(\d{8}T\d{6})Z")
 
 def find_image_for(entry: dict) -> Path | None:
     """Best-effort search for a decoded PNG matching one NDJSON entry."""
-    skey = entry.get("satellite", "")
+    skey = resolve_sat_key(entry)
     aos = entry.get("aos_iso") or entry.get("pi_mtime_iso") or ""
     dt = parse_iso(aos)
     if not dt:
@@ -204,11 +218,22 @@ def nd_to_plate(entry: dict, copy_images: bool = True) -> dict:
     """Translate one canonical (or NDJSON) record to a plates.json record.
     Set copy_images=False to skip the side-effect filesystem copy — used
     by --dry-run."""
-    skey = entry["satellite"]
+    skey = resolve_sat_key(entry)
     info = SAT_INFO.get(skey, {"display": skey.upper(), "band": "L", "freq": 0.0})
 
     aos = entry.get("aos_iso") or entry.get("pi_mtime_iso") or ""
     dt = parse_iso(aos) or datetime.now(timezone.utc)
+
+    # decode_outcome was added to the schema later; older records carry
+    # img_count / cadu_bytes instead — derive an outcome from those.
+    outcome = entry.get("decode_outcome")
+    if not outcome:
+        if entry.get("img_count", 0):
+            outcome = "success"
+        elif entry.get("cadu_bytes", 0):
+            outcome = "partial"
+        else:
+            outcome = "no-lock"
 
     plate: dict[str, Any] = {
         "id": derive_id(entry),
@@ -216,7 +241,7 @@ def nd_to_plate(entry: dict, copy_images: bool = True) -> dict:
         "captured_at": dt.isoformat().replace("+00:00", "Z"),
         "band": info["band"],
         "frequency_mhz": info["freq"],
-        "outcome": entry["decode_outcome"],
+        "outcome": outcome,
         "cadu_bytes": entry.get("cadu_bytes", 0),
         "iq_sha256_first_mb": entry.get("sha256_first_mb"),
         "draft": False,
@@ -230,7 +255,7 @@ def nd_to_plate(entry: dict, copy_images: bool = True) -> dict:
         plate["notes"] = entry["notes"]
 
     # Image discovery — only for outcomes that could have produced one.
-    if entry["decode_outcome"] in ("success", "partial"):
+    if outcome in ("success", "partial"):
         img = find_image_for(entry)
         if img:
             safe_name = re.sub(r"[^a-zA-Z0-9._-]", "-", f"{plate['id']}-{img.name}")[:200]

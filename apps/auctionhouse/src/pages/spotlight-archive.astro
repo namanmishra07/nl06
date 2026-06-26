@@ -1,0 +1,313 @@
+---
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Container  from "@nl06/design-system/components/Container.astro";
+
+// Every lot that ever made the spotlight, snapshotted by the sync at the
+// moment it was featured. This page renders from the snapshot alone, so
+// entries stay readable after a lot closes and leaves the register.
+import historyData from "../content/spotlight-history.json";
+import metaData    from "../content/meta.json";
+
+type Entry = {
+  id: string; spotlit_on: string; title: string; seller: string | null;
+  seller_category: string; location: string | null;
+  start_price_inr: number | null; score: number | null;
+  category: string | null; note: string | null; close_at_utc: string | null;
+  photo: string | null; auction_id: string | null;
+};
+
+const history = (historyData as Entry[]).slice().reverse(); // newest first
+const meta: any = metaData;
+const currentIds = new Set<string>((meta.spotlight_ids ?? []) as string[]);
+const now = Date.now();
+
+const isClosed = (e: Entry) =>
+  !!e.close_at_utc && Date.parse(e.close_at_utc) <= now;
+
+function fmtINR(rupees: number | null): string {
+  if (rupees == null) return "no reserve";
+  if (rupees >= 10_000_000) return `₹${(rupees / 10_000_000).toFixed(2)} cr`;
+  if (rupees >= 100_000)    return `₹${(rupees / 100_000).toFixed(2)} L`;
+  return `₹${rupees.toLocaleString("en-IN")}`;
+}
+const isTokenReserve = (r: number | null) => r != null && r > 0 && r <= 10;
+const TOKEN_TIP = "MSTC published this reserve as listed. Token reserves "
+  + "of a few rupees are standard in government disposal auctions; "
+  + "the EMD and competitive bidding set the actual price.";
+
+function statusOf(e: Entry): { label: string; kind: string } {
+  if (currentIds.has(e.id)) return { label: "in today's spotlight", kind: "live" };
+  if (isClosed(e))          return { label: `closed ${e.close_at_utc!.slice(0, 10)}`, kind: "closed" };
+  return { label: "still live on the register", kind: "live" };
+}
+---
+<BaseLayout
+  title="Spotlight archive · auctionhouse.nl06"
+  description="Every lot that has been featured in the auctionhouse spotlight, kept after the hammer falls."
+  itemNumber="№ AH02"
+>
+  <article class="sa">
+    <Container size="wide" class="sa__inner">
+      <header class="sa__head">
+        <div class="sa__rail">
+          <a class="sa__back" href="/">← Auctionhouse front page</a>
+        </div>
+        <div>
+          <h1 class="sa__title">Spotlight archive.</h1>
+          <p class="sa__lede">
+            Every lot that has been featured on the front page, kept after the
+            hammer falls. Each entry is a snapshot from the day it was
+            spotlighted. {history.length} so far.
+          </p>
+        </div>
+      </header>
+
+      {history.length === 0 ? (
+        <p class="sa__empty">Nothing archived yet. The spotlight rotates
+        nightly; featured lots land here once they rotate out or close.</p>
+      ) : (
+        <ol class="sa__list">
+          {history.map(e => {
+            const st = statusOf(e);
+            return (
+              <li class="sa-card">
+                <div class="sa-card__side">
+                  <span class="sa-card__date">{e.spotlit_on}</span>
+                  <span class="sa-card__stamp"><b>{e.score ?? "·"}</b><i>/10</i></span>
+                  <span class:list={["sa-card__status", `sa-card__status--${st.kind}`]}>
+                    {st.label}
+                  </span>
+                </div>
+                {e.photo && (
+                  <img class="sa-card__photo" src={e.photo} alt="" loading="lazy" />
+                )}
+                <div class="sa-card__body">
+                  <span class="sa-card__cat">{e.category}</span>
+                  <h2 class="sa-card__title">{e.title}</h2>
+                  {e.note && <p class="sa-card__note">{e.note}</p>}
+                  <p class="sa-card__meta">
+                    {e.seller} ({e.seller_category})
+                    {e.location ? ` · ${e.location}` : ""} ·{" "}
+                    {isTokenReserve(e.start_price_inr) ? (
+                      <span class="sa-card__token" title={TOKEN_TIP}>
+                        token reserve of {fmtINR(e.start_price_inr)}, as listed
+                      </span>
+                    ) : (
+                      `${fmtINR(e.start_price_inr)} reserve`
+                    )}
+                    {e.close_at_utc ? ` · close ${e.close_at_utc.replace("T", " ").replace("Z", "")} UTC` : ""}
+                  </p>
+                  {e.auction_id && (
+                    <button class="sa-card__pdf" type="button" data-aid={e.auction_id}>
+                      Catalogue PDF ↗
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <footer class="sa__foot">
+        <p><a href="/">Front page</a> · <a href="/register">The register</a> ·
+           <a href="/feeds/spotlight.xml">Spotlight RSS</a></p>
+      </footer>
+    </Container>
+  </article>
+
+  <script>
+    // MSTC catalogue PDFs are POST-only; shims for aged-out auctions are
+    // wiped, so the archive builds the form on the fly.
+    document.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-aid]");
+      if (!btn) return;
+      const f = document.createElement("form");
+      f.method = "post";
+      f.action = "https://www.mstcecommerce.com/auctionhome/mstc/auction_detailed_report_pdf.jsp";
+      f.target = "_blank";
+      const i = document.createElement("input");
+      i.type = "hidden"; i.name = "auc"; i.value = btn.dataset.aid!;
+      f.appendChild(i);
+      document.body.appendChild(f);
+      f.submit();
+      f.remove();
+    });
+  </script>
+</BaseLayout>
+
+<style>
+  .sa { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+  .sa__head {
+    display: grid;
+    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    padding-bottom: var(--space-8);
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .sa__back {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    text-decoration: none;
+  }
+  .sa__back:hover { color: var(--color-accent); }
+  .sa__title {
+    font-family: var(--font-serif);
+    font-weight: 900;
+    font-size: var(--type-display);
+    line-height: var(--leading-display);
+    color: var(--color-ink);
+  }
+  .sa__lede {
+    margin-top: var(--space-4);
+    font-family: var(--font-serif);
+    font-size: var(--type-h4);
+    line-height: var(--leading-snug);
+    color: var(--color-ink-soft);
+    max-width: 44rem;
+  }
+  .sa__empty {
+    margin-top: var(--space-10);
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-ink-muted);
+  }
+
+  .sa__list {
+    list-style: none;
+    margin: var(--space-10) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-6);
+  }
+  .sa__list li + li { margin-top: 0; } /* defuse global li + li prose margin */
+
+  .sa-card {
+    display: grid;
+    grid-template-columns: 11rem auto minmax(0, 1fr);
+    gap: var(--space-6);
+    padding: var(--space-6);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+  }
+  .sa-card__side { display: flex; flex-direction: column; gap: var(--space-3); }
+  .sa-card__date {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-accent);
+    font-feature-settings: var(--features-tabular);
+  }
+  .sa-card__stamp {
+    align-self: flex-start;
+    display: inline-flex; align-items: baseline; gap: 0.1em;
+    padding: 0.25em 0.5em;
+    border: 2px solid var(--color-accent);
+    box-shadow: inset 0 0 0 1.5px var(--color-paper-margin), inset 0 0 0 2.5px var(--color-accent);
+    color: var(--color-accent);
+    transform: rotate(-4deg);
+    font-family: var(--font-sans);
+    line-height: 1;
+  }
+  .sa-card__stamp b { font-size: 1.3em; font-weight: 800; }
+  .sa-card__stamp i { font-style: normal; font-size: 0.75em; font-weight: 600; }
+  .sa-card__status {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .sa-card__status--closed { color: var(--color-ink-muted); }
+  .sa-card__status--live   { color: #2e6b3a; }
+
+  .sa-card__photo {
+    width: 11rem;
+    height: 8rem;
+    object-fit: cover;
+    border: 1px solid var(--color-rule-strong);
+    filter: saturate(0.85);
+    align-self: start;
+  }
+
+  .sa-card__cat {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 600;
+  }
+  .sa-card__title {
+    margin-top: var(--space-1);
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h3);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+  }
+  .sa-card__note {
+    margin-top: var(--space-3);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+    max-width: 46rem;
+  }
+  .sa-card__meta {
+    margin-top: var(--space-3);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+  .sa-card__token {
+    color: var(--color-accent);
+    font-weight: 600;
+    border-bottom: 1px dotted var(--color-accent);
+    cursor: help;
+  }
+  .sa-card__pdf {
+    margin-top: var(--space-4);
+    appearance: none;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule-strong);
+    padding: 0.35rem 0.8rem;
+  }
+  .sa-card__pdf:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+  .sa__foot {
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+  }
+  .sa__foot a { color: inherit; }
+  .sa__foot a:hover { color: var(--color-accent); }
+
+  @media (max-width: 760px) {
+    .sa__head, .sa-card { grid-template-columns: 1fr; }
+    .sa-card__side { flex-direction: row; align-items: center; flex-wrap: wrap; }
+    .sa-card__photo { width: 100%; height: auto; max-height: 14rem; }
+  }
+</style>

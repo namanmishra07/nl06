@@ -1,0 +1,295 @@
+---
+// SearchBar — full-database search over /search.json (~all active lots,
+// lazy-fetched on first focus). Hits on the register open the lot plate
+// (LotModal must be present on the page); everything else opens the MSTC
+// catalogue PDF via an on-the-fly POST form.
+interface Props { searchable: number }
+const { searchable } = Astro.props;
+---
+<div class="ah__search" data-ah-search>
+  <label class="ah__search-icon" for="ah-q" aria-label="Search">
+    <svg viewBox="0 0 20 20" width="18" height="18" fill="none"
+         stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <circle cx="8.5" cy="8.5" r="5.5" />
+      <line x1="12.8" y1="12.8" x2="17.5" y2="17.5" stroke-linecap="round" />
+    </svg>
+  </label>
+  <input class="ah__search-input" id="ah-q" type="search"
+         placeholder={`Search all ${searchable.toLocaleString("en-IN")} active lots…`}
+         autocomplete="off" spellcheck="false"
+         data-search-url="/search.json" />
+  <span class="ah__search-state" data-ah-search-state></span>
+  <kbd class="ah__search-kbd" title="press / to search">/</kbd>
+  <div class="ah__search-panel" data-ah-search-panel hidden>
+    <p class="ah__search-hint" data-ah-search-hint>
+      Searches titles, sellers, locations, and annexure text across every
+      active lot, including the thousands below the register's publishing
+      floor.
+    </p>
+    <ol class="ah__search-results" data-ah-search-results></ol>
+  </div>
+</div>
+
+<script>
+  type SearchRow = [string, string, string, string, string, number, string,
+                    number | null, string, string, number];
+  const box   = document.querySelector<HTMLElement>("[data-ah-search]");
+  const input = box?.querySelector<HTMLInputElement>("input[type=search]");
+  const panel = box?.querySelector<HTMLElement>("[data-ah-search-panel]");
+  const out   = box?.querySelector<HTMLOListElement>("[data-ah-search-results]");
+  const stateEl = box?.querySelector<HTMLElement>("[data-ah-search-state]");
+  const hint  = box?.querySelector<HTMLElement>("[data-ah-search-hint]");
+
+  if (box && input && panel && out) {
+    let rows: SearchRow[] | null = null;
+    let loading = false;
+
+    const fmtPrice = (p: number | null) => {
+      if (p == null) return "no reserve";
+      if (p >= 1e7) return `₹${(p / 1e7).toFixed(2)} cr`;
+      if (p >= 1e5) return `₹${(p / 1e5).toFixed(2)} L`;
+      return `₹${p.toLocaleString("en-IN")}`;
+    };
+
+    async function load() {
+      if (rows || loading) return;
+      loading = true;
+      if (stateEl) stateEl.textContent = "loading index…";
+      try {
+        const r = await fetch(input!.dataset.searchUrl!);
+        const j = await r.json();
+        rows = j.rows as SearchRow[];
+        if (stateEl) stateEl.textContent = `${rows.length.toLocaleString("en-IN")} lots indexed`;
+      } catch {
+        if (stateEl) stateEl.textContent = "index failed to load";
+      }
+      loading = false;
+      run();
+    }
+
+    function openCatalogue(aid: string) {
+      // MSTC's catalogue endpoint is POST-only; build the form on the fly
+      // (same trick as the static shims, no file needed).
+      const f = document.createElement("form");
+      f.method = "post";
+      f.action = "https://www.mstcecommerce.com/auctionhome/mstc/auction_detailed_report_pdf.jsp";
+      f.target = "_blank";
+      const i = document.createElement("input");
+      i.type = "hidden"; i.name = "auc"; i.value = aid;
+      f.appendChild(i);
+      document.body.appendChild(f);
+      f.submit();
+      f.remove();
+    }
+
+    function run() {
+      const q = input!.value.trim().toLowerCase();
+      if (!q || !rows) {
+        panel!.hidden = !document.activeElement || document.activeElement !== input || !q;
+        if (out) out.innerHTML = "";
+        return;
+      }
+      const tokens = q.split(/\s+/).filter(Boolean);
+      type Hit = { r: SearchRow; rank: number };
+      const hits: Hit[] = [];
+      for (const r of rows) {
+        const title = r[2].toLowerCase();
+        const hay = (r[2] + " " + r[3] + " " + r[4] + " " + r[9]).toLowerCase();
+        let ok = true, titleHits = 0;
+        for (const t of tokens) {
+          if (title.includes(t)) { titleHits++; continue; }
+          if (!hay.includes(t)) { ok = false; break; }
+        }
+        if (!ok) continue;
+        hits.push({ r, rank: titleHits * 100 + (r[5] || 0) + (r[10] ? 50 : 0) });
+        if (hits.length >= 400) break;
+      }
+      hits.sort((a, b) => b.rank - a.rank);
+      const top = hits.slice(0, 30);
+
+      out!.innerHTML = "";
+      if (hint) hint.hidden = top.length > 0;
+      if (top.length === 0) {
+        out!.innerHTML = `<li class="ah-sr ah-sr--none">No active lot matches "${q}".</li>`;
+      }
+      for (const { r } of top) {
+        const [id, aid, title, seller, location, score, cat, price, close, , pub] = r;
+        const li = document.createElement("li");
+        li.className = "ah-sr";
+        li.innerHTML =
+          `<span class="ah-sr__score">${score || "·"}</span>` +
+          `<span class="ah-sr__main"><b>${title}</b>` +
+          `<small>${[seller, location].filter(Boolean).join(" · ")}` +
+          `${cat ? " · " + cat : ""} · ${fmtPrice(price)}` +
+          `${close ? " · closes " + close.slice(0, 10) : ""}</small></span>` +
+          (pub
+            ? `<span class="ah-sr__tag ah-sr__tag--reg">on the register</span>`
+            : `<span class="ah-sr__tag">catalogue PDF ↗</span>`);
+        li.addEventListener("click", () => {
+          if (pub) {
+            panel!.hidden = true;
+            const opener = (window as any).__ahOpenLot;
+            if (opener) opener(id);
+            else location.href = `/register#lot-${id}`;
+          } else {
+            openCatalogue(aid);
+          }
+        });
+        out!.appendChild(li);
+      }
+      panel!.hidden = false;
+    }
+
+    let t: number | undefined;
+    input.addEventListener("focus", load);
+    input.addEventListener("input", () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(run, 130);
+    });
+    document.addEventListener("click", (e) => {
+      if (!box!.contains(e.target as Node)) panel!.hidden = true;
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { panel!.hidden = true; input!.blur(); }
+    });
+    // click anywhere on the bar focuses the field
+    box.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest(".ah__search-panel")) return;
+      input!.focus();
+    });
+    // "/" anywhere on the page jumps to search (standard pattern)
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tgt = e.target as HTMLElement;
+      if (tgt.closest("input, textarea, select, [contenteditable]")) return;
+      e.preventDefault();
+      input!.focus();
+      input!.select();
+    });
+  }
+</script>
+
+<style is:global>
+  .ah__search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    border: 1px solid var(--color-rule-strong);
+    border-radius: 2px;
+    background: var(--color-paper);
+    padding: var(--space-3) var(--space-4);
+    cursor: text;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .ah__search:hover { border-color: var(--color-ink); }
+  .ah__search:focus-within {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+  .ah__search-icon {
+    display: inline-flex;
+    color: var(--color-ink-muted);
+    cursor: text;
+    flex: 0 0 auto;
+  }
+  .ah__search:focus-within .ah__search-icon { color: var(--color-accent); }
+  .ah__search-input {
+    flex: 1;
+    min-width: 0;
+    appearance: none;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: var(--type-body);
+    color: var(--color-ink);
+    outline: none;
+  }
+  .ah__search-input::placeholder { color: var(--color-ink-muted); }
+  .ah__search-kbd {
+    flex: 0 0 auto;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    border: 1px solid var(--color-rule-strong);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    padding: 0.05rem 0.45rem;
+    background: var(--color-paper-margin);
+  }
+  .ah__search:focus-within .ah__search-kbd { visibility: hidden; }
+  .ah__search-state {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    white-space: nowrap;
+  }
+  .ah__search-panel {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: -1px; right: -1px;
+    z-index: 30;
+    background: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    box-shadow: 0 14px 30px rgba(20, 16, 10, 0.14);
+    max-height: 30rem;
+    overflow-y: auto;
+  }
+  .ah__search-hint {
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    border-bottom: 1px dashed var(--color-rule);
+  }
+  .ah__search-results { list-style: none; margin: 0; padding: 0; }
+  .ah__search-results li + li { margin-top: 0; } /* defuse global li + li prose margin */
+  .ah-sr {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-rule);
+    cursor: pointer;
+  }
+  .ah-sr:hover { background: var(--color-paper-margin); }
+  .ah-sr--none { cursor: default; font-family: var(--font-serif); font-style: italic; color: var(--color-ink-muted); }
+  .ah-sr__score {
+    flex: 0 0 1.9rem;
+    text-align: center;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: var(--type-small);
+    color: var(--color-accent);
+    border: 1px solid var(--color-rule-strong);
+    padding: 0.15rem 0;
+  }
+  .ah-sr__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .ah-sr__main b {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-small);
+    color: var(--color-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ah-sr__main small {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ah-sr__tag {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+  }
+  .ah-sr__tag--reg { color: var(--color-accent); font-weight: 600; }
+  @media (max-width: 760px) {
+    .ah__search-state, .ah__search-kbd { display: none; }
+  }
+</style>

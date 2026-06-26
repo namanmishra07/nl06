@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Container  from "@nl06/design-system/components/Container.astro";
+import LotModal   from "~/components/LotModal.astro";
 
 // Static-time imports. sync-auctionhouse.py writes both files before the
 // build runs; an empty lots.json is the normal "no qualifying lots today"
@@ -8,40 +9,19 @@ import Container  from "@nl06/design-system/components/Container.astro";
 import lotsData from "../content/lots.json";
 import metaData from "../content/meta.json";
 
-type Annexure = {
-  filename: string;
-  url:      string;
-  has_text: boolean;
-};
-
 type Lot = {
-  id:               string;
-  source:           string;
-  source_url:       string;
-  mstc_listing_url: string | null;
-  auction_id:       string | null;
-  sublot_count:     number;
-  title:            string;
-  seller:           string | null;
-  seller_category:  string;
-  location:         string | null;
-  start_price_inr:  number | null;
-  emd_inr:          number | null;
-  close_at_utc:     string | null;
-  status:           string;
-  score:            number | null;
-  category:         string | null;
-  confidence:       number | null;
-  note:             string | null;
-  note_is_editor:   boolean;
-  boosted:          boolean;
-  annexures:        Annexure[];
-  group_total?:     number;
-  group_more?:      number;
+  id: string; source: string; source_url: string; title: string; score_title: string | null; seller: string | null;
+  seller_category: string; location: string | null;
+  start_price_inr: number | null; close_at_utc: string | null;
+  status: string; score: number | null; category: string | null;
+  confidence: number | null; note: string | null; note_is_editor: boolean; boosted: boolean;
+  first_seen_utc?: string | null; photos?: string[];
 };
 
 const lots: Lot[] = lotsData as Lot[];
 const meta:  any  = metaData;
+
+const ALERTS_WORKER = "https://auctionhouse-alerts.nl06.workers.dev";
 
 const synced     = new Date(meta.synced_at_utc);
 const syncedISO  = synced.toISOString().slice(0, 16).replace("T", " ") + " UTC";
@@ -54,63 +34,45 @@ const filter     = meta.publish_filter as {
 const lastRun    = meta.last_run as any | null;
 const lastRunErr = lastRun?.error as string | null;
 
-// Lowest score that could surface — used for the empty-state copy.
-const lowestThreshold = Math.min(
-  ...Object.values(filter.category_thresholds),
-  filter.prestige_seller_floor,
-);
+// ── derived shelves ─────────────────────────────────────────────────────────
+const spotlightIds = new Set<string>((meta.spotlight_ids ?? []) as string[]);
+const spotlight    = lots.filter(l => spotlightIds.has(l.id));
 
-// Filter facets — pre-counted at build time so chip labels are honest.
-const PRESTIGE_SELLERS = new Set(filter.prestige_categories);
-const CLOSING_SOON_DAYS = 7;
-const closingSoonCutoffMs = synced.getTime() + CLOSING_SOON_DAYS * 86400 * 1000;
-const isPrestigeSeller = (l: Lot) => PRESTIGE_SELLERS.has(l.seller_category);
-const isClosingSoon = (l: Lot) =>
-  !!l.close_at_utc && Date.parse(l.close_at_utc) <= closingSoonCutoffMs;
+// Hammer falls: strictly OPEN lots only (close in the future at build time;
+// the client also hides anything that closes while the page is up), in
+// ascending close order — soonest first.
+const CLOSING_RAIL_HOURS = 72;
+const railCutoffMs = synced.getTime() + CLOSING_RAIL_HOURS * 3600 * 1000;
+const closingRail = lots
+  .filter(l => l.close_at_utc
+            && Date.parse(l.close_at_utc) > synced.getTime()
+            && Date.parse(l.close_at_utc) <= railCutoffMs)
+  .sort((a, b) => Date.parse(a.close_at_utc!) - Date.parse(b.close_at_utc!))
+  .slice(0, 12);
 
 const CATEGORIES = ["curio", "arbitrage", "prestige-seller", "niche-instrument"] as const;
 const CATEGORY_LABELS: Record<typeof CATEGORIES[number], string> = {
-  "curio": "Curio",
-  "arbitrage": "Arbitrage",
-  "prestige-seller": "Prestige",
-  "niche-instrument": "Niche",
-};
-const SCORE_STEPS = [4, 5, 6, 7, 8, 9];
-
-const facetCounts = {
-  total: lots.length,
-  category: Object.fromEntries(
-    CATEGORIES.map(c => [c, lots.filter(l => l.category === c).length])
-  ) as Record<typeof CATEGORIES[number], number>,
-  minScore: Object.fromEntries(
-    SCORE_STEPS.map(s => [s, lots.filter(l => (l.score ?? 0) >= s).length])
-  ) as Record<number, number>,
-  prestigeSeller: lots.filter(isPrestigeSeller).length,
-  closingSoon: lots.filter(isClosingSoon).length,
+  "curio": "Curio", "arbitrage": "Arbitrage",
+  "prestige-seller": "Prestige", "niche-instrument": "Niche",
 };
 
 function fmtINR(rupees: number | null): string {
-  if (rupees == null) return "—";
+  if (rupees == null) return "no reserve";
   if (rupees >= 10_000_000) return `₹${(rupees / 10_000_000).toFixed(2)} cr`;
   if (rupees >= 100_000)    return `₹${(rupees / 100_000).toFixed(2)} L`;
   return `₹${rupees.toLocaleString("en-IN")}`;
 }
-
-function fmtClose(iso: string | null): string {
-  if (!iso) return "—";
-  return iso.replace("T", " ").replace("Z", "") + " UTC";
-}
-
-function statusMark(lot: Lot): string {
-  if (lot.boosted) return "BOOSTED";
-  if (lot.status === "closed") return "CLOSED";
-  if (lot.status === "cancelled") return "CANCELLED";
-  return "ACTIVE";
-}
+// A reserve of a few rupees is real, not a data bug: MSTC disposal
+// auctions routinely publish nominal "token" reserves and let bidding
+// set the price. Call it what it is so nobody reads ₹1 as a placeholder.
+const isTokenReserve = (r: number | null) => r != null && r > 0 && r <= 10;
+const TOKEN_TIP = "MSTC publishes this reserve as listed. Token reserves "
+  + "of a few rupees are standard in government disposal auctions; "
+  + "the EMD and competitive bidding set the actual price.";
 ---
 <BaseLayout
-  title="auctionhouse.nl06 — A register of government lots"
-  description="A register of Indian government surplus and disposal auctions listed on MSTC India. Scored and updated nightly."
+  title="auctionhouse.nl06 · A register of government lots"
+  description="A register of Indian government surplus and disposal auctions from MSTC, BAANKNET, and IREPS. Searchable, scored, and updated nightly, with email alerts."
   itemNumber="№ AH00"
 >
   <article class="ah">
@@ -124,208 +86,182 @@ function statusMark(lot: Lot): string {
         </div>
 
         <div class="ah__heading">
-          <span class="ah__eyebrow">A standing register of public-sector auctions, India</span>
           <h1 class="ah__title">
-            <span class="ah__title-line">Auctionhouse.</span>
-            <span class="ah__title-emphasis">What the state is selling.</span>
+            <span class="ah__title-line">What the State</span>
+            <span class="ah__title-emphasis">Is Selling.</span>
           </h1>
-          <p class="ah__lede dropcap-text">
-            Each working day the Government of India lists thousands of lots through
-            <strong>MSTC Limited</strong> &mdash; the public-sector e-auction platform that
-            handles surplus, disposal, and confiscated-goods sales for the ministries, the
-            Railways, defence-PSU yards, port trusts, and customs warehouses. This page
-            tracks those listings and surfaces the ones worth a closer look.
-          </p>
-
-          <p class="ah__sub">
-            Scored nightly on four axes: <em>arbitrage</em> (priced below likely
-            resale value), <em>niche-instrument</em> (a tool that rarely comes up),
-            <em>prestige-seller</em> (notable selling agency), and <em>curio</em>
-            (unusual object). The publishing floor differs by axis — arbitrage needs
-            a clear margin ({filter.category_thresholds["arbitrage"]}+/10); prestige
-            and curio surface earlier ({filter.category_thresholds["prestige-seller"]}+).
-            Anything from a prestige seller (DRDO, ISRO, CSIR, HAL, academic) also
-            surfaces at {filter.prestige_seller_floor}+ regardless of category fit.
-          </p>
         </div>
       </header>
 
-      <!-- REGISTER ──────────────────────────────────────────────── -->
-      <section class="ah__register" id="register">
-        <header class="ah__banner reveal">
-          <span class="ah__banner__num">¶</span>
-          <h2 class="ah__banner__title">The register</h2>
-          <span class="ah__banner__rule" aria-hidden="true"></span>
-          <span class="ah__banner__count">
-            {lots.length} surfaced
-            {counts.collapsed_seller_category
-              ? ` · ${counts.collapsed_seller_category} near-duplicates collapsed` : ""}
-             · {counts.active} active · {counts.scored_active} scored
-          </span>
-        </header>
+      <!-- SPOTLIGHT ─────────────────────────────────────────────── -->
+      {spotlight.length > 0 && (
+        <section class="ah__spot" id="spotlight" aria-label="Spotlight">
+          <header class="ah__banner reveal">
+            <span class="ah__banner__num">✶</span>
+            <h2 class="ah__banner__title">Spotlight</h2>
+            <span class="ah__banner__rule" aria-hidden="true"></span>
+            <span class="ah__banner__count">
+              <a class="ah__banner__archive" href="/spotlight-archive">Spotlight archive →</a>
+            </span>
+          </header>
 
-        {lots.length > 0 && (
-          <form class="ah__filters" data-ah-filters>
-            <div class="ah__filter-row">
-              <span class="ah__filter-label">Show</span>
-              <button type="button" class="ah__chip is-active"
-                      data-facet="category" data-value="*"
-                      aria-pressed="true">
-                All <small>{facetCounts.total}</small>
-              </button>
-              {CATEGORIES.map(cat => (
-                <button type="button" class="ah__chip"
-                        data-facet="category" data-value={cat}
-                        aria-pressed="false">
-                  {CATEGORY_LABELS[cat]} <small>{facetCounts.category[cat]}</small>
-                </button>
-              ))}
-            </div>
-            <div class="ah__filter-row">
-              <span class="ah__filter-label">Score</span>
-              {SCORE_STEPS.map(s => (
-                <button type="button" class="ah__chip"
-                        data-facet="minscore" data-value={String(s)}
-                        aria-pressed="false">
-                  ≥{s} <small>{facetCounts.minScore[s]}</small>
-                </button>
-              ))}
-            </div>
-            <div class="ah__filter-row">
-              <span class="ah__filter-label">Subset</span>
-              <button type="button" class="ah__chip"
-                      data-facet="prestige-seller" data-value="1"
-                      aria-pressed="false">
-                From prestige seller <small>{facetCounts.prestigeSeller}</small>
-              </button>
-              <button type="button" class="ah__chip"
-                      data-facet="closing-soon" data-value="1"
-                      aria-pressed="false">
-                Closing in {CLOSING_SOON_DAYS}d <small>{facetCounts.closingSoon}</small>
-              </button>
-              <button type="button" class="ah__chip ah__chip--reset"
-                      data-facet="reset" hidden>
-                Reset
-              </button>
-              <span class="ah__filter-status" data-ah-status>
-                {lots.length} showing
-              </span>
-            </div>
-          </form>
-        )}
-
-        {lots.length === 0 ? (
-          <div class="ah__empty">
-            <p class="ah__empty-headline">
-              No active lots currently meet the publishing threshold.
-            </p>
-            <p class="ah__empty-detail">
-              The pipeline ran at <time datetime={meta.synced_at_utc}>{syncedISO}</time>.
-              It tracks <strong>{counts.active}</strong> active lots across MSTC&rsquo;s
-              twenty regional offices, and has scored <strong>{counts.scored_active}</strong>
-              of them. The highest-scoring active lot today is
-              <strong> {counts.top_active_score}/10</strong>. New lots arrive nightly;
-              the lowest publishing floor is {lowestThreshold}/10 (prestige &amp; curio).
-            </p>
-            {lastRunErr ? (
-              <p class="ah__empty-error">
-                Last ingestion attempt failed: <code>{lastRunErr.slice(0, 200)}</code>.
-                The page is showing the snapshot from before that failure.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <ol class="ah__register-list" data-ah-list>
-            {lots.map((lot, i) => (
-              <li
-                class="reveal"
-                data-ah-item
-                data-index={String(i + 1)}
-                data-category={lot.category ?? ""}
-                data-score={String(lot.score ?? 0)}
-                data-prestige-seller={isPrestigeSeller(lot) ? "1" : "0"}
-                data-close-utc={lot.close_at_utc ?? ""}
-              >
-                <article class="ah-lot">
-                  <aside class="ah-lot__rail">
-                    <span class="ah-lot__mark" data-ah-mark>Lot №&nbsp;{String(i + 1).padStart(2, "0")}</span>
-                    <span class:list={[
-                      "status-mark",
-                      lot.status === "active" ? "status-mark--live" : "status-mark--unresolved",
-                    ]}>{statusMark(lot)}</span>
-                    {lot.score != null ? (
-                      <span class="ah-lot__score">Score {lot.score}/10</span>
-                    ) : null}
-                    {lot.category ? (
-                      <span class="ah-lot__cat">{lot.category}</span>
-                    ) : null}
-                    {lot.sublot_count > 1 ? (
-                      <span class="ah-lot__sublots">× {lot.sublot_count} sublots</span>
-                    ) : null}
-                    {lot.close_at_utc ? (
-                      <span class="ah-lot__when">Close · {fmtClose(lot.close_at_utc)}</span>
-                    ) : null}
-                  </aside>
-
-                  <div class="ah-lot__body">
-                    <h3 class="ah-lot__title">
-                      <a href={lot.source_url} rel="noopener" target="_blank">{lot.title}</a>
-                    </h3>
-                    {lot.group_more && lot.group_more > 0 ? (
-                      <p class="ah-lot__more">
-                        + {lot.group_more} more {lot.category} {lot.group_more === 1 ? "lot" : "lots"} from this seller, collapsed
-                      </p>
-                    ) : null}
-                    {lot.note ? (
-                      <p class:list={["ah-lot__note", lot.note_is_editor && "ah-lot__note--editor"]}>
-                        {lot.note}
-                      </p>
-                    ) : null}
-                    <dl class="ah-lot__rows">
-                      {lot.seller && (
-                        <div class="ah-lot__row"><dt>Selling agency</dt><dd>
-                          {lot.seller} <span class="ah-lot__chip">{lot.seller_category}</span>
-                        </dd></div>
-                      )}
-                      {lot.location && (
-                        <div class="ah-lot__row"><dt>Location</dt><dd>{lot.location}</dd></div>
-                      )}
-                      {lot.start_price_inr != null && (
-                        <div class="ah-lot__row"><dt>Reserve</dt>
-                          <dd class="tabular">
-                            {fmtINR(lot.start_price_inr)}
-                            {lot.sublot_count > 1 ? (
-                              <span class="ah-lot__sublot-note">&nbsp;per sublot</span>
-                            ) : null}
-                          </dd></div>
-                      )}
-                      {lot.emd_inr != null && (
-                        <div class="ah-lot__row"><dt>EMD</dt><dd class="tabular">{fmtINR(lot.emd_inr)}</dd></div>
-                      )}
-                      {lot.close_at_utc && (
-                        <div class="ah-lot__row"><dt>Closes</dt><dd class="tabular">{fmtClose(lot.close_at_utc)}</dd></div>
-                      )}
-                      {lot.annexures && lot.annexures.length > 0 && (
-                        <div class="ah-lot__row"><dt>Annexures</dt><dd>
-                          <ul class="ah-lot__annex">
-                            {lot.annexures.map(ax => (
-                              <li>
-                                <a href={ax.url} rel="noopener" target="_blank">{ax.filename}</a>
-                                {ax.has_text
-                                  ? null
-                                  : <span class="ah-lot__annex-note"> (no extractable text)</span>}
-                              </li>
-                            ))}
-                          </ul>
-                        </dd></div>
-                      )}
-                    </dl>
-                  </div>
-                </article>
+          <ol class="ah__spot-shelf">
+            {spotlight.map((lot, i) => (
+              <li class="ah-spot reveal">
+                <a class="ah-spot__link" href={`/register#lot-${lot.id}`}
+                   data-lot-open={lot.id} data-spot-close={lot.close_at_utc ?? ""}>
+                  <span class="ah-spot__index">{String(i + 1).padStart(2, "0")}</span>
+                  {lot.photos && lot.photos.length > 0 && (
+                    <img class="ah-spot__thumb" src={lot.photos[0]} alt="" loading="lazy" />
+                  )}
+                  <span class="ah-spot__cat">{lot.category}</span>
+                  <h3 class="ah-spot__title">{lot.score_title ?? lot.title}</h3>
+                  {lot.note ? (
+                    <p class="ah-spot__why">{lot.note}</p>
+                  ) : null}
+                  <span class="ah-spot__meta">
+                    {fmtINR(lot.start_price_inr)}
+                  </span>
+                </a>
               </li>
             ))}
           </ol>
-        )}
+        </section>
+      )}
+
+      <!-- REGISTER TEASER ───────────────────────────────────────── -->
+      <section class="ah__teaser reveal" aria-label="The register">
+        <a class="ah__teaser-link" href="/register">
+          <span class="ah__teaser-num">¶</span>
+          <span class="ah__teaser-main">
+            <span class="ah__teaser-title">Open the full register</span>
+            <span class="ah__teaser-sub">
+              {lots.length} lots currently surfaced
+              {counts.collapsed_seller_category
+                ? ` · ${counts.collapsed_seller_category} near-duplicates collapsed` : ""}
+               · filters, photos, and search across all {(counts.searchable ?? counts.active).toLocaleString("en-IN")} active lots
+            </span>
+          </span>
+          <span class="ah__teaser-arrow" aria-hidden="true">→</span>
+        </a>
+        {lots.length === 0 ? (
+          <p class="ah__teaser-empty">
+            No active lots currently meet the publishing threshold. The pipeline
+            tracks {counts.active} active lots and re-scores nightly.
+            {lastRunErr ? " The last ingestion attempt failed; showing the prior snapshot." : ""}
+          </p>
+        ) : null}
+      </section>
+
+      <!-- CLOSING SOON RAIL ─────────────────────────────────────── -->
+      {closingRail.length > 0 && (
+        <section class="ah__closing" aria-label="Closing soon">
+          <div class="ah__closing-head">
+            <span class="ah__closing-label">Hammer falls</span>
+            <span class="ah__closing-sub">closing within {CLOSING_RAIL_HOURS} hours · soonest first</span>
+          </div>
+          <ul class="ah__closing-rail" data-ah-rail>
+            {closingRail.map(lot => (
+              <li class="ah-tick">
+                <a href={`/register#lot-${lot.id}`} data-lot-open={lot.id}
+                   data-close={lot.close_at_utc}>
+                  <span class="ah-tick__count">…</span>
+                  <span class="ah-tick__title">{lot.title}</span>
+                  <span class="ah-tick__price">{fmtINR(lot.start_price_inr)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <!-- ALERTS SIGNUP ─────────────────────────────────────────── -->
+      <section class="ah__alerts" id="alerts">
+        <header class="ah__banner reveal">
+          <span class="ah__banner__num">✉</span>
+          <h2 class="ah__banner__title">Alerts</h2>
+          <span class="ah__banner__rule" aria-hidden="true"></span>
+          <span class="ah__banner__count">at most one email a day</span>
+        </header>
+
+        <div class="ah__alerts-grid">
+          <div class="ah__alerts-copy">
+            <p>
+              Get an email when a new lot matches your criteria. The rules are
+              strict by design: at most one digest a day (or a Sunday weekly,
+              your choice), only for lots listed <em>after</em> you subscribe,
+              and never the same lot twice. Confirmation is double opt-in and
+              every email carries a one-click unsubscribe.
+            </p>
+          </div>
+
+          <form class="ah__alerts-form" data-ah-alerts data-worker={ALERTS_WORKER}>
+            <div class="af__row">
+              <label class="af__label" for="af-email">Email</label>
+              <input class="af__input" id="af-email" name="email" type="email"
+                     required placeholder="you@example.com" autocomplete="email" />
+            </div>
+
+            <div class="af__row">
+              <span class="af__label">Categories</span>
+              <div class="af__chips">
+                {CATEGORIES.map(cat => (
+                  <label class="af__chip">
+                    <input type="checkbox" name="categories" value={cat} />
+                    <span>{CATEGORY_LABELS[cat]}</span>
+                  </label>
+                ))}
+              </div>
+              <span class="af__hint">none checked = all categories</span>
+            </div>
+
+            <div class="af__row">
+              <label class="af__label" for="af-score">Min score</label>
+              <select class="af__input af__input--narrow" id="af-score" name="min_score">
+                <option value="5" selected>5 (default)</option>
+                <option value="4">4 (everything surfaced)</option>
+                <option value="6">6</option>
+                <option value="7">7 (high bar)</option>
+                <option value="8">8</option>
+              </select>
+              <label class="af__chip af__chip--toggle">
+                <input type="checkbox" name="prestige_only" value="1" />
+                <span>prestige sellers only</span>
+              </label>
+            </div>
+
+            <div class="af__row">
+              <label class="af__label" for="af-kw">Keywords</label>
+              <input class="af__input" id="af-kw" name="keywords" type="text"
+                     placeholder="optional · comma-separated, e.g. aircraft, oscilloscope, drone"
+                     maxlength="220" />
+            </div>
+
+            <div class="af__row">
+              <label class="af__label" for="af-price">Max reserve</label>
+              <input class="af__input af__input--narrow" id="af-price" name="max_price_inr"
+                     type="number" min="1" placeholder="₹, optional" />
+              <span class="af__label" style="margin-left:auto">Cadence</span>
+              <label class="af__chip af__chip--toggle">
+                <input type="radio" name="cadence" value="daily" checked />
+                <span>daily</span>
+              </label>
+              <label class="af__chip af__chip--toggle">
+                <input type="radio" name="cadence" value="weekly" />
+                <span>weekly (Sundays)</span>
+              </label>
+            </div>
+
+            <!-- honeypot: humans never see it; bots fill it and get dropped -->
+            <input class="af__hp" type="text" name="company" tabindex="-1"
+                   autocomplete="off" aria-hidden="true" />
+
+            <div class="af__row af__row--submit">
+              <button class="af__submit" type="submit">Subscribe</button>
+              <output class="af__status" data-af-status></output>
+            </div>
+          </form>
+        </div>
       </section>
 
       <!-- METHODOLOGY ─────────────────────────────────────────── -->
@@ -343,9 +279,10 @@ function statusMark(lot: Lot): string {
             <div class="ah-step__body">
               <h3 class="ah-step__head">Ingest</h3>
               <p class="ah-step__text">
-                A nightly crawl of MSTC&rsquo;s catalogue pages across all twenty
-                regional offices. Each auction is captured once with provenance &mdash;
-                URL, snapshot, fetched-at timestamp.
+                A nightly crawl of MSTC (twenty regional offices), BAANKNET
+                (IBC liquidation auctions), and IREPS (Indian Railways disposal).
+                Each auction is captured once with provenance: URL, snapshot,
+                fetched-at timestamp.
               </p>
             </div>
           </li>
@@ -355,9 +292,10 @@ function statusMark(lot: Lot): string {
               <h3 class="ah-step__head">Normalise</h3>
               <p class="ah-step__text">
                 Lots are mapped to a single schema: selling agency, category,
-                location, reserve price, EMD, start, close. Annexures &mdash;
-                the per-lot detail PDFs MSTC publishes alongside the catalogue
-                &mdash; are fetched and excerpted.
+                location, reserve price, EMD, start, close. Annexures, the
+                per-lot detail PDFs MSTC publishes alongside the catalogue,
+                are fetched and excerpted. Embedded photos are pulled out of
+                the PDFs and shown on the lot cards.
               </p>
             </div>
           </li>
@@ -368,7 +306,7 @@ function statusMark(lot: Lot): string {
               <p class="ah-step__text">
                 Every lot is scored 1&ndash;10 against four categories:
                 arbitrage, niche-instrument, prestige-seller, curio. The
-                publishing floor is per-category, not uniform — arbitrage
+                publishing floor is per-category, not uniform. Arbitrage
                 needs a clear margin; prestige and curio surface earlier.
                 Anything from a prestige seller is included regardless of
                 category fit.
@@ -378,11 +316,12 @@ function statusMark(lot: Lot): string {
           <li class="ah-step reveal">
             <span class="ah-step__num">04</span>
             <div class="ah-step__body">
-              <h3 class="ah-step__head">Annotate</h3>
+              <h3 class="ah-step__head">Surface</h3>
               <p class="ah-step__text">
-                A small subset of lots gets a written note &mdash; what&rsquo;s
-                being sold, why it&rsquo;s notable, and what the close attracted.
-                Hand-written and infrequent.
+                The register holds the curated cut. Search spans the whole
+                active database. The spotlight rotates nightly. Subscribers
+                get at most one email a day for new matches, and the feeds
+                (RSS and JSON) republish the register for machines.
               </p>
             </div>
           </li>
@@ -402,34 +341,34 @@ function statusMark(lot: Lot): string {
           <div class="ah__source">
             <dt>MSTC Limited</dt>
             <dd>
-              <a href="https://www.mstcindia.co.in" rel="noopener">mstcindia.co.in</a>
-              &nbsp;&mdash;&nbsp; the Government of India&rsquo;s e-auction platform
-              for surplus, disposal, scrap, and confiscated goods. The primary
-              ingest target.
+              <a href="https://www.mstcindia.co.in" rel="noopener">mstcindia.co.in</a>:
+              the Government of India&rsquo;s e-auction platform for surplus, disposal,
+              scrap, and confiscated goods. Twenty regional offices. Primary ingest target.
             </dd>
           </div>
           <div class="ah__source">
-            <dt>DGS&amp;D / GeM</dt>
+            <dt>BAANKNET</dt>
             <dd>
-              The Government e-Marketplace handles procurement, not auctions, so
-              it is out of scope here. Cross-referenced when an MSTC lot is the
-              upstream consequence of a GeM procurement decision.
+              <a href="https://www.baanknet.com" rel="noopener">baanknet.com</a>:
+              the IBBI-mandated auction platform for liquidation proceedings under
+              the Insolvency and Bankruptcy Code. Covers plant, machinery, and
+              business assets from companies in resolution.
             </dd>
           </div>
           <div class="ah__source">
-            <dt>Selling-agency catalogues</dt>
+            <dt>IREPS</dt>
             <dd>
-              Railway divisions, defence PSUs, port trusts, central PSU mills
-              and refineries each publish their own catalogues alongside the
-              MSTC listing. Used to verify lot composition and condition.
+              Indian Railways e-Procurement System: disposal auctions for
+              condemned railway material (sleepers, track fittings, rolling stock
+              parts). Scraped as a supplementary source.
             </dd>
           </div>
         </dl>
 
         <p class="ah__caveat">
-          The register tracks what is publicly listed on MSTC. It does not predict
-          outcomes, advise on bidding, or represent any seller or buyer. Like the rest
-          of <a href="https://nl06.com">nl06</a>, it records what a running system does.
+          The register tracks what is publicly listed across these platforms. It does not
+          predict outcomes, advise on bidding, or represent any seller or buyer. Like the
+          rest of <a href="https://nl06.com">nl06</a>, it records what a running system does.
         </p>
       </section>
 
@@ -441,6 +380,11 @@ function statusMark(lot: Lot): string {
           {counts.scored_active}/{counts.active} scored.
           {lastRun ? `Last ingestion: ${lastRun.source} run #${lastRun.started_at_utc?.slice(0,10)}` : ""}
           {lastRunErr ? <span class="ah__pipeline-fail"> (failed)</span> : null}
+          &nbsp;·&nbsp;
+          <a href="/register">register</a> ·
+          <a href="/feeds/register.xml">RSS</a> ·
+          <a href="/feeds/spotlight.xml">spotlight RSS</a> ·
+          <a href="/feeds/register.json">JSON</a>
         </p>
       </footer>
 
@@ -448,123 +392,86 @@ function statusMark(lot: Lot): string {
     </Container>
   </article>
 
+  <LotModal />
+
   <script>
-    type FacetState = {
-      categories: Set<string>;
-      minScore: number | null;
-      prestigeSeller: boolean;
-      closingSoon: boolean;
-    };
-
-    const root = document.querySelector<HTMLFormElement>("[data-ah-filters]");
-    const list = document.querySelector<HTMLOListElement>("[data-ah-list]");
-    if (root && list) {
-      const items = Array.from(list.querySelectorAll<HTMLLIElement>("[data-ah-item]"));
-      const status = root.querySelector<HTMLElement>("[data-ah-status]");
-      const resetBtn = root.querySelector<HTMLButtonElement>("[data-facet=reset]");
-      const allBtn   = root.querySelector<HTMLButtonElement>('[data-facet=category][data-value="*"]');
-      const total    = items.length;
-      const closingSoonMs = Date.now() + 7 * 86_400_000;
-
-      const state: FacetState = {
-        categories: new Set<string>(),
-        minScore: null,
-        prestigeSeller: false,
-        closingSoon: false,
-      };
-
-      function press(btn: HTMLButtonElement | null, on: boolean) {
-        if (!btn) return;
-        btn.classList.toggle("is-active", on);
-        btn.setAttribute("aria-pressed", on ? "true" : "false");
-      }
-
-      function apply() {
-        let shown = 0;
-        for (const li of items) {
-          const cat   = li.dataset.category || "";
-          const score = Number(li.dataset.score || 0);
-          const ps    = li.dataset.prestigeSeller === "1";
-          const close = li.dataset.closeUtc;
-          const closeMs = close ? Date.parse(close) : Infinity;
-
-          const okCat   = state.categories.size === 0 || state.categories.has(cat);
-          const okScore = state.minScore == null || score >= state.minScore;
-          const okPs    = !state.prestigeSeller || ps;
-          const okClose = !state.closingSoon    || closeMs <= closingSoonMs;
-
-          const show = okCat && okScore && okPs && okClose;
-          li.hidden = !show;
-          if (show) shown++;
-        }
-        let n = 0;
-        for (const li of items) {
-          if (li.hidden) continue;
-          n++;
-          const mark = li.querySelector<HTMLElement>("[data-ah-mark]");
-          if (mark) mark.textContent = `Lot № ${String(n).padStart(2, "0")}`;
-        }
-        if (status) {
-          status.textContent = shown === total
-            ? `${shown} showing`
-            : `${shown} of ${total} showing`;
-        }
-        const anyActive =
-          state.categories.size > 0 ||
-          state.minScore != null ||
-          state.prestigeSeller ||
-          state.closingSoon;
-        if (resetBtn) resetBtn.hidden = !anyActive;
-      }
-
-      function handle(btn: HTMLButtonElement) {
-        const facet = btn.dataset.facet!;
-        const value = btn.dataset.value;
-
-        if (facet === "category") {
-          if (value === "*") {
-            state.categories.clear();
-          } else if (value) {
-            if (state.categories.has(value)) state.categories.delete(value);
-            else state.categories.add(value);
-          }
-          press(allBtn, state.categories.size === 0);
-          root!.querySelectorAll<HTMLButtonElement>(
-            '[data-facet=category]:not([data-value="*"])'
-          ).forEach(b => press(b, state.categories.has(b.dataset.value!)));
-        } else if (facet === "minscore") {
-          const n = Number(value);
-          state.minScore = state.minScore === n ? null : n;
-          root!.querySelectorAll<HTMLButtonElement>("[data-facet=minscore]")
-            .forEach(b => press(b, Number(b.dataset.value) === state.minScore));
-        } else if (facet === "prestige-seller") {
-          state.prestigeSeller = !state.prestigeSeller;
-          press(btn, state.prestigeSeller);
-        } else if (facet === "closing-soon") {
-          state.closingSoon = !state.closingSoon;
-          press(btn, state.closingSoon);
-        } else if (facet === "reset") {
-          state.categories.clear();
-          state.minScore = null;
-          state.prestigeSeller = false;
-          state.closingSoon = false;
-          root!.querySelectorAll<HTMLButtonElement>(".ah__chip").forEach(b =>
-            press(b, false)
-          );
-          press(allBtn, true);
-        }
-        apply();
-      }
-
-      root.addEventListener("click", (e) => {
-        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ah__chip");
-        if (!btn) return;
-        handle(btn);
+    // ── hammer-falls countdowns: live tick + hide anything that closes ────
+    function tick() {
+      const now = Date.now();
+      document.querySelectorAll<HTMLElement>("[data-ah-rail] [data-close]").forEach(a => {
+        const ms = Date.parse(a.dataset.close!) - now;
+        const li = a.closest("li");
+        if (ms <= 0) { if (li) li.hidden = true; return; }
+        const el = a.querySelector<HTMLElement>(".ah-tick__count");
+        if (!el) return;
+        const h = Math.floor(ms / 3.6e6), m = Math.floor((ms % 3.6e6) / 6e4);
+        el.textContent = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        el.classList.toggle("is-urgent", ms < 6 * 3.6e6);
       });
-      // Don't let the form try to submit on Enter.
-      root.addEventListener("submit", (e) => e.preventDefault());
+      // if every chip closed while the page was open, drop the whole rail
+      const rail = document.querySelector<HTMLElement>("[data-ah-rail]");
+      if (rail && ![...rail.children].some(li => !(li as HTMLElement).hidden)) {
+        rail.closest("section")?.setAttribute("hidden", "");
+      }
+      // spotlight never shows a closed lot: hide a card the moment its
+      // hammer falls (the nightly rebuild won't re-pick it)
+      document.querySelectorAll<HTMLElement>("[data-spot-close]").forEach(a => {
+        const iso = a.dataset.spotClose;
+        if (iso && Date.parse(iso) <= now) {
+          const li = a.closest("li");
+          if (li) li.hidden = true;
+        }
+      });
+    }
+    tick();
+    setInterval(tick, 30_000);
+  </script>
 
-      apply();
+  <script>
+    // ── alerts signup ──────────────────────────────────────────────────────
+    const form = document.querySelector<HTMLFormElement>("[data-ah-alerts]");
+    if (form) {
+      const statusOut = form.querySelector<HTMLElement>("[data-af-status]")!;
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const keywords = String(fd.get("keywords") || "")
+          .split(",").map(s => s.trim()).filter(Boolean).slice(0, 5);
+        const body = {
+          email: String(fd.get("email") || "").trim(),
+          cadence: String(fd.get("cadence") || "daily"),
+          hp: String(fd.get("company") || ""),
+          filters: {
+            min_score: Number(fd.get("min_score") || 5),
+            categories: fd.getAll("categories").map(String),
+            prestige_only: fd.get("prestige_only") === "1",
+            keywords,
+            max_price_inr: Number(fd.get("max_price_inr")) || null,
+          },
+        };
+        statusOut.textContent = "sending…";
+        statusOut.className = "af__status";
+        try {
+          const r = await fetch(form.dataset.worker + "/subscribe", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const j = await r.json();
+          if (r.ok) {
+            statusOut.textContent =
+              "Check your inbox. The confirmation link expires in 24 hours.";
+            statusOut.classList.add("af__status--ok");
+            form.reset();
+          } else {
+            statusOut.textContent = j.error || "something went wrong; try again";
+            statusOut.classList.add("af__status--err");
+          }
+        } catch {
+          statusOut.textContent = "network error; try again";
+          statusOut.classList.add("af__status--err");
+        }
+      });
     }
   </script>
 
@@ -606,7 +513,7 @@ function statusMark(lot: Lot): string {
     grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
     gap: var(--space-8);
     align-items: start;
-    padding-bottom: var(--space-10);
+    padding-bottom: var(--space-6);
     border-bottom: 1px solid var(--color-rule);
   }
   .ah__rail {
@@ -626,21 +533,17 @@ function statusMark(lot: Lot): string {
   .rail__label { color: var(--color-ink); font-weight: 600; }
   .rail__date  { color: var(--color-accent); }
   .rail__rule  { height: 1px; background: var(--color-rule); }
-
-  .ah__eyebrow {
-    display: inline-flex;
-    align-items: baseline;
+  .rail__feeds {
+    margin-top: var(--space-2);
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
     color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-rule);
-    margin-bottom: var(--space-6);
   }
+  .rail__feeds a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--color-rule-strong); }
+  .rail__feeds a:hover { color: var(--color-accent); }
+
   .ah__title {
     font-family: var(--font-serif);
     font-weight: 900;
@@ -657,31 +560,14 @@ function statusMark(lot: Lot): string {
     font-weight: 500;
     color: var(--color-accent);
   }
-  .ah__lede {
-    margin-top: var(--space-6);
-    font-family: var(--font-serif);
-    font-size: var(--type-h4);
-    line-height: var(--leading-snug);
-    color: var(--color-ink);
-    max-width: 44rem;
-  }
-  .ah__sub {
-    margin-top: var(--space-5);
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: var(--type-body);
-    line-height: var(--leading-prose);
-    color: var(--color-ink-soft);
-    max-width: 44rem;
-    padding-top: var(--space-5);
-    border-top: 1px dashed var(--color-rule-strong);
-  }
-
-  /* BANNER ──────────────────────────────────────────────────── */
-  .ah__register, .ah__method, .ah__sources {
+  /* SECTION SPINE ───────────────────────────────────────────── */
+  .ah__spot, .ah__closing, .ah__teaser, .ah__alerts, .ah__method, .ah__sources {
     grid-column: 1 / -1;
-    margin-top: var(--space-16);
   }
+  .ah__spot { margin-top: var(--space-8); }
+  .ah__alerts, .ah__method, .ah__sources { margin-top: var(--space-16); }
+  .ah__closing, .ah__teaser { margin-top: var(--space-8); }
+
   .ah__banner {
     display: grid;
     grid-template-columns: auto auto 1fr auto;
@@ -721,34 +607,314 @@ function statusMark(lot: Lot): string {
     font-feature-settings: var(--features-tabular);
     font-weight: 500;
   }
+  .ah__banner__feedlink { color: inherit; }
+  .ah__banner__feedlink:hover { color: var(--color-accent); }
+  .ah__banner__archive {
+    display: inline-block;
+    margin-right: var(--space-3);
+    padding: 0.3em 0.85em;
+    font-family: var(--font-sans);
+    font-size: var(--type-small);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    text-decoration: none;
+    transition: background 100ms, color 100ms;
+  }
+  .ah__banner__archive:hover {
+    background: var(--color-accent);
+    color: var(--color-paper);
+  }
 
-  /* FILTERS ─────────────────────────────────────────────────── */
-  .ah__filters {
-    margin: var(--space-6) 0 0;
-    padding: var(--space-5) 0 var(--space-4);
+  /* SPOTLIGHT shelf ─────────────────────────────────────────── */
+  .ah__spot-shelf {
+    list-style: none;
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
+    gap: var(--space-8);
+  }
+  .ah-spot { border: 1px solid var(--color-rule); }
+  .ah-spot + .ah-spot { margin-top: 0; } /* defuse global li + li prose margin */
+  .ah-spot__link {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    border-bottom: 1px dashed var(--color-rule);
+    gap: var(--space-4);
+    height: 100%;
+    padding: var(--space-8);
+    text-decoration: none;
+    color: inherit;
+    background: var(--color-paper-margin);
+    transition: background 140ms ease;
+    cursor: pointer;
   }
-  .ah__filter-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2);
+  .ah-spot__link:hover { background: var(--color-paper); }
+  .ah-spot__index {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h2);
+    color: var(--color-accent);
+    line-height: 1;
   }
-  .ah__filter-label {
+  .ah-spot__stamp {
+    --stamp: var(--color-accent);
+    position: absolute;
+    top: var(--space-5); right: var(--space-5);
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.1em;
+    padding: 0.28em 0.55em;
+    border: 2px solid var(--stamp);
+    box-shadow: inset 0 0 0 1.5px var(--color-paper-margin), inset 0 0 0 2.5px var(--stamp);
+    color: var(--stamp);
+    transform: rotate(-4deg);
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    opacity: 0.92;
+  }
+  .ah-spot__stamp b { font-size: 1.5em; font-weight: 800; }
+  .ah-spot__stamp i { font-style: normal; font-size: 0.8em; font-weight: 600; }
+  .ah-spot__thumb {
+    width: 100%;
+    aspect-ratio: 16/10;
+    object-fit: cover;
+    border: 1px solid var(--color-rule-strong);
+    filter: saturate(0.85);
+  }
+  .ah-spot__cat {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
     letter-spacing: var(--tracking-meta);
     text-transform: uppercase;
-    color: var(--color-ink);
+    color: var(--color-ink-muted);
     font-weight: 600;
-    min-width: 4.5rem;
   }
-  .ah__chip {
-    appearance: none;
+  .ah-spot__title {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h3);
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+  }
+  .ah-spot__link:hover .ah-spot__title { color: var(--color-accent); }
+  .ah-spot__why {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    line-height: 1.45;
+    color: var(--color-ink-soft);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ah-spot__meta {
+    margin-top: auto;
+    padding-top: var(--space-3);
+    border-top: 1px dotted var(--color-rule-strong);
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+  .ah-spot__agency {
+    display: block;
+    font-size: 0.7em;
+    letter-spacing: 0.12em;
+    color: var(--color-accent);
+    margin-bottom: var(--space-1);
+  }
+  .ah-spot__token {
+    color: var(--color-accent);
+    font-weight: 600;
+    border-bottom: 1px dotted var(--color-accent);
+    cursor: help;
+  }
+
+  /* CLOSING RAIL ────────────────────────────────────────────── */
+  .ah__closing {
+    border-top: 1px solid var(--color-ink);
+    border-bottom: 1px solid var(--color-ink);
+    padding: var(--space-3) 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-6);
+    align-items: center;
+  }
+  .ah__closing-head { display: flex; flex-direction: column; white-space: nowrap; }
+  .ah__closing-label {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h4);
+    color: var(--color-ink);
+  }
+  .ah__closing-sub {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+  }
+  .ah__closing-rail {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-3);
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: var(--space-2);
+  }
+  /* the design system's prose rule `li + li { margin-top }` pushes every
+     chip after the first down in this flex row — neutralize it */
+  .ah-tick + .ah-tick { margin-top: 0; }
+  .ah-tick { flex: 0 0 auto; display: flex; }
+  .ah-tick a {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    gap: var(--space-3);
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--color-rule-strong);
+    background: var(--color-paper-margin);
+    text-decoration: none;
+    color: inherit;
+    max-width: 26rem;
+    transition: border-color 120ms ease;
     cursor: pointer;
+  }
+  .ah-tick a:hover { border-color: var(--color-accent); }
+  .ah-tick__count {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: var(--type-small);
+    font-feature-settings: var(--features-tabular);
+    color: var(--color-accent);
+    white-space: nowrap;
+  }
+  .ah-tick__count.is-urgent { color: #b94a47; }
+  .ah-tick__title {
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 16rem;
+  }
+  .ah-tick__price {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+    white-space: nowrap;
+  }
+
+  /* REGISTER TEASER ─────────────────────────────────────────── */
+  .ah__teaser-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-6) var(--space-7);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 140ms ease, background 140ms ease;
+  }
+  .ah__teaser-link:hover { border-color: var(--color-accent); background: var(--color-paper); }
+  .ah__teaser-num {
+    font-family: var(--font-serif);
+    font-weight: 800;
+    font-size: var(--type-h1);
+    color: var(--color-accent);
+    line-height: 0.9;
+  }
+  .ah__teaser-main { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+  .ah__teaser-title {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: var(--type-h3);
+    color: var(--color-ink);
+  }
+  .ah__teaser-sub {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-feature-settings: var(--features-tabular);
+  }
+  .ah__teaser-arrow {
+    margin-left: auto;
+    font-family: var(--font-serif);
+    font-size: var(--type-h2);
+    color: var(--color-accent);
+  }
+  .ah__teaser-empty {
+    margin-top: var(--space-4);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--type-small);
+    color: var(--color-ink-muted);
+  }
+
+  /* ALERTS ──────────────────────────────────────────────────── */
+  .ah__alerts-grid {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: var(--space-10);
+    align-items: start;
+  }
+  .ah__alerts-copy p {
+    font-family: var(--font-serif);
+    font-size: var(--type-body);
+    line-height: var(--leading-prose);
+    color: var(--color-ink-soft);
+  }
+  .ah__alerts-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-6);
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper-margin);
+  }
+  .af__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+  .af__label {
+    font-family: var(--font-sans);
+    font-size: var(--type-marginalia);
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-ink);
+    min-width: 6rem;
+  }
+  .af__input {
+    flex: 1;
+    min-width: 10rem;
+    font-family: var(--font-serif);
+    font-size: var(--type-small);
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule-strong);
+    padding: 0.4rem 0.6rem;
+  }
+  .af__input--narrow { flex: 0 1 11rem; }
+  .af__input:focus { outline: none; border-color: var(--color-accent); }
+  .af__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .af__chip { display: inline-flex; cursor: pointer; }
+  .af__chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .af__chip span {
     font-family: var(--font-sans);
     font-size: var(--type-small);
     letter-spacing: var(--tracking-meta);
@@ -758,195 +924,39 @@ function statusMark(lot: Lot): string {
     border: 1px solid var(--color-rule-strong);
     padding: 0.25rem 0.7rem;
     line-height: 1.2;
-    transition: background 80ms, color 80ms, border-color 80ms;
+    transition: background 80ms, color 80ms;
   }
-  .ah__chip small {
-    margin-left: 0.4em;
-    font-feature-settings: var(--features-tabular);
-    color: var(--color-ink-muted);
-    font-size: 0.85em;
-    font-weight: 500;
-  }
-  .ah__chip:hover { border-color: var(--color-ink); }
-  .ah__chip.is-active {
+  .af__chip input:checked + span {
     background: var(--color-ink);
     color: var(--color-paper);
     border-color: var(--color-ink);
   }
-  .ah__chip.is-active small {
-    color: var(--color-paper);
-    opacity: 0.75;
-  }
-  .ah__chip--reset {
-    border-style: dashed;
-    color: var(--color-ink-muted);
-  }
-  .ah__filter-status {
-    margin-left: auto;
+  .af__chip input:focus-visible + span { outline: 2px solid var(--color-accent); }
+  .af__hint {
     font-family: var(--font-sans);
     font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
     color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-  }
-
-  /* EMPTY STATE ─────────────────────────────────────────────── */
-  .ah__empty {
-    margin: var(--space-10) 0;
-    padding: var(--space-8);
-    background: var(--color-paper-margin);
-    border: 1px dashed var(--color-rule-strong);
-    max-width: 50rem;
-  }
-  .ah__empty-headline {
-    font-family: var(--font-serif);
-    font-weight: 700;
-    font-size: var(--type-h3);
-    color: var(--color-ink);
-    margin: 0;
-  }
-  .ah__empty-detail {
-    margin-top: var(--space-4);
-    font-family: var(--font-serif);
-    font-size: var(--type-body);
-    line-height: var(--leading-prose);
-    color: var(--color-ink-soft);
-  }
-  .ah__empty-error {
-    margin-top: var(--space-4);
-    font-family: var(--font-sans);
-    font-size: var(--type-small);
-    color: var(--color-ink-muted);
-  }
-  .ah__empty-error code {
-    font-family: var(--font-mono);
-    background: var(--color-paper);
-    padding: 0 0.25em;
-  }
-
-  /* REGISTER LIST ───────────────────────────────────────────── */
-  .ah__register-list {
-    list-style: none;
-    margin: var(--space-8) 0 0;
-    padding: 0;
-    display: grid;
-    gap: var(--space-8);
-  }
-
-  /* LOT card ────────────────────────────────────────────────── */
-  .ah-lot {
-    display: grid;
-    grid-template-columns: var(--width-marginalia) minmax(0, 1fr);
-    gap: var(--space-8);
-    padding: var(--space-8);
-    border: 1px solid var(--color-ink);
-    background: var(--color-paper-margin);
-    transition: border-color 160ms ease;
-  }
-  .ah-lot:hover,
-  .ah-lot:focus-within { border-color: var(--color-accent); }
-  .ah-lot__rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-  .ah-lot__mark {
-    font-family: var(--font-serif);
-    font-weight: 800;
-    font-size: var(--type-h2);
-    color: var(--color-accent);
-    line-height: 1;
-    letter-spacing: var(--tracking-display);
-  }
-  .ah-lot__when, .ah-lot__cat, .ah-lot__score {
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-  }
-  .ah-lot__score { color: var(--color-accent); font-weight: 600; }
-  .ah-lot__body { max-width: 50rem; }
-  .ah-lot__title {
-    font-family: var(--font-serif);
-    font-weight: 700;
-    font-size: var(--type-h2);
-    line-height: var(--leading-snug);
-    color: var(--color-ink);
-    letter-spacing: var(--tracking-display);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .ah-lot__title a {
-    color: inherit;
-    text-decoration: none;
-    border-bottom: 1px dotted var(--color-rule-strong);
-  }
-  .ah-lot__title a:hover { color: var(--color-accent); }
-  .ah-lot__more {
-    margin: var(--space-3) 0 0;
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 500;
-  }
-  .ah-lot__note {
-    margin: var(--space-4) 0 0;
-    font-family: var(--font-serif);
     font-style: italic;
-    font-size: var(--type-body);
-    line-height: var(--leading-prose);
-    color: var(--color-ink-soft);
   }
-  .ah-lot__note--editor {
-    font-style: normal;
-    color: var(--color-ink);
-    border-left: 3px solid var(--color-accent);
-    padding-left: var(--space-4);
-  }
-  .ah-lot__rows {
-    margin: var(--space-5) 0 0;
-    display: grid;
-    grid-template-columns: 10rem 1fr;
-    gap: var(--space-3) var(--space-6);
-  }
-  .ah-lot__row { display: contents; }
-  .ah-lot__rows dt {
+  .af__hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .af__submit {
+    appearance: none;
+    cursor: pointer;
     font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
-    color: var(--color-ink);
-    font-feature-settings: var(--features-tabular);
-    font-weight: 600;
-    padding-top: 0.18em;
-  }
-  .ah-lot__rows dd {
-    margin: 0;
-    font-family: var(--font-serif);
     font-size: var(--type-small);
-    color: var(--color-ink-muted);
-    line-height: var(--leading-normal);
-  }
-  .ah-lot__rows dd.tabular { font-feature-settings: var(--features-tabular); }
-  .ah-lot__chip {
-    display: inline-block;
-    margin-left: 0.5em;
-    padding: 0 0.5em;
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    font-family: var(--font-sans);
-    font-size: var(--type-marginalia);
-    color: var(--color-ink);
-    text-transform: uppercase;
     letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--color-paper);
+    background: var(--color-ink);
+    border: 1px solid var(--color-ink);
+    padding: 0.5rem 1.4rem;
+    transition: background 100ms;
   }
+  .af__submit:hover { background: var(--color-accent); border-color: var(--color-accent); }
+  .af__status { font-family: var(--font-sans); font-size: var(--type-small); color: var(--color-ink-muted); }
+  .af__status--ok  { color: #2e6b3a; }
+  .af__status--err { color: #b94a47; }
 
   /* METHODOLOGY ─────────────────────────────────────────────── */
   .ah__method-steps {
@@ -967,7 +977,6 @@ function statusMark(lot: Lot): string {
     border-right: 1px solid var(--color-rule);
     border-bottom: 1px solid var(--color-rule);
   }
-  .ah-step + .ah-step { margin-top: 0; }
   .ah-step__num {
     font-family: var(--font-serif);
     font-weight: 800;
@@ -1041,13 +1050,11 @@ function statusMark(lot: Lot): string {
     color: var(--color-ink-muted);
     text-transform: uppercase;
   }
+  .ah__pipeline-line a { color: inherit; }
+  .ah__pipeline-line a:hover { color: var(--color-accent); }
   .ah__pipeline-fail { color: #b94a47; }
 
-  /* Entrance choreography — the masthead rises on load; section banners,
-     lot cards, and methodology steps stagger in as they scroll into view.
-     JS arms it (.js-reveal on <html>); no-JS renders everything visible
-     and prefers-reduced-motion suppresses it. Lot cards are deliberately
-     un-staggered: they enter one at a time, and the list is filterable. */
+  /* Entrance choreography */
   @keyframes ah-rise {
     from { opacity: 0; transform: translateY(14px); }
     to   { opacity: 1; transform: none; }
@@ -1070,16 +1077,15 @@ function statusMark(lot: Lot): string {
   @media (max-width: 760px) {
     .ah :global(.ah__inner),
     .ah__head,
-    .ah-lot,
     .ah__sources-list,
-    .ah-lot__rows { grid-template-columns: 1fr; }
-    .ah__rail { flex-direction: row; align-items: center; gap: var(--space-3); }
+    .ah__alerts-grid { grid-template-columns: 1fr; }
+    .ah__rail { flex-direction: row; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
     .ah__rail .rail__rule { flex: 1; }
     .ah__title { font-size: var(--type-display); }
     .ah__method-steps { grid-template-columns: 1fr; }
     .ah__banner { grid-template-columns: auto 1fr; }
     .ah__banner__rule, .ah__banner__count { display: none; }
-    .ah-lot__rail { flex-direction: row; align-items: baseline; flex-wrap: wrap; }
     .ah__sources-list dt { padding-top: var(--space-3); }
+    .ah__closing { grid-template-columns: 1fr; gap: var(--space-3); }
   }
 </style>

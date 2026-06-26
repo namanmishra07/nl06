@@ -8,6 +8,7 @@ export default defineConfig({
   build: { format: "file" },
   integrations: [
     tailwind({ applyBaseStyles: false }),
-    sitemap(),
+    // Keep the private, Access-gated /watch dashboard out of the public sitemap.
+    sitemap({ filter: (page) => !page.includes("/watch") }),
   ],
 });
